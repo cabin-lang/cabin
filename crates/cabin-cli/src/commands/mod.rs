@@ -1,4 +1,4 @@
-use crate::cli::commands::{build::BuildCommand, configure::ConfigureCommand, format::FormatCommand, new::NewCommand, run::RunCommand, transpile::TranspileCommand};
+use crate::commands::{build::BuildCommand, configure::ConfigureCommand, format::FormatCommand, new::NewCommand, run::RunCommand, transpile::TranspileCommand};
 
 /// The build module, which handles the `cabin build` command.
 pub mod build;

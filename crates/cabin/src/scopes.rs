@@ -87,6 +87,7 @@ impl Scope {
 	/// # Returns
 	/// A reference to the declaration data of the variable declared in this scope with the given name. If none exists, `None` is returned. If it does exist
 	/// and `Some` is returned, the returned reference will have the same lifetime as this `Scope` object.
+	#[must_use]
 	pub fn get_variable_direct(&self, name: &Name) -> Option<&DeclarationData> {
 		self.variables.get(name)
 	}
@@ -104,6 +105,7 @@ impl Scope {
 	/// # Returns
 	/// A reference to the declaration data of the variable that exists in this scope with the given name. If none exists, `None` is returned. If it does exist
 	/// and `Some` is returned, the returned reference will have the same lifetime as this `Scope` object, as well as the given scopes slice.
+	#[must_use]
 	pub fn get_variable<'scopes>(&'scopes self, name: &Name, scopes: &'scopes [Self]) -> Option<&DeclarationData> {
 		self.variables
 			.get(name)
@@ -121,6 +123,7 @@ impl Scope {
 	///
 	/// # Returns
 	/// All variables that exist in this scope, including those declared in ancestor scopes.
+	#[must_use]
 	pub fn get_variables<'scopes>(&'scopes self, scopes: &'scopes [Self]) -> Vec<(&'scopes Name, &'scopes DeclarationData)> {
 		let mut variables = self.variables.iter().collect::<Vec<_>>();
 		if let Some(parent) = self.parent {
@@ -159,6 +162,7 @@ impl Scope {
 	///
 	/// # Returns
 	/// A string representation of this scope to debug programs.
+	#[must_use]
 	pub fn to_string(&self, scopes: &[Self]) -> String {
 		let mut string = vec!["{".to_owned()];
 		string.push(format!("\ttype: [{:?}]", self.scope_type));
@@ -208,6 +212,7 @@ impl ScopeData {
 	///
 	/// # Returns
 	/// A newly created scope data object with an empty global scope.
+	#[must_use]
 	pub fn global() -> Self {
 		Self {
 			scopes: vec![Scope {
@@ -246,6 +251,7 @@ impl ScopeData {
 	///
 	/// # Returns
 	/// An immutable reference to the scope with this id, or `None` if no scope exists with the given id.
+	#[must_use]
 	pub fn get_scope_from_id(&self, id: usize) -> Option<&Scope> {
 		self.scopes.get(id)
 	}
@@ -259,6 +265,7 @@ impl ScopeData {
 	///
 	/// # Returns
 	/// A reference to the variable declaration, or `None` if the variable does not exist in the current scope.
+	#[must_use]
 	pub fn get_variable(&self, name: &Name) -> Option<&DeclarationData> {
 		self.current().get_variable(name, &self.scopes)
 	}
@@ -272,6 +279,7 @@ impl ScopeData {
 	///
 	/// # Returns
 	/// A reference to the variable declaration, or `None` if the variable does not exist in the current scope.
+	#[must_use]
 	pub fn get_variable_from_id(&self, name: &Name, id: usize) -> Option<&DeclarationData> {
 		self.get_scope_from_id(id).and_then(|scope| scope.get_variable(name, &self.scopes))
 	}
@@ -312,6 +320,7 @@ impl ScopeData {
 	///
 	/// # Returns
 	/// The unique ID of the current scope
+	#[must_use]
 	pub const fn unique_id(&self) -> usize {
 		self.current_scope
 	}
@@ -444,6 +453,7 @@ impl ScopeData {
 	///
 	/// # Returns
 	/// a sorted list, which are sorted by how close they are to the given variable name.
+	#[must_use]
 	pub fn get_variables(&self) -> Vec<(&Name, &DeclarationData)> {
 		self.current().get_variables(&self.scopes)
 	}
@@ -459,6 +469,7 @@ impl ScopeData {
 	/// # Returns
 	/// a sorted list, of at most `max` elements, which are sorted by how close they are to the given variable
 	/// name.
+	#[must_use]
 	pub fn get_closest_variables(&self, name: &Name, max: usize) -> Vec<(&Name, &DeclarationData)> {
 		let mut all_variables = self.get_variables();
 		all_variables.sort_by(|(first, _), (second, _)| first.cabin_name().distance_to(&name.cabin_name()).cmp(&second.cabin_name().distance_to(&name.cabin_name())));
@@ -478,6 +489,7 @@ impl ScopeData {
 	///
 	/// # Returns
 	/// The declaration data for the variable, or `None` if no global variable with this name exists.
+	#[must_use]
 	pub fn get_global_variable(&self, name: &Name) -> Option<&DeclarationData> {
 		self.get_variable_from_id(name, 0)
 	}
@@ -487,6 +499,7 @@ impl ScopeData {
 	/// # Returns
 	/// The id of the global scope
 	#[allow(clippy::unused_self)]
+	#[must_use]
 	pub const fn global_id(&self) -> usize {
 		0
 	}

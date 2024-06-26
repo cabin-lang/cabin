@@ -65,7 +65,7 @@ impl Parse for FunctionDeclaration {
 	type Output = Self;
 
 	fn parse(tokens: &mut std::collections::VecDeque<Token>, context: &mut Context) -> anyhow::Result<Self::Output> {
-		tokens.pop(TokenType::KeywordFunction, context)?;
+		tokens.pop(TokenType::KeywordAction, context)?;
 
 		// Parameters
 		let mut parameters = Vec::new();

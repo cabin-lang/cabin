@@ -1,3 +1,14 @@
+//! # Cabin
+//!
+//! A dead simple, highly performant, and extremely safe programming language.
+//!
+//! ## Installation
+//!
+//! Cabin can be installed cross-platform with Cargo:
+//!
+//! ```bash
+//! cargo install cabin-language
+
 /// The `compile_time` module. Although lang2 is a compiled language, it has the ability to run
 /// arbitrary code at compile time, which requires an `compile_time`.
 pub mod compile_time;

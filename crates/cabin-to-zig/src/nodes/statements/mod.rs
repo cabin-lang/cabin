@@ -1,18 +1,14 @@
-use cabin::{context::Context, parser::statements::declaration::Declaration};
+use cabin::parser::statements::Statement;
 
 use crate::TranspileToZig;
 
 mod declaration;
 
-impl TranspileToZig for Declaration {
-    fn to_zig(&self, context: &mut Context) -> String {
-        let value = context
-            .scope_data
-            .get_variable_from_id(&self.name, self.declared_scope_id)
-            .unwrap()
-            .value
-            .clone()
-            .unwrap();
-        format!("var {} = {};", self.name.c_name(), value.to_zig(context))
-    }
+impl TranspileToZig for Statement {
+	fn to_zig(&self, context: &mut Context) -> String {
+		match self {
+			Self::Declaration(declaration) => declaration.to_zig(context),
+			_ => todo!(),
+		}
+	}
 }

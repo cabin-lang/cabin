@@ -105,7 +105,7 @@ pub enum TokenType {
 	/// TODO: We are considering changing the name of this as well to something more "common English". Originally I called this "action" to indicate that it just
 	/// "does a thing", but that's not always true, because some functions just take an input and spit an output, or get a field, etc., without "doing" anything.
 	/// We should consider what words would be good here and fit the Cabin aesthetic.
-	KeywordFunction,
+	KeywordAction,
 
 	/// The new keyword. This is used to instantiate a table.
 	///
@@ -378,7 +378,7 @@ impl TokenType {
 			// Keywords
 			Self::KeywordEither => regex_macro::regex!(r"^either\b"),
 			Self::KeywordIf => regex_macro::regex!(r"^if\b"),
-			Self::KeywordFunction => regex_macro::regex!(r"^function\b"),
+			Self::KeywordAction => regex_macro::regex!(r"^action\b"),
 			Self::KeywordNew => regex_macro::regex!(r"^new\b"),
 			Self::KeywordOtherwise => regex_macro::regex!(r"^otherwise\b"),
 			Self::KeywordLet => regex_macro::regex!(r"^let\b"),
@@ -439,6 +439,7 @@ impl TokenType {
 	///
 	/// # Returns
 	/// The matched text of the token type in the given code, or `None` if no match was found.
+	#[must_use]
 	pub fn get_match(&self, code: &str) -> Option<String> {
 		self.pattern().find(code).map(|m| m.as_str().to_owned())
 	}
@@ -450,6 +451,7 @@ impl TokenType {
 	///
 	/// # Returns
 	/// The first token type that matches the given code, along with the matched text.
+	#[must_use]
 	fn find_match(code: &str) -> Option<(Self, String)> {
 		for token_type in Self::iter() {
 			if let Some(matched) = token_type.get_match(code) {
@@ -495,6 +497,10 @@ pub struct Token {
 ///
 /// # Returns
 /// A vector of tokens in the order they appeared in the given source code after tokenization, or an `Err` if an unrecognized token was found.
+/// 
+/// # Errors
+/// If the given code string is not syntactically valid Cabin code. It needn't be semantically valid, but it must be comprised of the proper tokens.
+#[allow(clippy::missing_panics_doc)]
 pub fn tokenize(mut code: String) -> anyhow::Result<Vec<Token>> {
 	code = code.replace('\t', "    ");
 

@@ -105,6 +105,7 @@ impl Context {
 	///
 	/// # Returns
 	/// A new `Context` instance.
+	#[must_use]
 	pub fn new(file_name: String) -> Self {
 		Self {
 			file_name,
@@ -134,6 +135,7 @@ impl Context {
 	///
 	/// # Returns
 	/// the currently active theme as specified from the user, or the default theme if none was explicitly configured.
+	#[must_use]
 	pub const fn theme(&self) -> &Theme {
 		&self.theme
 	}
@@ -143,6 +145,7 @@ impl Context {
 	///
 	/// # Returns
 	/// A reference to the unique value representing `UnknownAtCompileTime`.
+	#[must_use]
 	pub fn unknown_at_compile_time(&self) -> &Literal {
 		let Some(Expression::Literal(literal)) = self
 			.scope_data

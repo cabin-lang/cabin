@@ -26,7 +26,9 @@ Cabin aims to fill the "missing hole" in the intersection of these three values:
 
 There are other attempts to fill this hole as well, such as Nim and V. This is just one of them.
 
-Cabin is primarily inspired by Lua, Rust, Go, Zig, and V.
+Cabin is primarily inspired by Lua, Rust, Go, and Zig, except it aims to be type-safer than Lua, simpler than Rust, faster than Go, and memory-safer than Zig. That is the niche Cabin aims to fill.
+
+There will never be a Cabin 2.0; In fact, there will never even be a Cabin 1.1. Once the features of the language are added and 1.0 is released, Cabin will only change for bugfixes from then on. No new syntax, no changes to the standard library.
 
 ## Niceties
 
@@ -230,3 +232,11 @@ The compiled executable can be different depending on user input at compile-time
 ### Compilation Speed Limited by C
 
 Currently (though maybe not forever), Cabin compiles to C before being compiled to a native binary. This means that *no matter how optimized the compiler is, it will always be at least slower than C* (at compiling). This isn't a huge deal because modern C compilers are optimized really well to be really fast, but it's worth noting that this strict lower bound currently exists, and that with the current compilation system Cabin could never beat C in this department.
+
+# Philosophy
+
+If it can be done readably with existing syntax, it should be.
+
+Readable is good; traditional is not necessarily so.
+
+Software can be complete.

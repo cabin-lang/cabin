@@ -5,31 +5,27 @@
 /// The "Group" group. This contains type information about a group, and all group variables have this type.
 let Group = new Object {};
 
-/// No value. This is used in return types of functions that do not return a value. This is different from `Nothing` because functions
-/// that return `Nothing` must explicitly do so, whereas functions that return `Void` will do so implicitly.
+/// No value. This is used in return types of actions that do not return a value. This is different from `Nothing` because functions
+/// that return `Nothing` must explicitly do so, whereas actions that return `Void` will do so implicitly.
 let Void = new Object {};
 
-#[creatable]
 let Function = group {};
 
-#[creatable]
 let AnonymousTable = group {};
 
-#[creatable]
 let Object = group {};
 
-#[creatable]
 let This = group {};
 
-/// The `Anything` group. This is a group that is automatically implemented by all other groups. A function can use this as an argument to take any type. Note that the value
-/// given to the function can't have any fields accessed on it, since none are known, and it cannot be unsafely downcasted into another type. This is mostly used for 
+/// The `Anything` group. This is a group that is automatically implemented by all other groups. A action can use this as an argument to take any type. Note that the value
+/// given to the action can't have any fields accessed on it, since none are known, and it cannot be unsafely downcasted into another type. This is mostly used for 
 /// compile-time parameters
 let Anything = group {
 
 	/// Returns whether this object is the same as the other object. This checks for reference equality, not value, so it will only return true
 	/// if this object and the given argument literally point to the same data in memory.
 	#[builtin("Anything.is")]
-	is = function(other: This): Boolean
+	is = action(other: This): Boolean
 };
 
 /// Indicates that a value is unknown at compile-time. This should *never* be used explicity; Rather, this
@@ -42,11 +38,11 @@ let Parameter = new Object {};
 // Tags --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 /// Indicates that a variable is only available in the Cabin standard library, and not to developers writing their own programs using Cabin. This is used on things that have no real use outside
-/// of the Cabin standard library, like builtin function handling and system side effect handling.
+/// of the Cabin standard library, like builtin action handling and system side effect handling.
 #[cabin_only]
 let cabin_only = new Object {};
 
-/// A tag indicating that a function is built into the Cabin compiler.
+/// A tag indicating that a action is built into the Cabin compiler.
 #[cabin_only]
 let BuiltinTag = group {
 	internal_name: Text
@@ -54,7 +50,7 @@ let BuiltinTag = group {
 
 /// Creates a new `BuiltinTag` with the given name.
 #[cabin_only]
-let builtin = function(builtin_name: Text): BuiltinTag {
+let builtin = action(builtin_name: Text): BuiltinTag {
 	return new BuiltinTag {
 		internal_name = builtin_name
 	};
@@ -70,12 +66,12 @@ let uncreatable = new Object {};
 #[cabin_only]
 let creatable = new Object {};
 
-/// A tag indicating that a function has side effects on the system that can't be tracked by the language or the function's parameters. This is used for things like IO and file
+/// A tag indicating that a action has side effects on the system that can't be tracked by the language or the function's parameters. This is used for things like IO and file
 /// operations. Functions marked with this will not be evaluated at compile-time when linting with `cabin check`. 
 #[cabin_only]
 let system_side_effects = new Object {};
 
-/// A tag indicating that a function is preferred to be run at compile-time. This doesn't prevent the function from being run at compile-time, but will emit a warning if it is.
+/// A tag indicating that a action is preferred to be run at compile-time. This doesn't prevent the function from being run at compile-time, but will emit a warning if it is.
 #[cabin_only]
 let RuntimeOnlyTag = group {
 	reason: Text
@@ -83,7 +79,7 @@ let RuntimeOnlyTag = group {
 
 /// Creates a new runtime-only tag with the given reason.
 #[cabin_only]
-let runtime_only = function(reason: Text): RuntimeOnlyTag {
+let runtime_only = action(reason: Text): RuntimeOnlyTag {
 	return new RuntimeOnlyTag {
 		reason = reason
 	};
@@ -112,7 +108,7 @@ let Text = group {
 let Number = group {
 	// Internal number field //
 	
-	to = function(this: Number, end: Number): List {
+	to = action(this: Number, end: Number): List {
 		// let list = [];
 		// let current = this;
 		// while current < end {
@@ -128,19 +124,19 @@ let Number = group {
 let List = group<Element> {
 
 	/// Adds a new element to the end of this list.
-	append = function(this: List, element: Element): Void,
+	append = action(this: List, element: Element): Void,
 
 	/// Adds a new element to the beginning of this list.
-	prepend = function(this: List, element: Element): Void,
+	prepend = action(this: List, element: Element): Void,
 
 	/// Returns the element from this list at the given index.
-	get = function(this: List, index: Number): Element,
+	get = action(this: List, index: Number): Element,
 
 	/// Sets the element in this list at the given index.
-	set = function(this: List, index: Number, value: Element): Void,
+	set = action(this: List, index: Number, value: Element): Void,
 
 	/// Checks if the given value is in this list. This checks for value equality, not reference.
-	contains = function(this: List, value: Element): Boolean {
+	contains = action(this: List, value: Element): Boolean {
 		foreach element in this {
 			if element == value {
 				return true;
@@ -149,17 +145,6 @@ let List = group<Element> {
 
 		return false;
 	}
-
-	/// Returns a new list which is the same as this list but with each element also containing its index.
-	// with_indices = function(this: List): List {
-	// 	let values = [];
-	// 	let index = 0;
-	// 	foreach value in this {
-	// 		values.append([index, value]);
-	// 		index = index + 1;
-	// 	};
-	// 	return values;
-	// }
 };
 
 // System ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -167,17 +152,17 @@ let List = group<Element> {
 let system = new Object {
 
 	#[runtime_only("
-		The function system.get_environment_variable() will read the value of an environment variable. Using this value means that the
+		The action system.get_environment_variable() will read the value of an environment variable. Using this value means that the
 		resuling application will depend on user environment at compile-time, meaning the same program can be compiled to different
-		binary executables depending on the user's environment. This can be confusing and cause unexpected behavior, so this function
+		binary executables depending on the user's environment. This can be confusing and cause unexpected behavior, so this action
 		is recommended to only be called at runtime.
 	")]
 	/// Gets the value of an environment variable.
-	get_environment_variable = function(name: Text): Text,
+	get_environment_variable = action(name: Text): Text,
 
 	/// Sets the value of an environment variable for this process. This is only valid in the current process and will not persist once
 	/// the process ends. 
-	set_environment_variable = function(name: Text, value: Text): Void
+	set_environment_variable = action(name: Text, value: Text): Void
 };
 
 // IO ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -187,57 +172,57 @@ let terminal = new Object {
 
 	/// Prints to the standard output stream. A newnline is automatically appended.
 	#[system_side_effects, builtin("terminal.print")]
-	print = function(text: Text): Void,
+	print = action(text: Text): Void,
 
 	// Prints to the standard error stream. A newline is automatically appended.
 	#[system_side_effects, builtin("terminal.print_error")]
-	print_error = function(text: Text): Void,
+	print_error = action(text: Text): Void,
 
 	/// Reads a line of user input from the terminal, and returns the result as text. The trailing newline is stripped.
 	#[
 		system_side_effects, 
 		builtin("terminal.input"),
 		runtime_only("
-			The function terminal.input takes input from the user and returns the value as Text. Using this value means that the
+			The action terminal.input takes input from the user and returns the value as Text. Using this value means that the
 			resuling application will depend on user input at compile-time, meaning the same program can be compiled to different
-			binary executables depending on the user's input. This can be confusing and cause unexpected behavior, so this function
+			binary executables depending on the user's input. This can be confusing and cause unexpected behavior, so this action
 			is recommended to only be called at runtime.
 		")
 	]
-	input = function(): Text,
+	input = action(): Text,
 
 	/// Clears the terminal
 	#[builtin("terminal.clear")]
-	clear = function(): Void
+	clear = action(): Void
 };
 
 /// The file object, which gives access to file operations, such as reading files, writing files, and checking if files exist. Cabin has no
-/// concept of a "file" object instance; You can simply read from and write to files functionally by path.
-let file = new Object {
+/// concept of a "file" object instance; You can simply read from and write to files actionally by path.
+let files = new Object {
 
 	/// Reads the contents of a file and returns the output as Text.
 	#[
 		builtin("File.read"),
 		runtime_only("
-			The function file.read reads a file from user and returns its contents as Text. Using this value means that the
+			The action file.read reads a file from user and returns its contents as Text. Using this value means that the
 			resuling application will depend on user environment at compile-time, meaning the same program can be compiled to different
-			binary executables depending on the user's environment. This can be confusing and cause unexpected behavior, so this function
+			binary executables depending on the user's environment. This can be confusing and cause unexpected behavior, so this action
 			is recommended to only be called at runtime.
 		")
 	]
-	read = function(path: Text): Text,
+	read = action(path: Text): Text,
 
 	/// Writes Text to a file.
 	#[builtin("File.write"), system_side_effects]
-	write = function(path: Text, content: Text): Void,
+	write = action(path: Text, content: Text): Void,
 
 	/// Checks whether a path exists and is a file (not a directory).
 	#[builtin("File.file_exists")]
-	is_file = function(path: Text): Boolean,
+	file_exists = action(path: Text): Boolean,
 
 	/// Check whether a path exists and is a directory (not a file).
 	#[builtin("File.directory_exists")]
-	is_directory = function(path: Text): Boolean
+	directory_exists = action(path: Text): Boolean
 };
 
 // -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

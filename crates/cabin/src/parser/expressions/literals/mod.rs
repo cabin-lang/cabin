@@ -213,7 +213,7 @@ impl Parse for LiteralValue {
 			TokenType::KeywordNew => Self::Object(Object::parse(tokens, context)?),
 			TokenType::KeywordGroup => Self::Group(GroupDeclaration::parse(tokens, context)?),
 			TokenType::KeywordEither => Self::Either(Either::parse(tokens, context)?),
-			TokenType::KeywordFunction => Self::FunctionDeclaration(Box::new(FunctionDeclaration::parse(tokens, context)?)),
+			TokenType::KeywordAction => Self::FunctionDeclaration(Box::new(FunctionDeclaration::parse(tokens, context)?)),
 
 			// Not a literal
 			_ => anyhow::bail!("Expected literal but found {}", tokens.peek().unwrap().token_type),
