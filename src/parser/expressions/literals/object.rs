@@ -167,9 +167,9 @@ impl Object {
 	}
 
 	/// Returns the C name for the type of this object. If this object is not anonymous, this returns the C name of the type of this object. If this object is anonymous,
-	/// this returns `table_` followed by the object's unique anonymous ID.
+	/// this returns `object_` followed by the object's unique anonymous ID.
 	pub fn c_name(&self) -> String {
-		self.anonymous_id.map_or_else(|| self.name.c_name(), |anonymous_id| format!("table_{anonymous_id}"))
+		self.anonymous_id.map_or_else(|| self.name.c_name(), |anonymous_id| format!("object_{anonymous_id}"))
 	}
 }
 
@@ -331,9 +331,9 @@ impl CompileTime for Object {
 			&& !context
 				.groups
 				.iter()
-				.any(|group_name| group_name.0 == format!("table_{}", new_object.anonymous_id.as_ref().unwrap()))
+				.any(|group_name| group_name.0 == format!("object_{}", new_object.anonymous_id.as_ref().unwrap()))
 		{
-			context.groups.push((format!("table_{}", new_object.anonymous_id.as_ref().unwrap()), GroupType::Group));
+			context.groups.push((format!("object_{}", new_object.anonymous_id.as_ref().unwrap()), GroupType::Group));
 		}
 
 		Ok(Expression::Literal(Literal::new(LiteralValue::Object(new_object))))

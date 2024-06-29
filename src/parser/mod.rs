@@ -235,6 +235,7 @@ impl TranspileToC for Program {
 
 		let mut forward_declarations = Vec::new();
 
+		// Typedef the groups (structs)
 		for (group, group_type) in &context.groups {
 			forward_declarations.push(format!(
 				"typedef {} {group} {group};",
@@ -245,6 +246,7 @@ impl TranspileToC for Program {
 			));
 		}
 
+		// Forward-declare the functions (and define them)
 		for function in context.function_declarations.clone() {
 			forward_declarations.push(format!(
 				"void {name}({parameters});",
@@ -260,6 +262,7 @@ impl TranspileToC for Program {
 			prelude.push_str(&function.c_prelude(context)?);
 		}
 
+		// Generate the final prelude
 		prelude = format!(
 			"{}\n\n{forward_declarations}\n\n{prelude}",
 			unindent::unindent(
