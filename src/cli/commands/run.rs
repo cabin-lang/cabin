@@ -29,6 +29,9 @@ pub struct RunCommand {
 	/// code will be outputted to this file. The program will still be built to a native executable and run.
 	#[arg(long, short = 'c')]
 	pub emit_c: Option<String>,
+
+	#[arg(long = "show-c-errors", short)]
+	pub show_c_errors: bool
 }
 
 impl CabinCommand for RunCommand {
@@ -85,6 +88,7 @@ impl CabinCommand for RunCommand {
 		}
 
 		// Compilation
+		context.show_c_errors = self.show_c_errors;
 		log!(self.quiet, "{}", format!("\t{} generated C code... ", "Compiling".green()).bold())?;
 		let exe_file = step!(
 			compile_c_to(&c_file, &(temp_dir() + "/cabin_output"), &mut context),

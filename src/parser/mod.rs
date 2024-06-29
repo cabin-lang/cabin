@@ -179,16 +179,15 @@ impl TranspileToC for Program {
 					.unwrap();
 
 				match value {
-					Expression::Literal(Literal(LiteralValue::Group(_) | LiteralValue::FunctionDeclaration(_) | LiteralValue::Either(_), ..)) => {},
+					Expression::Literal(Literal(LiteralValue::Group(_) | LiteralValue::Either(_), ..)) => {
+						declaration
+							.c_prelude(context)?
+							.lines()
+							.map(|line| Ok(writeln!(prelude, "{line}")?))
+							.collect::<anyhow::Result<Vec<_>>>()?;
+					},
+					Expression::Literal(Literal( LiteralValue::FunctionDeclaration(_), ..)) => {}
 					_ => continue,
-				}
-
-				if let Expression::Literal(Literal(LiteralValue::Group(..), ..)) = value {
-					declaration
-						.c_prelude(context)?
-						.lines()
-						.map(|line| Ok(writeln!(prelude, "{line}")?))
-						.collect::<anyhow::Result<Vec<_>>>()?;
 				}
 
 				declared_variables.push(declaration.name.clone());

@@ -157,7 +157,7 @@ pub enum LiteralValue {
 	Group(GroupDeclaration),
 	/// A function declaration literal.
 	FunctionDeclaration(Box<FunctionDeclaration>),
-
+	/// An either declaration literal.
 	Either(Either),
 }
 

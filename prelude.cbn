@@ -93,8 +93,11 @@ let Text = group {
 
 // Numbers ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-let Number = group {
+let Number = new Object {
 	// Internal number field //
+
+    #[system_side_effects, builtin("Number.equals")]
+    equals = action(this: Number, other: Number): Boolean,
 	
 	to = action(this: Number, end: Number): List {
 		// let list = [];

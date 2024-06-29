@@ -18,7 +18,7 @@ impl CabinCommand for NewCommand {
 		std::fs::create_dir_all(format!("{project_name}/src"))?;
 
 		// Main Cabin file
-		std::fs::write(format!("{project_name}/src/main.cbn"), "run terminal.output(\"Hello world!\");")?;
+		std::fs::write(format!("{project_name}/src/main.cbn"), "run terminal.print(\"Hello world!\");")?;
 
 		// Project configuration
 		std::fs::write(
