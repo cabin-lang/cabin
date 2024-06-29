@@ -89,11 +89,6 @@ let false = Boolean.false;
 
 let Text = group {
 	// Internal string field //
-
-	split = action(this: Text, delimiter: Text): Text {
-		// it is this;
-		return this;
-	}
 };
 
 // Numbers ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
