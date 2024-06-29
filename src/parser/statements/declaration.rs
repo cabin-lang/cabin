@@ -491,17 +491,11 @@ impl ParentStatement for Declaration {
 			)
 		})?;
 
+		// If it's a group, we want to save it
 		if let Expression::Literal(Literal(LiteralValue::Group(group), ..)) = &cabin_value_node {
 			if !context.groups.iter().any(|group_name| group_name.0 == self.name.c_name()) {
 				context.groups.push((self.name.c_name(), group.group_type.clone()));
 			}
-		}
-
-		if self.name == Name("main".to_owned()) {
-			let Expression::Literal(Literal(LiteralValue::FunctionDeclaration(function_declaration), ..)) = &cabin_value_node else {
-				anyhow::bail!("Main variable is not a function");
-			};
-			context.main_function_name = Some(format!("{}_{}", function_declaration.name.as_ref().unwrap(), function_declaration.id));
 		}
 
 		// Return the evaluated declaration

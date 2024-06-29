@@ -304,18 +304,18 @@ impl TranspileToC for GroupDeclaration {
 			.transpiling_group_name
 			.clone()
 			.map_or_else(|| format!("anonymous_group_{}", self.id), |name| name.c_name());
-		let mut prelude = vec![format!("// group {name}")];
+		let mut prelude = vec![format!("// group {name}", name = Name::from_c(&name).cabin_name())];
 		if let Some(compile_time_parameters) = &self.compile_time_parameters {
 			context.generics_stack.push(compile_time_parameters.clone());
 		}
 		for field in &self.fields {
 			if field.value.is_some() {
-				prelude.push(field.value.as_ref().unwrap().c_prelude(context).map_err(|error| {
-					anyhow::anyhow!(
-						"{error}\n\t{}",
-						format!("while generating the C prelude for the field \"{}\" of a group", field.name.cabin_name().bold().cyan()).dimmed()
-					)
-				})?);
+				// prelude.push(field.value.as_ref().unwrap().c_prelude(context).map_err(|error| {
+				// 	anyhow::anyhow!(
+				// 		"{error}\n\t{}",
+				// 		format!("while generating the C prelude for the field \"{}\" of a group", field.name.cabin_name().bold().cyan()).dimmed()
+				// 	)
+				// })?);
 			}
 		}
 		if self.compile_time_parameters.is_some() {
@@ -341,8 +341,6 @@ impl TranspileToC for GroupDeclaration {
 			}
 		}
 
-		// c.push_str(&format!("&group_{}", self.id));
-
 		match name.as_str() {
 			"Text_u" => prelude.push("\tchar* internal_value;".to_owned()),
 			"Number_u" => prelude.push("\tfloat internal_value;".to_owned()),
@@ -362,14 +360,6 @@ impl TranspileToC for GroupDeclaration {
 		}
 
 		prelude.push("};".to_owned());
-
-		// prelude.push(format!("struct Group_{} {{", self.id));
-		// prelude.push(format!("\t{name}* (*new) ();"));
-		// prelude.push(format!(
-		// 	"}};\n{name}* new_Group_{id}() {{\n\treturn malloc(sizeof({name}));\n}}\n#define group_{id} (Group_{id}) {{ .new = &new_Group_{id} }}\n\n",
-		// 	id = self.id
-		// ));
-
 		context.transpiling_group_name = None;
 
 		Ok(prelude.join("\n"))

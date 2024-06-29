@@ -56,16 +56,6 @@ let builtin = action(builtin_name: Text): BuiltinTag {
 	};
 };
 
-/// Indicates that a group can't be created with a `new` expression. Empty groups are implicitly tagged with this. To make an empty group
-/// creatable, mark it with `#[creatable]`.
-#[cabin_only]
-let uncreatable = new Object {};
-
-/// Indicates that a group can be created with a `new` expression. Empty groups are implicitly tagged as `#[uncreatable]`; Marking an empty
-/// group as this removes that implicit tag.
-#[cabin_only]
-let creatable = new Object {};
-
 /// A tag indicating that a action has side effects on the system that can't be tracked by the language or the function's parameters. This is used for things like IO and file
 /// operations. Functions marked with this will not be evaluated at compile-time when linting with `cabin check`. 
 #[cabin_only]
@@ -97,14 +87,17 @@ let false = Boolean.false;
 
 // Strings ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-#[creatable]
 let Text = group {
 	// Internal string field //
+
+	split = action(this: Text, delimiter: Text): Text {
+		// it is this;
+		return this;
+	}
 };
 
 // Numbers ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-#[creatable]
 let Number = group {
 	// Internal number field //
 	
@@ -189,11 +182,11 @@ let terminal = new Object {
 			is recommended to only be called at runtime.
 		")
 	]
-	input = action(): Text,
+	input = action: Text,
 
 	/// Clears the terminal
 	#[builtin("terminal.clear")]
-	clear = action(): Void
+	clear = action: Void
 };
 
 /// The file object, which gives access to file operations, such as reading files, writing files, and checking if files exist. Cabin has no
