@@ -10,6 +10,7 @@ use crate::{
 };
 
 use colored::Colorize as _;
+use expressions::literals::function_declaration;
 
 // Brings the `write!()` and `writeln!()` macros into scope, which allows appending to a string. This is more efficient than using
 // `string = format!("{string}...")`, because it avoids an extra allocation. We have a clippy warning turned on for this very
@@ -255,6 +256,8 @@ impl TranspileToC for Program {
 					.collect::<anyhow::Result<Vec<_>>>()?
 					.join(", ")
 			));
+
+			prelude.push_str(&function.c_prelude(context)?);
 		}
 
 		prelude = format!(

@@ -309,13 +309,17 @@ impl TranspileToC for GroupDeclaration {
 			context.generics_stack.push(compile_time_parameters.clone());
 		}
 		for field in &self.fields {
-			if field.value.is_some() {
-				// prelude.push(field.value.as_ref().unwrap().c_prelude(context).map_err(|error| {
-				// 	anyhow::anyhow!(
-				// 		"{error}\n\t{}",
-				// 		format!("while generating the C prelude for the field \"{}\" of a group", field.name.cabin_name().bold().cyan()).dimmed()
-				// 	)
-				// })?);
+			if let Some(value) = &field.value {
+				if let &Expression::Literal(Literal(LiteralValue::FunctionDeclaration(_), ..)) = &value {
+					// nothing to see here...
+				} else {
+					prelude.push(field.value.as_ref().unwrap().c_prelude(context).map_err(|error| {
+						anyhow::anyhow!(
+							"{error}\n\t{}",
+							format!("while generating the C prelude for the field \"{}\" of a group", field.name.cabin_name().bold().cyan()).dimmed()
+						)
+					})?);
+				}
 			}
 		}
 		if self.compile_time_parameters.is_some() {
