@@ -537,7 +537,7 @@ impl Levenshtein for str {
 	/// exactly equivalent to `s2.distance_to(s1)` in result. The greater the result, the further apart the strings are. Two
 	/// equivalent strings will always return 0.
 	///
-	/// Algorithm adapted from [https://en.wikipedia.org/wiki/Levenshtein_distance#Iterative_with_two_matrix_rows]
+	/// Algorithm adapted from [`https://en.wikipedia.org/wiki/Levenshtein_distance#Iterative_with_two_matrix_rows`]
 	fn distance_to(&self, other: &str) -> usize {
 		let mut insertion_cost: usize;
 		let mut deletion_cost: usize;

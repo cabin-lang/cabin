@@ -175,6 +175,7 @@ impl Parse for GroupDeclaration {
 
 		tokens.pop(TokenType::RightBrace, context)?;
 		context.scope_data.exit_scope()?;
+
 		let group = Self {
 			fields,
 			compile_time_parameters,

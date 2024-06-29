@@ -95,6 +95,7 @@ pub fn compile_c_to(file_to_compile: &str, output_path: &str, context: &mut Cont
 }
 
 /// Returns the operating system of the user, as specified by `Os`.
+#[must_use]
 pub fn get_os() -> Os {
 	if std::env::consts::OS == "windows" {
 		Os::Windows

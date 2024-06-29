@@ -39,6 +39,7 @@ impl VariableReference {
 	///
 	/// # Returns
 	/// The newly created variable referenced.
+	#[must_use]
 	pub const fn new(name: Name, referenced_scope_id: usize) -> Self {
 		Self {
 			name,
@@ -58,6 +59,7 @@ impl VariableReference {
 	///
 	/// # Returns
 	/// The newly created variable reference.
+	#[must_use]
 	pub const fn with_position(name: Name, referenced_scope_id: usize, line: usize, column: usize) -> Self {
 		Self {
 			name,
@@ -71,6 +73,7 @@ impl VariableReference {
 	///
 	/// # Parameters
 	/// - `name` - The name of the variable being referenced.
+	#[must_use]
 	pub const fn name(&self) -> &Name {
 		&self.name
 	}
@@ -79,6 +82,7 @@ impl VariableReference {
 	///
 	/// # Returns
 	/// The scope ID that this variable reference is declared in.
+	#[must_use]
 	pub const fn scope_id(&self) -> usize {
 		self.referenced_scope_id
 	}
@@ -159,7 +163,7 @@ impl Parse for VariableReference {
 }
 
 impl CompileTime for VariableReference {
-	fn compile_time_evaluate(&self, context: &mut Context, _with_side_effects: bool) -> anyhow::Result<Expression> {
+	fn compile_time_evaluate(&self, _context: &mut Context, _with_side_effects: bool) -> anyhow::Result<Expression> {
 		Ok(Expression::Literal(Literal::new(LiteralValue::VariableReference(self.clone()))))
 	}
 }

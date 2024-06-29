@@ -4,21 +4,22 @@ use crate::{
 	formatter::{ColoredCabin, ToCabin},
 	lexer::{Token, TokenType},
 	parser::{
-		expressions::{literals::group::GroupType, util::name::Name, Expression},
+		expressions::{
+			literals::{group::GroupType, Literal, LiteralValue},
+			util::name::Name,
+			Expression,
+		},
 		statements::Statement,
 	},
 };
 
 use colored::Colorize as _;
-use expressions::literals::function_declaration;
 
 // Brings the `write!()` and `writeln!()` macros into scope, which allows appending to a string. This is more efficient than using
 // `string = format!("{string}...")`, because it avoids an extra allocation. We have a clippy warning turned on for this very
 // purpose. We assign this to `_` to indicate clearly that it's just a trait and not used explicitly anywhere outside of bringing its
 // methods into scope.
 use std::{fmt::Write as _, sync::atomic::Ordering};
-
-use self::expressions::literals::{Literal, LiteralValue};
 
 /// The expressions module, which handles AST nodes that represent expressions.
 pub mod expressions;

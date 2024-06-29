@@ -66,6 +66,7 @@ impl Object {
 	///
 	/// # Returns
 	/// A new empty table.
+	#[must_use]
 	pub fn new() -> Self {
 		Self {
 			fields: Vec::new(),
@@ -84,6 +85,7 @@ impl Object {
 	///
 	/// # Returns
 	/// The newly created object.
+	#[must_use]
 	pub fn named(name: Name) -> Self {
 		Self {
 			fields: Vec::new(),
@@ -109,6 +111,7 @@ impl Object {
 	///
 	/// # Returns
 	/// `true` iff this is an anonymous object.
+	#[must_use]
 	pub const fn is_anonymous(&self) -> bool {
 		self.anonymous_id.is_some()
 	}
@@ -140,6 +143,7 @@ impl Object {
 	///
 	/// # Returns
 	/// The value of the field with the given name from this table, or `None` if no such field exists.
+	#[must_use]
 	pub fn get_field(&self, name: &Name) -> Option<&Expression> {
 		self.fields.iter().find_map(|field| (&field.name == name).then_some(field.value.as_ref().unwrap()))
 	}
@@ -151,6 +155,7 @@ impl Object {
 	///
 	/// # Returns
 	/// The value of the internal field with the given name from this table, or `None` if no such field exists.
+	#[must_use]
 	pub fn get_internal_field(&self, name: &str) -> Option<&InternalValue> {
 		self.internal_fields.get(name)
 	}
@@ -162,12 +167,14 @@ impl Object {
 	///
 	/// # Returns
 	/// The value of the internal field with the given name from this table, or `None` if no such field exists.
+	#[must_use]
 	pub fn get_internal_field_mut(&mut self, name: &str) -> Option<&mut InternalValue> {
 		self.internal_fields.get_mut(name)
 	}
 
 	/// Returns the C name for the type of this object. If this object is not anonymous, this returns the C name of the type of this object. If this object is anonymous,
 	/// this returns `object_` followed by the object's unique anonymous ID.
+	#[must_use]
 	pub fn c_name(&self) -> String {
 		self.anonymous_id.map_or_else(|| self.name.c_name(), |anonymous_id| format!("object_{anonymous_id}"))
 	}

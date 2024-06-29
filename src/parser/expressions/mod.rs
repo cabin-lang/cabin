@@ -188,12 +188,11 @@ impl Expression {
 	}
 
 	pub fn as_literal(&self, context: &mut Context) -> anyhow::Result<&Literal> {
-		match self {
-			Self::Literal(literal) => Ok(literal),
-			_ => {
-				context.add_error_details(format!("Although Cabin allows arbitrary expressions as types, it is still a statically typed language, so the expressions you use as types must be able to be evaluated at compile-time into a literal value."));
-				anyhow::bail!("An expression was used as a type, but the expression couldn't be fully evaluated at compile-time into a literal value.")
-			},
+		if let Self::Literal(literal) = self {
+			Ok(literal)
+		} else {
+			context.add_error_details("Although Cabin allows arbitrary expressions as types, it is still a statically typed language, so the expressions you use as types must be able to be evaluated at compile-time into a literal value.".to_owned());
+			anyhow::bail!("An expression was used as a type, but the expression couldn't be fully evaluated at compile-time into a literal value.")
 		}
 	}
 }
