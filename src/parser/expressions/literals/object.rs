@@ -411,7 +411,7 @@ impl TranspileToC for Object {
 			}
 
 			if self.fields.is_empty() {
-				prelude.push_str("\n\tchar empty;");
+				prelude.push_str("\n\tchar empty[0];");
 			}
 
 			writeln!(prelude, "\n}};\n")?;

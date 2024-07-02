@@ -104,6 +104,15 @@ impl ParentExpression for Either {
 }
 
 impl TranspileToC for Either {
+	fn to_c(&self, _context: &mut Context) -> anyhow::Result<String> {
+		let mut c = "{".to_owned();
+		for field in self.variants() {
+			write!(c, "\n\t{},", field.0.c_name()).unwrap();
+		}
+		c.push_str("\n}");
+		Ok(c)
+	}
+
 	fn c_prelude(&self, context: &mut Context) -> anyhow::Result<String> {
 		let name = context
 			.transpiling_either_name
@@ -118,15 +127,6 @@ impl TranspileToC for Either {
 
 		prelude.push("};".to_string());
 		Ok(prelude.join("\n"))
-	}
-
-	fn to_c(&self, _context: &mut Context) -> anyhow::Result<String> {
-		let mut c = "{".to_owned();
-		for field in self.variants() {
-			write!(c, "\n\t{},", field.0.c_name()).unwrap();
-		}
-		c.push_str("\n}");
-		Ok(c)
 	}
 }
 

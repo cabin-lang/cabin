@@ -179,7 +179,7 @@ impl TranspileToC for Program {
 					.unwrap();
 
 				match value {
-					Expression::Literal(Literal(LiteralValue::Group(_) | LiteralValue::Either(_), ..)) => {
+					Expression::Literal(Literal(LiteralValue::Group(_) | LiteralValue::Either(_) | LiteralValue::Object(_), ..)) => {
 						declaration
 							.c_prelude(context)?
 							.lines()
