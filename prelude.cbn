@@ -93,7 +93,7 @@ let Text = group {
 
 // Numbers ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-let Number = new Object {
+let Number = group {
 	// Internal number field //
 
     #[system_side_effects, builtin("Number.equals")]
