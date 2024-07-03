@@ -30,7 +30,7 @@ pub struct RunCommand {
 	#[arg(long, short = 'c')]
 	pub emit_c: Option<String>,
 
-	#[arg(long = "show-c-errors", short)]
+	#[arg(long)]
 	pub show_c_errors: bool
 }
 
