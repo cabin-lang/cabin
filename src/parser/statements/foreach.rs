@@ -74,7 +74,7 @@ impl TranspileToC for ForEachLoop {
 			{
 				let body = self.body.to_c(context)?;
 				format!(
-					"{{\n\tvoid* {name};\n\tcollection->get_u(collection, index, &{name});{}",
+					"{{\n\tvoid* {name};\n\tNumber_u index_u = (Number_u){{ .equals_u=equals_3 }};\n\tcollection->get_u(collection, index_u, &{name});{}",
 					body.get(2..body.len() - 1).unwrap().to_owned(),
 					name = self.name.c_name(),
 				)

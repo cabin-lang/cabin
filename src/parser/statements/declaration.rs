@@ -365,6 +365,10 @@ impl TranspileToC for Declaration {
 			context.transpiling_group_name = Some(self.name.clone());
 		}
 
+		if let Expression::Literal(Literal(LiteralValue::Either(_), ..)) = &value {
+			context.transpiling_either_name = Some(self.name.clone());
+		}
+
 		value.c_prelude(context).map_err(|error| {
 			anyhow::anyhow!(
 				"{error}\n\t{}", format!("while generating the C prelude of the initial declared value of the variable \"{}\"",

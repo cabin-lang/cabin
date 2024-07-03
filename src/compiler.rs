@@ -77,18 +77,29 @@ pub fn write_c(c_code: &str) -> anyhow::Result<String> {
 /// on Windows, and have no extension on all other operating systems. If an error occurs, such as the C compiler throwing an error, an `Err` will be returned.
 pub fn compile_c_to(file_to_compile: &str, output_path: &str, context: &mut Context) -> anyhow::Result<String> {
 	let extension = get_native_executable_extension();
-	let status = std::process::Command::new(get_c_compiler().ok_or_else(|| anyhow::anyhow!("No C compiler found!"))?)
+	let mut cmd = std::process::Command::new(get_c_compiler().ok_or_else(|| anyhow::anyhow!("No C compiler found!"))?);
+	let output = cmd
+		.arg("-ferror-limit=0")
 		.arg("-w")
 		.arg("-o")
 		.arg(format!("{output_path}{extension}"))
 		.arg(file_to_compile)
-		.stderr(Stdio::null())
-		.status()
+		.stdout(Stdio::piped())
+		.stderr(Stdio::piped())
+		.output()
 		.map_err(|error| anyhow::anyhow!("Error during C compilation: Unable to spawn C compiler: {error}."))?;
+	let status = output.status;
 
 	if !status.success() {
 		context.encountered_compiler_bug = true;
-		anyhow::bail!("Error during C compilation: Compilation failed with {status}.");
+		if context.show_c_errors {
+			let out = String::from_utf8(output.stdout).unwrap();
+			let err = String::from_utf8(output.stderr).unwrap();
+			anyhow::bail!("Error during C compilation: Compilation failed with {status}.\nSTDOUT:{out}\nSTDERR:\n{err}");
+		}
+		else {
+			anyhow::bail!("Error during C compilation: Compilation failed with {status}.");
+		}
 	}
 
 	Ok(format!("{output_path}{extension}"))

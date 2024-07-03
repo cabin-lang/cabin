@@ -94,6 +94,9 @@ pub struct Context {
 	pub parameter_names: Vec<(Name, Literal)>,
 
 	pub transpiling_group_name: Option<Name>,
+	pub transpiling_either_name: Option<Name>,
+
+	pub show_c_errors: bool,
 }
 
 impl Context {
@@ -126,6 +129,8 @@ impl Context {
 			warnings: Vec::new(),
 			parameter_names: Vec::new(),
 			transpiling_group_name: None,
+			transpiling_either_name: None,
+			show_c_errors: false,
 		}
 	}
 

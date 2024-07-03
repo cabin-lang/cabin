@@ -95,6 +95,9 @@ let Text = group {
 
 let Number = group {
 	// Internal number field //
+
+    #[builtin("Number.equals")]
+    equals = action(this: Number, other: Number): Boolean,
 	
 	to = action(this: Number, end: Number): List {
 		// let list = [];
