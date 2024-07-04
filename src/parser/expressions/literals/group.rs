@@ -333,8 +333,6 @@ impl TranspileToC for GroupDeclaration {
 
 		prelude.push(format!("struct {name} {{"));
 
-		prelude.push("\tBoolean_u* (*equals_u)(void*, void*);".to_owned());
-
 		for field in &self.fields {
 			if let Expression::Literal(Literal(LiteralValue::FunctionDeclaration(_), ..)) = field.type_annotation.as_ref().unwrap() {
 				context.function_type_name = Some(field.name.clone());

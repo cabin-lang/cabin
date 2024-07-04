@@ -283,9 +283,12 @@ impl TranspileToC for FunctionDeclaration {
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		if let Some(name) = context.function_type_name.clone() {
 			Ok(format!(
-				"{return_type}* (*{name})({parameters})",
+				"{return_type} (*{name})({parameters})",
 				name = name.c_name(),
-				return_type = self.return_type.to_c(context)?,
+				return_type = match self.return_type.to_c(context)?.as_str() {
+					"void" => "void".to_owned(),
+					value => format!("{value}*"),
+				},
 				parameters = self
 					.parameters
 					.iter()
