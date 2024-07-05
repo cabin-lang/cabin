@@ -14,7 +14,6 @@ use crate::{
 		},
 		Parse, TokenQueue,
 	},
-	var_literal,
 };
 
 use std::{collections::VecDeque, fmt::Write as _};

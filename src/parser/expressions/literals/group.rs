@@ -53,7 +53,10 @@ pub struct GroupDeclaration {
 	pub id: usize,
 }
 
+/// The next unused group ID. This should never be referenced directly, but instead fetched-and-updated from `next_unused_group_id()`.
 static NEXT_UNUSED_GROUP_ID: AtomicUsize = AtomicUsize::new(0);
+
+/// Returns the next unused group ID.
 fn next_unused_group_id() -> usize {
 	NEXT_UNUSED_GROUP_ID.fetch_add(1, Ordering::Relaxed)
 }
@@ -135,7 +138,8 @@ impl Parse for GroupDeclaration {
 					.next_is(TokenType::Equal)
 					.then(|| {
 						tokens.pop(TokenType::Equal, context)?;
-						let mut value = Expression::parse(tokens, context).map_err(|error| anyhow::anyhow!("{error}\n\twhile parsing value of field \"{}\"", name.unmangled_name()))?;
+						let mut value =
+							Expression::parse(tokens, context).map_err(|error| anyhow::anyhow!("{error}\n\twhile parsing value of field \"{}\"", name.unmangled_name()))?;
 
 						if let Expression::Literal(Literal(LiteralValue::FunctionDeclaration(function_declaration), ..)) = &mut value {
 							function_declaration.name = Some(name.unmangled_name());

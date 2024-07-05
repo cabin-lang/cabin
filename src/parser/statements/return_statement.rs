@@ -4,11 +4,10 @@ use crate::{
 	formatter::{ColoredCabin, ToCabin},
 	lexer::{Token, TokenType},
 	parser::{
-		expressions::{binary::BinaryExpression, util::name::Name, Expression},
+		expressions::{util::name::Name, Expression},
 		statements::Statement,
 		Parse, TokenQueue,
 	},
-	var,
 };
 
 use std::collections::VecDeque;

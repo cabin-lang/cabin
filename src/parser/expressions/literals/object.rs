@@ -67,6 +67,7 @@ impl Object {
 	/// # Returns
 	/// A new empty table.
 	#[must_use]
+	#[allow(clippy::new_without_default)]
 	pub fn new() -> Self {
 		Self {
 			fields: Vec::new(),
@@ -399,7 +400,7 @@ impl TranspileToC for Object {
 
 					Expression::Literal(Literal(LiteralValue::Group(group), ..)) => write!(prelude, "\n\tGroup_{}* {};", group.id, field.name.mangled_name())?,
 					Expression::Literal(Literal(LiteralValue::Object(object), ..)) => {
-						write!(prelude, "\n\ttable_{}* {};", object.anonymous_id.unwrap(), field.name.mangled_name())?
+						write!(prelude, "\n\ttable_{}* {};", object.anonymous_id.unwrap(), field.name.mangled_name())?;
 					},
 
 					_ => {

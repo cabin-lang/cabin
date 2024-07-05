@@ -63,7 +63,11 @@ impl Parse for Expression {
 	type Output = Self;
 
 	fn parse(tokens: &mut std::collections::VecDeque<Token>, context: &mut Context) -> anyhow::Result<Self::Output> {
-		match tokens.peek().ok_or_else(|| anyhow::anyhow!("Unexpected EOF"))?.token_type {
+		match tokens
+			.peek()
+			.ok_or_else(|| anyhow::anyhow!("An expression must occur here, but instead the file ends."))?
+			.token_type
+		{
 			// If expressions
 			TokenType::KeywordIf => Ok(Self::IfStatement(Box::new(IfExpression::parse(tokens, context)?))),
 

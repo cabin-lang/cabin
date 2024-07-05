@@ -129,7 +129,9 @@ impl Parse for BinaryExpression {
 
 #[derive(Debug, Clone)]
 pub struct AccessExpression {
+	/// The left hand side of the thing being accessed. This can be any kind of expression, such as the case `(1 + 1).to(10)`.
 	left: Expression,
+	/// The right hand side of the access expression, which is the field to access.
 	right: Name,
 }
 
