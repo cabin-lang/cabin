@@ -3,9 +3,6 @@ use crate::{
 	parser::{expressions::Expression, statements::Statement},
 };
 
-/// The type tree module, which handles detection of circular dependencies in compile-time code.
-pub mod type_tree;
-
 /// The builtin module, which handles running built-in functions at compile-time and transpiling built-in functions to C code.
 pub mod builtin;
 

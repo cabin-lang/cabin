@@ -448,13 +448,13 @@ static BUILTINS: phf::Map<&'static str, BuiltinFunction> = phf::phf_map! {
 
 	"Anything.is" => BuiltinFunction {
 		compile_time: |args| {
-			let Expression::Literal(this) = args
+			let Expression::Literal(_this) = args
 				.first()
 				.ok_or_else(|| anyhow::anyhow!("The function \"{}\" takes two arguments (the list to append to and the element to append), but no arguments were given", "List.append".bold().cyan()))? else {
 					anyhow::bail!("First argument to Anything.is is not a literal");
 				};
 
-			let Expression::Literal(other) = args
+			let Expression::Literal(_other) = args
 				.get(1)
 				.ok_or_else(|| anyhow::anyhow!("The function \"{}\" takes two arguments (the list to append to and the element to append), but no arguments were given", "List.append".bold().cyan()))? else {
 					anyhow::bail!("Second argument to Anything.is is not a literal");
