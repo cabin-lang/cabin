@@ -126,7 +126,7 @@ impl Parse for GroupDeclaration {
 					.next_is(TokenType::Colon)
 					.then(|| {
 						tokens.pop(TokenType::Colon, context)?;
-						Expression::parse(tokens, context).map_err(|error| anyhow::anyhow!("{error}\n\twhile parsing the type of the field \"{}\"", name.cabin_name()))
+						Expression::parse(tokens, context).map_err(|error| anyhow::anyhow!("{error}\n\twhile parsing the type of the field \"{}\"", name.unmangled_name()))
 					})
 					.transpose()?;
 
@@ -135,10 +135,10 @@ impl Parse for GroupDeclaration {
 					.next_is(TokenType::Equal)
 					.then(|| {
 						tokens.pop(TokenType::Equal, context)?;
-						let mut value = Expression::parse(tokens, context).map_err(|error| anyhow::anyhow!("{error}\n\twhile parsing value of field \"{}\"", name.cabin_name()))?;
+						let mut value = Expression::parse(tokens, context).map_err(|error| anyhow::anyhow!("{error}\n\twhile parsing value of field \"{}\"", name.unmangled_name()))?;
 
 						if let Expression::Literal(Literal(LiteralValue::FunctionDeclaration(function_declaration), ..)) = &mut value {
-							function_declaration.name = Some(name.cabin_name());
+							function_declaration.name = Some(name.unmangled_name());
 						}
 
 						// Infer type tag
@@ -159,7 +159,7 @@ impl Parse for GroupDeclaration {
 				let Some(field_type_annotation) = type_annotation else {
 					anyhow::bail!(
 						"Unable to infer the type of the field \"{name}\"\n\twhile parsing the field \"{name}\" of a group",
-						name = name.cabin_name().bold().cyan()
+						name = name.unmangled_name().bold().cyan()
 					);
 				};
 
@@ -229,7 +229,7 @@ impl CompileTime for GroupDeclaration {
 							format!(
 								"while evaluating the {} \"{}\" at compile-time",
 								"tags of the field".bold().white(),
-								field.name.cabin_name().cyan().bold()
+								field.name.unmangled_name().cyan().bold()
 							)
 							.dimmed()
 						)
@@ -243,7 +243,7 @@ impl CompileTime for GroupDeclaration {
 					format!(
 						"while evaluating the {} \"{}\" at compile-time",
 						"type of the field".white().bold(),
-						field.name.cabin_name().cyan().bold()
+						field.name.unmangled_name().cyan().bold()
 					)
 					.dimmed()
 				)
@@ -258,7 +258,7 @@ impl CompileTime for GroupDeclaration {
 						anyhow::anyhow!(
 							"{error}\n\twhile evaluating the {} \"{}\" at compile-time",
 							"value of the field".bold().white(),
-							field.name.cabin_name().bold().cyan()
+							field.name.unmangled_name().bold().cyan()
 						)
 					});
 
@@ -275,7 +275,7 @@ impl CompileTime for GroupDeclaration {
 					anyhow::anyhow!(
 						"{error}\n\twhile evaluating the {} \"{}\" at compile-time",
 						"value of the field".bold().white(),
-						field.name.cabin_name().cyan().bold()
+						field.name.unmangled_name().cyan().bold()
 					)
 				})?;
 		}
@@ -304,8 +304,8 @@ impl TranspileToC for GroupDeclaration {
 		let name = context
 			.transpiling_group_name
 			.clone()
-			.map_or_else(|| format!("anonymous_group_{}", self.id), |name| name.c_name());
-		let mut prelude = vec![format!("// group {name}", name = Name::from_c(&name).cabin_name())];
+			.map_or_else(|| format!("anonymous_group_{}", self.id), |name| name.mangled_name());
+		let mut prelude = vec![format!("// group {name}", name = Name::from_c(&name).unmangled_name())];
 		if let Some(compile_time_parameters) = &self.compile_time_parameters {
 			context.generics_stack.push(compile_time_parameters.clone());
 		}
@@ -317,7 +317,7 @@ impl TranspileToC for GroupDeclaration {
 					prelude.push(field.value.as_ref().unwrap().c_prelude(context).map_err(|error| {
 						anyhow::anyhow!(
 							"{error}\n\t{}",
-							format!("while generating the C prelude for the field \"{}\" of a group", field.name.cabin_name().bold().cyan()).dimmed()
+							format!("while generating the C prelude for the field \"{}\" of a group", field.name.unmangled_name().bold().cyan()).dimmed()
 						)
 					})?);
 				}
@@ -340,7 +340,7 @@ impl TranspileToC for GroupDeclaration {
 				prelude.push(format!("{};", function_type_c.get(0..function_type_c.len() - 1).unwrap()));
 				context.function_type_name = None;
 			} else {
-				prelude.push(format!("\t{}* {};", field.type_annotation.as_ref().unwrap().to_c(context)?, field.name.c_name()));
+				prelude.push(format!("\t{}* {};", field.type_annotation.as_ref().unwrap().to_c(context)?, field.name.mangled_name()));
 			}
 		}
 
@@ -375,7 +375,7 @@ impl ToCabin for GroupDeclaration {
 	fn to_cabin(&self) -> String {
 		let mut cabin_code = "group {".to_owned();
 		for field in &self.fields {
-			write!(cabin_code, "\t{}", field.name.cabin_name()).unwrap();
+			write!(cabin_code, "\t{}", field.name.unmangled_name()).unwrap();
 			write!(cabin_code, ": {}", field.type_annotation.as_ref().unwrap().to_cabin()).unwrap();
 			if let Some(value) = &field.value {
 				write!(cabin_code, " = {}", value.to_cabin().lines().collect::<Vec<_>>().join("\n\t")).unwrap();

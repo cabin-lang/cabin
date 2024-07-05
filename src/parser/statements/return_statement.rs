@@ -4,7 +4,7 @@ use crate::{
 	formatter::{ColoredCabin, ToCabin},
 	lexer::{Token, TokenType},
 	parser::{
-		expressions::{binary::BinaryExpression, Expression},
+		expressions::{binary::BinaryExpression, util::name::Name, Expression},
 		statements::Statement,
 		Parse, TokenQueue,
 	},
@@ -14,6 +14,8 @@ use crate::{
 use std::collections::VecDeque;
 
 use colored::Colorize as _;
+
+use super::reassignment::Reassignment;
 
 /// A return statement. This is a statement that returns a value from a function.
 #[derive(Clone, Debug)]
@@ -56,11 +58,10 @@ impl CompileTimeStatement for ReturnStatement {
 		// This is a false positive warning - `Option::map_or_else()` will cause an ownership error here
 		#[allow(clippy::option_if_let_else)]
 		if let Some(expression) = evaluated {
-			Ok(Statement::Expression(Expression::BinaryExpression(Box::new(BinaryExpression {
-				left: var!("return_address", self.scope_id),
-				operator: TokenType::Equal,
-				right: expression,
-			}))))
+			Ok(Statement::Reassignment(Reassignment {
+				name: Name("return_address".to_owned()),
+				value: expression,
+			}))
 		} else {
 			Ok(Statement::ReturnStatement(Self {
 				expression: evaluated,

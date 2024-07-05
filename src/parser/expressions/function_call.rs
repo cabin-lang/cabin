@@ -120,7 +120,7 @@ impl CompileTime for FunctionCall {
 			function = context
 				.scope_data
 				.get_variable_from_id(variable_reference.name(), variable_reference.scope_id())
-				.ok_or_else(|| anyhow::anyhow!("Variable {} not found", variable_reference.name().cabin_name()))?
+				.ok_or_else(|| anyhow::anyhow!("Variable {} not found", variable_reference.name().unmangled_name()))?
 				.value
 				.clone()
 				.unwrap();
@@ -144,7 +144,7 @@ impl CompileTime for FunctionCall {
 			}
 
 			if let Expression::Literal(Literal(LiteralValue::Object(table), ..)) = tag {
-				if table.name.cabin_name() == "RuntimeOnlyTag" {
+				if table.name.unmangled_name() == "RuntimeOnlyTag" {
 					let reason_value = table.get_field(&Name("reason".to_owned())).unwrap_or_else(|| unreachable!());
 					let reason = reason_value
 						.as_string()
@@ -191,7 +191,7 @@ impl CompileTime for FunctionCall {
 		if !has_system_side_effects || with_side_effects {
 			for tag in function_declaration.tags.iter() {
 				if let Expression::Literal(Literal(LiteralValue::Object(table), ..)) = tag {
-					if table.name.cabin_name() == "BuiltinTag" {
+					if table.name.unmangled_name() == "BuiltinTag" {
 						let internal_name_value = table.get_field(&Name("internal_name".to_owned())).unwrap_or_else(|| unreachable!());
 						let internal_name = internal_name_value.as_string().map_err(|error| {
 							context.encountered_compiler_bug = true;
@@ -256,7 +256,7 @@ impl ParentExpression for FunctionCall {
 			function = context
 				.scope_data
 				.get_variable_from_id(variable_reference.name(), variable_reference.scope_id())
-				.ok_or_else(|| anyhow::anyhow!("Variable {} not found", variable_reference.name().cabin_name()))?
+				.ok_or_else(|| anyhow::anyhow!("Variable {} not found", variable_reference.name().unmangled_name()))?
 				.value
 				.clone()
 				.unwrap()
@@ -270,7 +270,7 @@ impl ParentExpression for FunctionCall {
 		}
 
 		let Expression::Literal(Literal(LiteralValue::FunctionDeclaration(function_declaration), ..)) = &mut function else {
-			unreachable!("{function:?}")
+			unreachable!("Function was evaluated to not be a function: {function:?}")
 		};
 
 		context.scope_data.enter_new_scope(ScopeType::Block);
@@ -292,7 +292,7 @@ impl ParentExpression for FunctionCall {
 				.scope_data
 				.declare_new_variable(parameter_name.clone(), None, argument.clone(), TagList::default())?;
 
-			*argument = var!(parameter_name.cabin_name(), context.scope_data.unique_id());
+			*argument = var!(parameter_name.unmangled_name(), context.scope_data.unique_id());
 		}
 
 		let block_scope_id = context.scope_data.unique_id();

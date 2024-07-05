@@ -76,7 +76,7 @@ impl TranspileToC for ForEachLoop {
 				format!(
 					"{{\n\tvoid* {name};\n\tNumber_u index_u = (Number_u){{ .equals_u = &equals_3 }};\n\tcollection->get_u(collection, &index_u, &{name});{}",
 					body.get(2..body.len() - 1).unwrap().to_owned(),
-					name = self.name.c_name(),
+					name = self.name.mangled_name(),
 				)
 			}
 		))
@@ -85,7 +85,7 @@ impl TranspileToC for ForEachLoop {
 
 impl ToCabin for ForEachLoop {
 	fn to_cabin(&self) -> String {
-		format!("foreach {} in {} {}", self.name.cabin_name(), self.iterator.to_cabin(), self.body.to_cabin())
+		format!("foreach {} in {} {}", self.name.unmangled_name(), self.iterator.to_cabin(), self.body.to_cabin())
 	}
 }
 
@@ -94,7 +94,7 @@ impl ColoredCabin for ForEachLoop {
 		format!(
 			"{} {} {} {} {}",
 			"foreach".style(context.theme().keyword()),
-			self.name.cabin_name(),
+			self.name.unmangled_name(),
 			"in".style(context.theme().keyword()),
 			self.iterator.to_cabin(),
 			self.body.to_cabin()

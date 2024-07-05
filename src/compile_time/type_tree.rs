@@ -50,8 +50,8 @@ impl VariableDependencyTreeSet {
 		if &dependency != current && self.depends_on(&dependency, current) {
 			anyhow::bail!(
   				"Variable dependency cycle detected: The variable \"{current}\" depends on the variable \"{dependency}\", but the variable \"{dependency}\" depends on the variable \"{current}\"",
-  				current = current.cabin_name().bold().cyan(),
-  				dependency = dependency.cabin_name().bold().cyan()
+  				current = current.unmangled_name().bold().cyan(),
+  				dependency = dependency.unmangled_name().bold().cyan()
   			);
 		}
 

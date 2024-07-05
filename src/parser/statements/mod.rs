@@ -11,6 +11,7 @@ use crate::{
 };
 
 use colored::Colorize as _;
+use reassignment::Reassignment;
 
 use self::{foreach::ForEachLoop, while_loop::WhileLoop};
 
@@ -23,10 +24,12 @@ pub mod return_statement;
 pub mod tail;
 
 /// The `foreach` module, which handles for loops.
-mod foreach;
+pub mod foreach;
 
 /// The `while_loop` module, which handles while loops.
-mod while_loop;
+pub mod while_loop;
+
+pub mod reassignment;
 
 /// A statement in the language. A statement can only occur at the top level of a program or within a function body.
 #[derive(Clone, Debug)]
@@ -38,6 +41,7 @@ pub enum Statement {
 	Tail(TailStatement),
 	ForEachLoop(ForEachLoop),
 	WhileLoop(WhileLoop),
+	Reassignment(Reassignment),
 }
 
 impl Parse for Statement {
@@ -65,7 +69,7 @@ impl ParentStatement for Statement {
 					"{error}\n\t{}",
 					format!(
 						"while evaluating the sub-expressions of the declaration of the variable {} at compile-time",
-						declaration.name.cabin_name().bold().cyan()
+						declaration.name.unmangled_name().bold().cyan()
 					)
 					.dimmed()
 				)
@@ -98,6 +102,7 @@ impl TranspileToC for Statement {
 			Self::Tail(tail) => tail.c_prelude(context),
 			Self::ForEachLoop(foreach) => foreach.c_prelude(context),
 			Self::WhileLoop(while_loop) => while_loop.c_prelude(context),
+			Self::Reassignment(reassignment) => reassignment.c_prelude(context),
 		}
 	}
 
@@ -109,6 +114,7 @@ impl TranspileToC for Statement {
 			Self::Tail(tail) => tail.to_c(context)?,
 			Self::ForEachLoop(foreach) => foreach.to_c(context)?,
 			Self::WhileLoop(while_loop) => while_loop.to_c(context)?,
+			Self::Reassignment(reassignment) => reassignment.to_c(context)?,
 		})
 	}
 }
@@ -122,6 +128,7 @@ impl ToCabin for Statement {
 			Self::Tail(tail) => tail.to_cabin(),
 			Self::ForEachLoop(foreach) => foreach.to_cabin(),
 			Self::WhileLoop(while_loop) => while_loop.to_cabin(),
+			Self::Reassignment(reassignment) => reassignment.to_cabin(),
 		}
 	}
 }
@@ -135,6 +142,7 @@ impl ColoredCabin for Statement {
 			Self::Tail(tail) => tail.to_colored_cabin(context),
 			Self::ForEachLoop(foreach) => foreach.to_colored_cabin(context),
 			Self::WhileLoop(while_loop) => while_loop.to_colored_cabin(context),
+			Self::Reassignment(reassignment) => reassignment.to_colored_cabin(context),
 		}
 	}
 }

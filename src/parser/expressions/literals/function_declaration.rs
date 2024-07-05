@@ -284,7 +284,7 @@ impl TranspileToC for FunctionDeclaration {
 		if let Some(name) = context.function_type_name.clone() {
 			Ok(format!(
 				"{return_type} (*{name})({parameters})",
-				name = name.c_name(),
+				name = name.mangled_name(),
 				return_type = match self.return_type.to_c(context)?.as_str() {
 					"void" => "void".to_owned(),
 					value => format!("{value}*"),
@@ -302,7 +302,7 @@ impl TranspileToC for FunctionDeclaration {
 								c_type
 							}
 						},
-						parameter_name = parameter_name.c_name()
+						parameter_name = parameter_name.mangled_name()
 					)))
 					.collect::<anyhow::Result<Vec<_>>>()?
 					.join(", ")
@@ -350,7 +350,7 @@ impl TranspileToC for FunctionDeclaration {
 							c_type
 						}
 					},
-					name.c_name()
+					name.mangled_name()
 				))
 			})
 			.collect::<anyhow::Result<Vec<_>>>()?;
@@ -365,7 +365,7 @@ impl TranspileToC for FunctionDeclaration {
 		for tag in self.tags.iter() {
 			if let Expression::Literal(Literal(LiteralValue::Object(table), ..)) = tag {
 				// Builtin function
-				if table.name.cabin_name() == "BuiltinTag" {
+				if table.name.unmangled_name() == "BuiltinTag" {
 					let internal_name_value = table.get_field(&Name("internal_name".to_owned())).unwrap_or_else(|| unreachable!());
 					let internal_name = internal_name_value.as_string().map_err(|error| {
 						anyhow::anyhow!(
@@ -374,7 +374,7 @@ impl TranspileToC for FunctionDeclaration {
 								.dimmed()
 						)
 					})?;
-					let parameter_names = self.parameters.iter().map(|parameter| parameter.0.c_name()).collect::<Vec<_>>();
+					let parameter_names = self.parameters.iter().map(|parameter| parameter.0.mangled_name()).collect::<Vec<_>>();
 					body = builtin_to_c(&internal_name, parameter_names.as_slice())?
 						.lines()
 						.map(|line| line.to_owned())
@@ -401,7 +401,7 @@ impl ToCabin for FunctionDeclaration {
 	fn to_cabin(&self) -> String {
 		let mut cabin_code = "function(".to_owned();
 		for (parameter_name, parameter_type) in &self.parameters {
-			write!(cabin_code, "{}: {},", parameter_name.cabin_name(), parameter_type.to_cabin()).unwrap();
+			write!(cabin_code, "{}: {},", parameter_name.unmangled_name(), parameter_type.to_cabin()).unwrap();
 		}
 		write!(cabin_code, "): {}", self.return_type.to_cabin()).unwrap();
 		if let Some(body) = &self.body {

@@ -11,6 +11,12 @@ let Void = new Object {};
 
 let Function = group {};
 
+let Either = group {};
+
+let EitherVariant = group {
+	id: Number
+};
+
 let AnonymousTable = group {};
 
 let Object = group {};

@@ -19,6 +19,7 @@ pub mod function_call;
 /// The `literals` module, which handles literal values.
 pub mod literals;
 
+use binary::AccessExpression;
 use colored::Colorize as _;
 
 use crate::{
@@ -52,7 +53,7 @@ use crate::{
 pub enum Expression {
 	Literal(Literal),
 	FunctionCall(Box<FunctionCall>),
-	BinaryExpression(Box<BinaryExpression>),
+	Access(Box<AccessExpression>),
 	IfStatement(Box<IfExpression>),
 	Run(Box<RunExpression>),
 	Block(Block),
@@ -112,7 +113,7 @@ impl Expression {
 		if table.name != Name("Text".to_owned()) {
 			anyhow::bail!(
 				"Attempted to get an expression as Text, and it is an object, but the object is not an instance of Text, it's an instance of {}",
-				table.name.cabin_name().bold().cyan()
+				table.name.unmangled_name().bold().cyan()
 			);
 		}
 

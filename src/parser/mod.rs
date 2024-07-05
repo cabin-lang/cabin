@@ -107,7 +107,7 @@ impl TranspileToC for Program {
 					.ok_or_else(|| anyhow::anyhow!("Expected scope to exist for declaration"))?
 					.get_variable_direct(&declaration.name)
 					.cloned()
-					.ok_or_else(|| anyhow::anyhow!("Variable {} not found", declaration.name.cabin_name()))?
+					.ok_or_else(|| anyhow::anyhow!("Variable {} not found", declaration.name.unmangled_name()))?
 					.value
 					.unwrap();
 
@@ -174,7 +174,7 @@ impl TranspileToC for Program {
 					.ok_or_else(|| anyhow::anyhow!("Expected scope to exist for declaration"))?
 					.get_variable_direct(&declaration.name)
 					.cloned()
-					.ok_or_else(|| anyhow::anyhow!("Variable {} not found", declaration.name.cabin_name()))?
+					.ok_or_else(|| anyhow::anyhow!("Variable {} not found", declaration.name.unmangled_name()))?
 					.value
 					.unwrap();
 
@@ -204,7 +204,7 @@ impl TranspileToC for Program {
 					.ok_or_else(|| anyhow::anyhow!("Expected scope to exist for declaration"))?
 					.get_variable_direct(&declaration.name)
 					.cloned()
-					.ok_or_else(|| anyhow::anyhow!("Variable {} not found", declaration.name.cabin_name()))?
+					.ok_or_else(|| anyhow::anyhow!("Variable {} not found", declaration.name.unmangled_name()))?
 					.value
 					.unwrap();
 
@@ -254,7 +254,7 @@ impl TranspileToC for Program {
 				parameters = function
 					.parameters
 					.iter()
-					.map(|parameter| Ok(format!("{}* {}", parameter.1.to_c(context)?, parameter.0.cabin_name())))
+					.map(|parameter| Ok(format!("{}* {}", parameter.1.to_c(context)?, parameter.0.unmangled_name())))
 					.collect::<anyhow::Result<Vec<_>>>()?
 					.join(", ")
 			));

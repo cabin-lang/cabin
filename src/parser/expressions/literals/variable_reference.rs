@@ -108,7 +108,7 @@ impl VariableReference {
 				let program = context.colored_program();
 				context.add_error_details(format!(
 					"In this part of the program, you refer to a variable \"{}\", but no variable with that name exists here:\n\n{}:\n\n{}\n\n{}",
-					self.name().cabin_name().bold().cyan(),
+					self.name().unmangled_name().bold().cyan(),
 					format!("In {} (line {})", context.file_name.bold().white(), self.line),
 					format!("\n{}\n",
 						program
@@ -123,7 +123,7 @@ impl VariableReference {
 								},
 								line = if (line_number as isize) + 1 == (self.line as isize) - 1 {
 									let spacing = " ".repeat(self.line - 1 + format!("    {line_number}    ").len());
-									let arrows = "v".repeat(self.name().cabin_name().len());
+									let arrows = "v".repeat(self.name().unmangled_name().len());
 									format!("{}", format!("{line}\n{spacing}{arrows}  the error is with this variable reference").style(context.theme().line_numbers()))
 								} else {
 									line.to_owned()
@@ -138,14 +138,14 @@ impl VariableReference {
 							.scope_data
 							.get_closest_variables(self.name(), 3)
 							.into_iter()
-							.map(|(name, _variable)| format!("    - {}", name.cabin_name().cyan().bold()))
+							.map(|(name, _variable)| format!("    - {}", name.unmangled_name().cyan().bold()))
 							.collect::<Vec<_>>()
 							.join("\n"),
-						name = self.name().cabin_name().bold().cyan()
+						name = self.name().unmangled_name().bold().cyan()
 					)
 				));
 
-				anyhow::anyhow!("You refer to a variable with the name \"{name}\", but no variable with the name \"{name}\" exists\nat the part of the program that you refer to it.\n", name = self.name().cabin_name().bold().cyan())
+				anyhow::anyhow!("You refer to a variable with the name \"{name}\", but no variable with the name \"{name}\" exists\nat the part of the program that you refer to it.\n", name = self.name().unmangled_name().bold().cyan())
 			})?
 			.value
 			.unwrap())
@@ -186,7 +186,7 @@ impl Typed for VariableReference {
 			.ok_or_else(|| {
 				anyhow::anyhow!(
 					"Error getting the type of identifier \"{name}\": The variable \"{name}\" does not exist in this scope\n",
-					name = self.name().cabin_name()
+					name = self.name().unmangled_name()
 				)
 			})?
 			.clone();
@@ -209,13 +209,13 @@ impl TranspileToC for VariableReference {
 	}
 
 	fn to_c(&self, _context: &mut Context) -> anyhow::Result<String> {
-		Ok(self.name().c_name())
+		Ok(self.name().mangled_name())
 	}
 }
 
 impl ToCabin for VariableReference {
 	fn to_cabin(&self) -> String {
-		self.name().cabin_name()
+		self.name().unmangled_name()
 	}
 }
 

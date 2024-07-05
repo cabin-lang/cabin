@@ -21,6 +21,8 @@ use std::{collections::VecDeque, fmt::Write as _};
 
 use colored::Colorize as _;
 
+use super::next_unused_virtual_address;
+
 /// An `either` declaration. This is analogous to an `enum` in other languages; It contains a list of property-less objects, and the variable that the `either` declaration is assigned to acts as a union
 /// type among those variants.
 #[derive(Debug, Clone)]
@@ -34,6 +36,7 @@ impl Either {
 	///
 	/// # Returns
 	/// a slice of the variants stored in this `either`
+	#[must_use]
 	pub fn variants(&self) -> &[(Name, Expression)] {
 		&self.variants
 	}
@@ -86,7 +89,7 @@ impl Parse for Either {
 		})?;
 
 		Ok(Self {
-			variants: variants.into_iter().map(|variant| (variant, object! { Object {}})).collect::<Vec<_>>(),
+			variants: variants.into_iter().map(|variant| (variant, object! { Object {} })).collect::<Vec<_>>(),
 		})
 	}
 }
@@ -107,25 +110,22 @@ impl TranspileToC for Either {
 	fn to_c(&self, _context: &mut Context) -> anyhow::Result<String> {
 		let mut c = "{".to_owned();
 		for field in self.variants() {
-			write!(c, "\n\t{},", field.0.c_name()).unwrap();
+			write!(c, "\n\t{},", field.0.mangled_name()).unwrap();
 		}
 		c.push_str("\n}");
 		Ok(c)
 	}
 
 	fn c_prelude(&self, context: &mut Context) -> anyhow::Result<String> {
-		let name = context
-			.transpiling_either_name
-			.clone()
-			.map(|n| { n.c_name() }).unwrap();
+		let name = context.transpiling_either_name.clone().map(|n| n.mangled_name()).unwrap();
 
-		let mut prelude = vec![format!("// either {}", name), format!("enum {} {{", name) ];
+		let mut prelude = vec![format!("// either {}", name), format!("enum {} {{", name)];
 
-		for (name, expr) in self.variants.clone() {
-			prelude.push(format!("\t{},", name.c_name()));
+		for (variant_name, _value) in self.variants.clone() {
+			prelude.push(format!("\t{},", variant_name.mangled_name()));
 		}
 
-		prelude.push("};".to_string());
+		prelude.push("};".to_owned());
 		Ok(prelude.join("\n"))
 	}
 }
@@ -134,7 +134,7 @@ impl ToCabin for Either {
 	fn to_cabin(&self) -> String {
 		let mut cabin = "either {".to_owned();
 		for variant in self.variants() {
-			write!(cabin, "\t{}", variant.0.cabin_name()).unwrap();
+			write!(cabin, "\t{}", variant.0.unmangled_name()).unwrap();
 		}
 		cabin.push('}');
 		cabin
@@ -154,6 +154,6 @@ impl ColoredCabin for Either {
 
 impl Typed for Either {
 	fn get_type(&self, _context: &mut Context) -> anyhow::Result<Literal> {
-		Ok(var_literal!("Either", 0))
+		Ok(Literal(LiteralValue::Either(self.clone()), next_unused_virtual_address()))
 	}
 }

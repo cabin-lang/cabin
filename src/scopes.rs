@@ -169,7 +169,7 @@ impl Scope {
 		string.push(format!("\tindex: [{}]", self.index));
 		string.push(format!(
 			"\tvariables: [{}],",
-			self.variables.keys().map(|name| name.cabin_name()).collect::<Vec<_>>().join(", ")
+			self.variables.keys().map(|name| name.unmangled_name()).collect::<Vec<_>>().join(", ")
 		));
 		for child_scope in &self.children {
 			for line in scopes
@@ -355,7 +355,7 @@ impl ScopeData {
 		let mut current = Some(self.current_scope);
 		while let Some(current_index) = current {
 			if let Some(variable) = self.scopes.get_mut(current_index).unwrap().get_variable_direct(&name) {
-				anyhow::bail!("\nError declaring new variable \"{name}\": The variable \"{name}\" already exists in the current scope, and Cabin doesn't allow shadowing\nThe variable is described as follows: {variable:?}", name = name.cabin_name());
+				anyhow::bail!("\nError declaring new variable \"{name}\": The variable \"{name}\" already exists in the current scope, and Cabin doesn't allow shadowing\nThe variable is described as follows: {variable:?}", name = name.unmangled_name());
 			}
 			current = self.scopes.get(current_index).unwrap().parent;
 		}
@@ -427,7 +427,7 @@ impl ScopeData {
 		// No variable found
 		anyhow::bail!(
 			"Error reassigning variable \"{name}\": No variable with the name \"{name}\" exists in this scope",
-			name = name.cabin_name()
+			name = name.unmangled_name()
 		);
 	}
 
@@ -472,7 +472,12 @@ impl ScopeData {
 	#[must_use]
 	pub fn get_closest_variables(&self, name: &Name, max: usize) -> Vec<(&Name, &DeclarationData)> {
 		let mut all_variables = self.get_variables();
-		all_variables.sort_by(|(first, _), (second, _)| first.cabin_name().distance_to(&name.cabin_name()).cmp(&second.cabin_name().distance_to(&name.cabin_name())));
+		all_variables.sort_by(|(first, _), (second, _)| {
+			first
+				.unmangled_name()
+				.distance_to(&name.unmangled_name())
+				.cmp(&second.unmangled_name().distance_to(&name.unmangled_name()))
+		});
 
 		if all_variables.len() <= max {
 			all_variables

@@ -32,6 +32,7 @@ impl TagList {
 	///
 	/// # Parameters
 	/// - `tags` - The tags in this tag list
+	#[must_use]
 	pub fn new(tags: Vec<Expression>) -> Self {
 		Self { tags }
 	}

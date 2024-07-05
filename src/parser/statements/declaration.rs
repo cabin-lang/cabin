@@ -77,7 +77,7 @@ impl Parse for Declaration {
 		let mut value = Expression::parse(tokens, context).map_err(|error| {
 			anyhow::anyhow!(
 				"{error}\n\twhile parsing the initial declared value of the variable \"{}\"",
-				name.cabin_name().bold().cyan()
+				name.unmangled_name().bold().cyan()
 			)
 		})?;
 
@@ -87,14 +87,14 @@ impl Parse for Declaration {
 			Expression::Literal(Literal(LiteralValue::Group(group), ..)) => {
 				for field in &mut group.fields {
 					if let Some(Expression::Literal(Literal(LiteralValue::FunctionDeclaration(function_declaration), ..))) = &mut field.value {
-						function_declaration.name = Some(format!("{}_{}", name.cabin_name(), function_declaration.name.as_ref().unwrap()));
+						function_declaration.name = Some(format!("{}_{}", name.unmangled_name(), function_declaration.name.as_ref().unwrap()));
 					}
 				}
 			},
 
 			// Add names to function declaration
 			Expression::Literal(Literal(LiteralValue::FunctionDeclaration(function_declaration), ..)) => {
-				function_declaration.name = Some(name.cabin_name());
+				function_declaration.name = Some(name.unmangled_name());
 			},
 			_ => (),
 		};
@@ -109,7 +109,7 @@ impl Parse for Declaration {
 		context
 			.scope_data
 			.declare_new_variable(name.clone(), type_annotation.clone(), value, tags.clone())
-			.map_err(|error| anyhow::anyhow!("{error}\n\twhile attempting to declare a new variable called \"{}\"", name.cabin_name()))?;
+			.map_err(|error| anyhow::anyhow!("{error}\n\twhile attempting to declare a new variable called \"{}\"", name.unmangled_name()))?;
 
 		Ok(Self {
 			name,
@@ -129,13 +129,13 @@ impl CompileTimeStatement for Declaration {
 		let mut value = context
 			.scope_data
 			.get_scope_from_id(self.declared_scope_id)
-			.ok_or_else(|| anyhow::anyhow!("Attempted to get the scope that the variable \"{name}\" was declared in at compile-time, but no scope was found with the stored ID.\n\twhile evaluating the initial declared value of the variable \"{name}\"", name = self.name.cabin_name()))?
+			.ok_or_else(|| anyhow::anyhow!("Attempted to get the scope that the variable \"{name}\" was declared in at compile-time, but no scope was found with the stored ID.\n\twhile evaluating the initial declared value of the variable \"{name}\"", name = self.name.unmangled_name()))?
 			.get_variable_direct(&self.name)
 			.cloned()
 			.ok_or_else(|| {
 				anyhow::anyhow!(
 					"Attempted to evaluate the initially declared value of the variable \"{name}\" at compile-time, but the no declaration for the variable was found in its declared scope\n\twhile evaluating the declaration for the variable \"{name}\" at compile-time",
-					name = self.name.cabin_name().bold().cyan()
+					name = self.name.unmangled_name().bold().cyan()
 				)
 			})?
 			.value
@@ -146,7 +146,7 @@ impl CompileTimeStatement for Declaration {
 				anyhow::anyhow!(
 					"{error}\n\t{}", format!("while evaluating the initial declared {} \"{}\" at compile-time",
 					"value of the variable".bold().white(),
-					self.name.cabin_name().cyan().bold()).dimmed()
+					self.name.unmangled_name().cyan().bold()).dimmed()
 				)
 			})?;
 
@@ -181,7 +181,7 @@ impl CompileTimeStatement for Declaration {
 			let Expression::Literal(Literal(LiteralValue::VariableReference(variable_reference), ..)) = 
 				type_annotation
 				.compile_time_evaluate(context, with_side_effects)
-				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", format!("while evaluating the explicit type tag of the variable \"{}\" at compile-time", self.name.cabin_name())))? 
+				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", format!("while evaluating the explicit type tag of the variable \"{}\" at compile-time", self.name.unmangled_name())))? 
 
 			else {
 				let name = self.name.to_colored_cabin(context);
@@ -192,7 +192,7 @@ impl CompileTimeStatement for Declaration {
 
 					// Print an arrow and message where the error is 
 					format!("{}{}  the error is with this type", 
-						" ".repeat(format!("    {}    let {}: ", self.line_start, self.name.cabin_name()).len()), 
+						" ".repeat(format!("    {}    let {}: ", self.line_start, self.name.unmangled_name()).len()), 
 						"v".repeat(type_annotation.to_cabin().len())
 					).truecolor(100, 100, 100),
 
@@ -213,14 +213,14 @@ impl CompileTimeStatement for Declaration {
 						.collect::<Vec<_>>()
 						.join("\n"),
 
-					self.name.cabin_name().bold().cyan(),
+					self.name.unmangled_name().bold().cyan(),
 					self.type_annotation.as_ref().unwrap().to_cabin().bold().cyan()
 				));
 
 				anyhow::bail!(
 					"The explicit type tag provided to the variable \"{name}\" at the time of declaration cannot be resolved at compile-time\n\n{}", 
-					format!("\twhile evaluating the type of the variable \"{name}\" at compile-time\n\twhile evaluating the declaration for the variable \"{name}\" at compile-time", name = self.name.cabin_name().bold().cyan()).dimmed(),
-					name = self.name.cabin_name().bold().cyan()
+					format!("\twhile evaluating the type of the variable \"{name}\" at compile-time\n\twhile evaluating the declaration for the variable \"{name}\" at compile-time", name = self.name.unmangled_name().bold().cyan()).dimmed(),
+					name = self.name.unmangled_name().bold().cyan()
 				);
 			};
 			context.is_evaluating_type = false;
@@ -235,7 +235,7 @@ impl CompileTimeStatement for Declaration {
 				.get_type(context)
 				.map_err(|error| {
 					anyhow::anyhow!(
-						"{error}\n\t{}", format!("while inferring the type of the variable \"{}\" at its declaration based on its initial declared value", self.name.cabin_name().cyan().bold()).dimmed()
+						"{error}\n\t{}", format!("while inferring the type of the variable \"{}\" at its declaration based on its initial declared value", self.name.unmangled_name().cyan().bold()).dimmed()
 					)
 				})?)
 		};
@@ -244,21 +244,21 @@ impl CompileTimeStatement for Declaration {
 		context.scope_data.reassign_variable_from_id(&self.name, value, self.declared_scope_id).map_err(|error| {
 			anyhow::anyhow!(
 				"{error}\n\twhile attempting to reassign the value of the variable \"{}\" after evaluating it at compile-time",
-				self.name.cabin_name().bold().cyan()
+				self.name.unmangled_name().bold().cyan()
 			)
 		})?;
 
 		// Add groups to the context as structs
 		if let Expression::Literal(Literal(LiteralValue::Group(group), ..)) = &cabin_value_node {
-			if !context.groups.iter().any(|group_name| group_name.0 == self.name.c_name()) {
-				context.groups.push((self.name.c_name(), group.group_type.clone()));
+			if !context.groups.iter().any(|group_name| group_name.0 == self.name.mangled_name()) {
+				context.groups.push((self.name.mangled_name(), group.group_type.clone()));
 			}
 		}
 
 		// Add either's to the context as enums
 		if let Expression::Literal(Literal(LiteralValue::Either(_either), ..)) = &cabin_value_node {
-			if !context.groups.iter().any(|group_name| group_name.0 == self.name.c_name()) {
-				context.groups.push((self.name.c_name(), GroupType::Either));
+			if !context.groups.iter().any(|group_name| group_name.0 == self.name.mangled_name()) {
+				context.groups.push((self.name.mangled_name(), GroupType::Either));
 			}
 		}
 
@@ -283,11 +283,11 @@ impl CompileTimeStatement for Declaration {
 
 impl TranspileToC for Declaration {
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
-		if self.name.cabin_name() == "Void" {
+		if self.name.unmangled_name() == "Void" {
 			return Ok(String::new());
 		}
 
-		let value = if self.name.cabin_name().starts_with("parameter_") {
+		let value = if self.name.unmangled_name().starts_with("parameter_") {
 			self.initial_value.clone()
 		} else {
 			context
@@ -296,15 +296,15 @@ impl TranspileToC for Declaration {
 				.ok_or_else(|| anyhow::anyhow!("Expected scope to exist for declaration"))?
 				.get_variable_direct(&self.name)
 				.cloned()
-				.ok_or_else(|| anyhow::anyhow!("Variable {} not found", self.name.cabin_name()))?
+				.ok_or_else(|| anyhow::anyhow!("Variable {} not found", self.name.unmangled_name()))?
 				.value
 				.unwrap()
 		};
 
 		Ok(match &value {
-			Expression::Literal(Literal(LiteralValue::Object(object), ..)) => format!("{} {} = {};\n\n", object.c_name(), self.name.c_name(), value.to_c(context)?),
+			Expression::Literal(Literal(LiteralValue::Object(object), ..)) => format!("{} {} = {};\n\n", object.c_name(), self.name.mangled_name(), value.to_c(context)?),
 			Expression::Literal(Literal(LiteralValue::Either(either), ..)) => {
-				let c = format!("enum {} {}", self.name.c_name(), either.to_c(context)?);
+				let c = format!("enum {} {}", self.name.mangled_name(), either.to_c(context)?);
 				format!("{c};\n\n")
 			},
 			Expression::Literal(Literal(LiteralValue::FunctionDeclaration(function_declaration), ..)) => {
@@ -317,7 +317,7 @@ impl TranspileToC for Declaration {
 						};
 						raw
 					},
-					name = self.name.c_name(),
+					name = self.name.mangled_name(),
 					parameters = function_declaration
 						.parameters
 						.iter()
@@ -335,16 +335,16 @@ impl TranspileToC for Declaration {
 						context.encountered_compiler_bug = true;
 						anyhow::anyhow!(
 							"Error: The variable \"{}\" has no type tag, even after type inference.\n\n\t{}", 
-							self.name.cabin_name().bold().cyan(), 
-							format!("while generating the C prelude for the variable \"{}\"", self.name.cabin_name().bold().cyan()).dimmed()
+							self.name.unmangled_name().bold().cyan(), 
+							format!("while generating the C prelude for the variable \"{}\"", self.name.unmangled_name().bold().cyan()).dimmed()
 						)
 					})?
 					.to_c(context)?,
-				self.name.c_name(),
+				self.name.mangled_name(),
 				value.to_c(context).map_err(|error| anyhow::anyhow!(
 					"{error}\n\twhile converting the {} of the variable \"{}\" to C code",
 					"initial declared value".bold().white(),
-					self.name.cabin_name().cyan().bold()
+					self.name.unmangled_name().cyan().bold()
 				))?
 			),
 		})
@@ -357,7 +357,7 @@ impl TranspileToC for Declaration {
 			.ok_or_else(|| anyhow::anyhow!("Expected scope to exist for declaration"))?
 			.get_variable_direct(&self.name)
 			.cloned()
-			.ok_or_else(|| anyhow::anyhow!("Variable \"{}\" not found\n\t{}", self.name.cabin_name().bold().cyan(), format!("while generating the C prelude code for the declaration of the variable \"{}\"", self.name.cabin_name().bold().cyan()).dimmed()))?
+			.ok_or_else(|| anyhow::anyhow!("Variable \"{}\" not found\n\t{}", self.name.unmangled_name().bold().cyan(), format!("while generating the C prelude code for the declaration of the variable \"{}\"", self.name.unmangled_name().bold().cyan()).dimmed()))?
 			.value
 			.unwrap();
 
@@ -372,7 +372,7 @@ impl TranspileToC for Declaration {
 		value.c_prelude(context).map_err(|error| {
 			anyhow::anyhow!(
 				"{error}\n\t{}", format!("while generating the C prelude of the initial declared value of the variable \"{}\"",
-				self.name.cabin_name().bold().cyan()).dimmed()
+				self.name.unmangled_name().bold().cyan()).dimmed()
 			)
 		})
 	}
@@ -384,13 +384,13 @@ impl ParentStatement for Declaration {
 		let value = context
 			.scope_data
 			.get_scope_from_id(self.declared_scope_id)
-			.ok_or_else(|| anyhow::anyhow!("Attempted to get the scope that the variable \"{name}\" was declared in at compile-time, but no scope was found with the stored ID.\n\twhile evaluating the initial declared value of the variable \"{name}\"", name = self.name.cabin_name()))?
+			.ok_or_else(|| anyhow::anyhow!("Attempted to get the scope that the variable \"{name}\" was declared in at compile-time, but no scope was found with the stored ID.\n\twhile evaluating the initial declared value of the variable \"{name}\"", name = self.name.unmangled_name()))?
 			.get_variable_direct(&self.name)
 			.cloned()
 			.ok_or_else(|| {
 				anyhow::anyhow!(
 					"Attempted to evaluate the initially declared value of the variable \"{name}\" at compile-time, but the no declaration for the variable was found in its declared scope\n\twhile evaluating the declaration for the variable \"{name}\" at compile-time",
-					name = self.name.cabin_name().bold().cyan()
+					name = self.name.unmangled_name().bold().cyan()
 				)
 			})?
 			.value
@@ -401,7 +401,7 @@ impl ParentStatement for Declaration {
 				anyhow::anyhow!(
 					"{error}\n\t{}", format!("while evaluating the initial declared {} \"{}\" at compile-time",
 					"value of the variable".bold().white(),
-					self.name.cabin_name().cyan().bold()).dimmed()
+					self.name.unmangled_name().cyan().bold()).dimmed()
 				)
 			})?;
 
@@ -427,7 +427,7 @@ impl ParentStatement for Declaration {
 			let Expression::Literal(Literal(LiteralValue::VariableReference(variable_reference), ..)) = 
 				type_annotation
 				.compile_time_evaluate(context, true)
-				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", format!("while evaluating the explicit type tag of the variable \"{}\" at compile-time", self.name.cabin_name())))? 
+				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", format!("while evaluating the explicit type tag of the variable \"{}\" at compile-time", self.name.unmangled_name())))? 
 
 			else {
 				let name = self.name.to_colored_cabin(context);
@@ -438,7 +438,7 @@ impl ParentStatement for Declaration {
 
 					// Print an arrow and message where the error is 
 					format!("{}{}  the error is with this type", 
-						" ".repeat(format!("    {}    let {}: ", self.line_start, self.name.cabin_name()).len()), 
+						" ".repeat(format!("    {}    let {}: ", self.line_start, self.name.unmangled_name()).len()), 
 						"v".repeat(type_annotation.to_cabin().len())
 					).truecolor(100, 100, 100),
 
@@ -459,14 +459,14 @@ impl ParentStatement for Declaration {
 						.collect::<Vec<_>>()
 						.join("\n"),
 
-					self.name.cabin_name().bold().cyan(),
+					self.name.unmangled_name().bold().cyan(),
 					self.type_annotation.as_ref().unwrap().to_cabin().bold().cyan()
 				));
 
 				anyhow::bail!(
 					"The explicit type tag provided to the variable \"{name}\" at the time of declaration cannot be resolved at compile-time\n\n{}", 
-					format!("\twhile evaluating the type of the variable \"{name}\" at compile-time\n\twhile evaluating the declaration for the variable \"{name}\" at compile-time", name = self.name.cabin_name().bold().cyan()).dimmed(),
-					name = self.name.cabin_name().bold().cyan()
+					format!("\twhile evaluating the type of the variable \"{name}\" at compile-time\n\twhile evaluating the declaration for the variable \"{name}\" at compile-time", name = self.name.unmangled_name().bold().cyan()).dimmed(),
+					name = self.name.unmangled_name().bold().cyan()
 				);
 			};
 			context.is_evaluating_type = false;
@@ -482,7 +482,7 @@ impl ParentStatement for Declaration {
 				.map_err(|error| {
 					anyhow::anyhow!(
 						"{error}\n\twhile inferring the type of the variable \"{}\" at its declaration based on its initial declared value",
-						self.name.cabin_name().cyan().bold()
+						self.name.unmangled_name().cyan().bold()
 					)
 				})?)
 		};
@@ -491,14 +491,14 @@ impl ParentStatement for Declaration {
 		context.scope_data.reassign_variable_from_id(&self.name, value, self.declared_scope_id).map_err(|error| {
 			anyhow::anyhow!(
 				"{error}\n\twhile attempting to reassign the value of the variable \"{}\" after evaluating it at compile-time",
-				self.name.cabin_name().bold().cyan()
+				self.name.unmangled_name().bold().cyan()
 			)
 		})?;
 
 		// If it's a group, we want to save it
 		if let Expression::Literal(Literal(LiteralValue::Group(group), ..)) = &cabin_value_node {
-			if !context.groups.iter().any(|group_name| group_name.0 == self.name.c_name()) {
-				context.groups.push((self.name.c_name(), group.group_type.clone()));
+			if !context.groups.iter().any(|group_name| group_name.0 == self.name.mangled_name()) {
+				context.groups.push((self.name.mangled_name(), group.group_type.clone()));
 			}
 		}
 
@@ -516,7 +516,7 @@ impl ParentStatement for Declaration {
 
 impl ToCabin for Declaration {
 	fn to_cabin(&self) -> String {
-		let mut cabin_code = format!("let {}", self.name.cabin_name());
+		let mut cabin_code = format!("let {}", self.name.unmangled_name());
 		if let Some(type_annotation) = &self.type_annotation {
 			write!(cabin_code, ": {}", type_annotation.to_cabin()).unwrap();
 		}

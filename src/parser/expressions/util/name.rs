@@ -23,7 +23,8 @@ impl Name {
 	///
 	/// This is exactly equivalent to calling `to_c(&mut context)` on the name, except that `to_c` will wrap it in an
 	/// `Ok()`.
-	pub fn c_name(&self) -> String {
+	#[must_use]
+	pub fn mangled_name(&self) -> String {
 		match self.0.as_str() {
 			"Void" => "void".to_owned(),
 			"unique" => "int".to_owned(),
@@ -34,7 +35,8 @@ impl Name {
 	/// Returns the name of this `Name` as a string **as originally specified in the Cabin source code.** This should be
 	/// used for things like communicating to the user, such as error messages that need to display information about a
 	/// variable. **Do not use this when transpiling to C; Use `c_name()` or `to_c(context)` instead**.
-	pub fn cabin_name(&self) -> String {
+	#[must_use]
+	pub fn unmangled_name(&self) -> String {
 		self.0.clone()
 	}
 
@@ -50,6 +52,7 @@ impl Name {
 	///
 	/// # Parameters
 	/// - `c` - The string representation of the C version of the name.
+	#[must_use]
 	pub fn from_c(c: &str) -> Self {
 		Self(c.get(0..c.len() - 2).unwrap().to_owned())
 	}
@@ -60,14 +63,14 @@ impl ColoredCabin for Name {
 		if let Some(bad_identifier) = &context.current_bad_identifier {
 			if bad_identifier == self {
 				context.current_bad_identifier = None;
-				return format!("{}", self.cabin_name().red().bold().underline());
+				return format!("{}", self.unmangled_name().red().bold().underline());
 			}
 		}
 
-		if self.cabin_name().starts_with(|character: char| character.is_uppercase()) {
-			format!("{}", self.cabin_name().style(context.theme().type_name()))
+		if self.unmangled_name().starts_with(|character: char| character.is_uppercase()) {
+			format!("{}", self.unmangled_name().style(context.theme().type_name()))
 		} else {
-			format!("{}", self.cabin_name().style(context.theme().variable_name()))
+			format!("{}", self.unmangled_name().style(context.theme().variable_name()))
 		}
 	}
 }

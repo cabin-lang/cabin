@@ -176,7 +176,7 @@ impl Object {
 	/// this returns `object_` followed by the object's unique anonymous ID.
 	#[must_use]
 	pub fn c_name(&self) -> String {
-		self.anonymous_id.map_or_else(|| self.name.c_name(), |anonymous_id| format!("object_{anonymous_id}"))
+		self.anonymous_id.map_or_else(|| self.name.mangled_name(), |anonymous_id| format!("object_{anonymous_id}"))
 	}
 }
 
@@ -203,13 +203,13 @@ impl Parse for Object {
 				tokens.pop(TokenType::Equal, context).map_err(|error| {
 					anyhow::anyhow!(
 						"{error}\n\twhile parsing the equal sign before parsing the field \"{}\"'s value on an object literal",
-						field_name.cabin_name().bold().cyan()
+						field_name.unmangled_name().bold().cyan()
 					)
 				})?;
-				let mut value = Expression::parse(tokens, context).map_err(|error| anyhow::anyhow!("Error parsing value of field \"{}\": {error}", field_name.cabin_name()))?;
+				let mut value = Expression::parse(tokens, context).map_err(|error| anyhow::anyhow!("Error parsing value of field \"{}\": {error}", field_name.unmangled_name()))?;
 				if let Expression::Literal(Literal(LiteralValue::FunctionDeclaration(function_declaration), ..)) = &mut value {
 					function_declaration.tags = tags.clone();
-					function_declaration.name = Some(field_name.cabin_name());
+					function_declaration.name = Some(field_name.unmangled_name());
 				}
 				object.add_field(DeclarationData {
 					name: field_name,
@@ -241,7 +241,7 @@ impl CompileTime for Object {
 					format!(
 						"while performing compile-time evaluation on the {} \"{name}\" on an object",
 						"value of the field".bold().white(),
-						name = field.name.cabin_name().bold().cyan()
+						name = field.name.unmangled_name().bold().cyan()
 					)
 					.dimmed()
 				)
@@ -256,7 +256,7 @@ impl CompileTime for Object {
 							context.encountered_compiler_bug = true;
 							anyhow::anyhow!(
 								"The variable {} was referenced in scope ID {} but that scope doesn't have the variable: {:?}",
-								variable_reference.name().cabin_name(),
+								variable_reference.name().unmangled_name(),
 								variable_reference.scope_id(),
 								context.scope_data
 							)
@@ -302,7 +302,7 @@ impl CompileTime for Object {
 				.ok_or_else(|| {
 					anyhow::anyhow!(
 						"Attempted to create an object literal of type \"{}\", but no variable with that name was found in this scope\n\n\t{}",
-						self.name.cabin_name().bold().cyan(),
+						self.name.unmangled_name().bold().cyan(),
 						"while evaluating an object literal at compile-time".dimmed(),
 					)
 				})?
@@ -312,7 +312,7 @@ impl CompileTime for Object {
 			else {
 				anyhow::bail!(
 					"Attempted to create an object literal of type {}, and that variable exists in this scope, but it's not a group",
-					self.name.cabin_name()
+					self.name.unmangled_name()
 				);
 			};
 
@@ -358,7 +358,7 @@ impl Typed for Object {
 		Ok(if self.is_anonymous() {
 			var_literal!("AnonymousTable", 0)
 		} else {
-			var_literal!(self.name.cabin_name(), 0)
+			var_literal!(self.name.unmangled_name(), 0)
 		})
 	}
 }
@@ -376,7 +376,7 @@ impl TranspileToC for Object {
 						&("\n".to_owned()
 							+ &format!(
 								"{return_type} (*{name})({parameters});",
-								name = field.name.c_name(),
+								name = field.name.mangled_name(),
 								return_type = {
 									let mut raw = function_declaration.return_type.to_c(context)?;
 									if &raw != "void" {
@@ -387,7 +387,7 @@ impl TranspileToC for Object {
 								parameters = function_declaration
 									.parameters
 									.iter()
-									.map(|(name, type_annotation)| Ok(format!("{}* {name}", type_annotation.to_c(context)?, name = name.c_name())))
+									.map(|(name, type_annotation)| Ok(format!("{}* {name}", type_annotation.to_c(context)?, name = name.mangled_name())))
 									.collect::<anyhow::Result<Vec<_>>>()?
 									.join(", ")
 							)
@@ -397,8 +397,10 @@ impl TranspileToC for Object {
 							.join("\n")),
 					),
 
-					Expression::Literal(Literal(LiteralValue::Group(group), ..)) => write!(prelude, "\n\tGroup_{}* {};", group.id, field.name.c_name())?,
-					Expression::Literal(Literal(LiteralValue::Object(object), ..)) => write!(prelude, "\n\ttable_{}* {};", object.anonymous_id.unwrap(), field.name.c_name())?,
+					Expression::Literal(Literal(LiteralValue::Group(group), ..)) => write!(prelude, "\n\tGroup_{}* {};", group.id, field.name.mangled_name())?,
+					Expression::Literal(Literal(LiteralValue::Object(object), ..)) => {
+						write!(prelude, "\n\ttable_{}* {};", object.anonymous_id.unwrap(), field.name.mangled_name())?
+					},
 
 					_ => {
 						// let Type::Group(field_type, field_id) = field.value.as_ref().unwrap().get_type(context)?;
@@ -430,11 +432,15 @@ impl TranspileToC for Object {
 		// Explicit fields
 		for field in &self.fields {
 			fields.push(
-				format!(".{name} = &{value}\n", name = field.name.c_name(), value = field.value.as_ref().unwrap().to_c(context)?)
-					.lines()
-					.map(|line| format!("\t{line}"))
-					.collect::<Vec<_>>()
-					.join("\n"),
+				format!(
+					".{name} = &{value}\n",
+					name = field.name.mangled_name(),
+					value = field.value.as_ref().unwrap().to_c(context)?
+				)
+				.lines()
+				.map(|line| format!("\t{line}"))
+				.collect::<Vec<_>>()
+				.join("\n"),
 			);
 		}
 
@@ -464,12 +470,12 @@ impl TranspileToC for Object {
 
 impl ToCabin for Object {
 	fn to_cabin(&self) -> String {
-		let mut table_cabin = self.name.cabin_name() + " {";
+		let mut table_cabin = self.name.unmangled_name() + " {";
 		for field in &self.fields {
 			if !field.tags.is_empty() {
 				write!(table_cabin, "#[{}]", field.tags.iter().map(|tag| tag.to_cabin()).collect::<Vec<_>>().join(", ")).unwrap();
 			}
-			write!(table_cabin, "\n\t{} = {}", field.name.cabin_name(), field.value.as_ref().unwrap().to_cabin()).unwrap();
+			write!(table_cabin, "\n\t{} = {}", field.name.unmangled_name(), field.value.as_ref().unwrap().to_cabin()).unwrap();
 		}
 		if !self.fields.is_empty() {
 			table_cabin.push('\n');

@@ -63,6 +63,7 @@ impl Literal {
 	///
 	/// # Returns
 	/// The newly created literal.
+	#[must_use]
 	pub const fn with_virtual_address(value: LiteralValue, virtual_address: usize) -> Self {
 		Self(value, virtual_address)
 	}
@@ -74,16 +75,19 @@ impl Literal {
 	///
 	/// # Returns
 	/// The newly created literal.
+	#[must_use]
 	pub fn new(value: LiteralValue) -> Self {
 		Self(value, next_unused_virtual_address())
 	}
 
 	/// Returns the value of this literal.
+	#[must_use]
 	pub const fn value(&self) -> &LiteralValue {
 		&self.0
 	}
 
 	/// Returns the virtual address of this literal.
+	#[must_use]
 	pub const fn virtual_address(&self) -> usize {
 		self.1
 	}

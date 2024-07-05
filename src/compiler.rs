@@ -97,9 +97,8 @@ pub fn compile_c_to(file_to_compile: &str, output_path: &str, context: &mut Cont
 			let err = String::from_utf8(output.stderr).unwrap();
 			anyhow::bail!("Error during C compilation: Compilation failed with {status}.\nSTDOUT:{out}\nSTDERR:\n{err}");
 		}
-		else {
-			anyhow::bail!("Error during C compilation: Compilation failed with {status}.");
-		}
+
+		anyhow::bail!("Error during C compilation: Compilation failed with {status}.");
 	}
 
 	Ok(format!("{output_path}{extension}"))
