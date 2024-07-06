@@ -366,7 +366,12 @@ impl TranspileToC for FunctionDeclaration {
 			if let Expression::Literal(Literal(LiteralValue::Object(table), ..)) = tag {
 				// Builtin function
 				if table.name.unmangled_name() == "BuiltinTag" {
-					let internal_name_value = table.get_field(&Name("internal_name".to_owned())).unwrap_or_else(|| unreachable!());
+					let internal_name_value = table.get_field(&Name("internal_name".to_owned())).ok_or_else(|| {
+						context.encountered_compiler_bug = true;
+						anyhow::anyhow!("An action marked as #[builtin] has not specified the internal lookup name for the builtin.\n"
+							.bold()
+							.white())
+					})?;
 					let internal_name = internal_name_value.as_string().map_err(|error| {
 						anyhow::anyhow!(
 							"{error}\n\t{}",

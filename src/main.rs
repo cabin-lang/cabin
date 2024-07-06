@@ -41,7 +41,7 @@ pub mod util;
 
 /// The Cabin prelude. This is a string of cabin code that's appended automatically to the beginning of all Cabin files prior to compilation. It includes basic necessities such as
 /// IO, file handling, basic data types like strings and numbers, etc.
-pub const PRELUDE: &str = include_str!("../prelude.cbn");
+pub const PRELUDE: &str = include_str!("../prelude.cabin");
 
 /// Bring the `Parser` trait into scope from `clap`, which allows parsing argument structs from the command line. We assign it to underscore to indicate
 /// clearly that it's not used outside of bringing its trait methods into scope.

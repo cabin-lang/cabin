@@ -239,6 +239,7 @@ impl ParentExpression for FunctionCall {
 			return Ok(Expression::FunctionCall(Box::new(self.clone())));
 		}
 
+		// Evaluate function to call at compile-time
 		let mut function = self.function.compile_time_evaluate(context, false).map_err(|error| {
 			anyhow::anyhow!(
 				"{error}\n\t{}",
@@ -246,12 +247,14 @@ impl ParentExpression for FunctionCall {
 			)
 		})?;
 
+		// Evaluate arguments at compile-time
 		let mut arguments = self
 			.arguments
 			.iter()
 			.map(|argument| argument.compile_time_evaluate(context, false))
 			.collect::<anyhow::Result<Vec<_>>>()?;
 
+		// Calling a variable reference like `var()`
 		if let Expression::Literal(Literal(LiteralValue::VariableReference(variable_reference), ..)) = function {
 			function = context
 				.scope_data
@@ -269,8 +272,32 @@ impl ParentExpression for FunctionCall {
 				})?;
 		}
 
+		// Calling a field access like `object.field()`
+		if let Expression::Access(access) = &function {
+			if let Expression::Literal(literal) = &access.left {
+				match literal.value() {
+					LiteralValue::Object(object) => {
+						function = object
+							.get_field(&access.right)
+							.ok_or_else(|| {
+								anyhow::anyhow!(
+									"Attempted to access field {} on an object, but the object doesn't have a field with that name.",
+									access.right.unmangled_name().bold().cyan()
+								)
+							})?
+							.clone();
+					},
+					_ => {},
+				}
+			}
+		}
+
 		let Expression::Literal(Literal(LiteralValue::FunctionDeclaration(function_declaration), ..)) = &mut function else {
-			unreachable!("Function was evaluated to not be a function: {function:?}")
+			return Ok(Expression::FunctionCall(Box::new(Self {
+				function,
+				arguments,
+				has_been_converted_to_block: true,
+			})));
 		};
 
 		context.scope_data.enter_new_scope(ScopeType::Block);

@@ -13,10 +13,6 @@ let Function = group {};
 
 let Either = group {};
 
-let EitherVariant = group {
-	id: Number
-};
-
 let AnonymousTable = group {};
 
 let Object = group {};
@@ -62,12 +58,12 @@ let builtin = action(builtin_name: Text): BuiltinTag {
 	};
 };
 
-/// A tag indicating that a action has side effects on the system that can't be tracked by the language or the function's parameters. This is used for things like IO and file
+/// A tag indicating that an action has side effects on the system that can't be tracked by the language or the function's parameters. This is used for things like IO and file
 /// operations. Functions marked with this will not be evaluated at compile-time when linting with `cabin check`. 
 #[cabin_only]
 let system_side_effects = new Object {};
 
-/// A tag indicating that a action is preferred to be run at compile-time. This doesn't prevent the function from being run at compile-time, but will emit a warning if it is.
+/// A tag indicating that an action is preferred to be run at compile-time. This doesn't prevent the function from being run at compile-time, but will emit a warning if it is.
 #[cabin_only]
 let RuntimeOnlyTag = group {
 	reason: Text

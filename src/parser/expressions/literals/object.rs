@@ -234,6 +234,7 @@ impl Parse for Object {
 impl CompileTime for Object {
 	fn compile_time_evaluate(&self, context: &mut Context, with_side_effects: bool) -> anyhow::Result<Expression> {
 		let mut new_object = Self::new();
+
 		for field in &self.fields {
 			// Value
 			let mut new_value = field.value.as_ref().unwrap().compile_time_evaluate(context, with_side_effects).map_err(|error| {
@@ -248,6 +249,7 @@ impl CompileTime for Object {
 				)
 			})?;
 
+			// Handle the case where the value is a variable reference - we need to get the variables value
 			if let Expression::Literal(Literal(LiteralValue::VariableReference(variable_reference), ..)) = &new_value {
 				let value_of_new_value = if with_side_effects {
 					context
@@ -269,6 +271,7 @@ impl CompileTime for Object {
 					variable_reference.value(context)?
 				};
 
+				// Unknown at compile-time
 				if let Expression::Literal(new_value_literal) = &value_of_new_value {
 					if !new_value_literal.is(&context.unknown_at_compile_time().clone(), context)? {
 						new_value = value_of_new_value;
@@ -330,11 +333,13 @@ impl CompileTime for Object {
 			}
 		}
 
+		// Copy trivial fields over
 		new_object.name = self.name.clone();
 		new_object.internal_fields = self.internal_fields.clone();
 		new_object.anonymous_id = self.anonymous_id;
 		new_object.has_been_compile_time_evaluated = true;
 
+		// If it's anonymous, we need to add a new struct definition to the context
 		if new_object.is_anonymous()
 			&& !context
 				.groups
@@ -421,7 +426,12 @@ impl TranspileToC for Object {
 		}
 
 		for field in &self.fields {
-			prelude.push_str(&field.value.as_ref().unwrap().c_prelude(context)?);
+			prelude.push_str(&field.value.as_ref().unwrap().c_prelude(context).map_err(|error| {
+				anyhow::anyhow!(
+					"{error}\n\t{}",
+					format!("while generating the C prelude for the value of the field {}", field.name.unmangled_name().bold().cyan()).dimmed()
+				)
+			})?);
 		}
 
 		Ok(prelude)

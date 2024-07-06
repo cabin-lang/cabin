@@ -1,4 +1,7 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+	collections::VecDeque,
+	sync::atomic::{AtomicUsize, Ordering},
+};
 
 use crate::{
 	compile_time::{ambassador_impl_TranspileToC, CompileTime, TranspileToC},
@@ -139,7 +142,7 @@ impl ParentExpression for Literal {
 impl Parse for Literal {
 	type Output = Self;
 
-	fn parse(tokens: &mut std::collections::VecDeque<Token>, context: &mut Context) -> anyhow::Result<Self::Output> {
+	fn parse(tokens: &mut VecDeque<Token>, context: &mut Context) -> anyhow::Result<Self::Output> {
 		Ok(Self::new(LiteralValue::parse(tokens, context)?))
 	}
 }
@@ -168,7 +171,7 @@ pub enum LiteralValue {
 impl Parse for LiteralValue {
 	type Output = Self;
 
-	fn parse(tokens: &mut std::collections::VecDeque<Token>, context: &mut Context) -> anyhow::Result<Self::Output> {
+	fn parse(tokens: &mut VecDeque<Token>, context: &mut Context) -> anyhow::Result<Self::Output> {
 		Ok(match tokens.peek().ok_or_else(|| anyhow::anyhow!("Expected literal but found end of input"))?.token_type {
 			// Number literals
 			TokenType::Number => {
