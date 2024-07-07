@@ -19,10 +19,7 @@ pub struct Name(pub String);
 impl Name {
 	/// Returns the name of this `Name` as string **after converting it into a unique C identifier**. This should
 	/// be used when transpiling Cabin code into C. **Do not use this when reporting information to the user about a
-	/// variable; use `cabin_name()` instead**.
-	///
-	/// This is exactly equivalent to calling `to_c(&mut context)` on the name, except that `to_c` will wrap it in an
-	/// `Ok()`.
+	/// variable; use `unmangled_name()` instead**.
 	#[must_use]
 	pub fn mangled_name(&self) -> String {
 		match self.0.as_str() {
@@ -34,7 +31,7 @@ impl Name {
 
 	/// Returns the name of this `Name` as a string **as originally specified in the Cabin source code.** This should be
 	/// used for things like communicating to the user, such as error messages that need to display information about a
-	/// variable. **Do not use this when transpiling to C; Use `c_name()` or `to_c(context)` instead**.
+	/// variable. **Do not use this when transpiling to C; Use `mangled_name()` or instead**.
 	#[must_use]
 	pub fn unmangled_name(&self) -> String {
 		self.0.clone()
@@ -49,6 +46,8 @@ impl Name {
 	/// let name = Name::from_c(/* any name */);
 	/// assert_eq!(name, Name(name.cabin_name()));
 	/// ```
+	///
+	/// If the given argument is not a valid mangled name, the behavior of this function is (safely) undefined.
 	///
 	/// # Parameters
 	/// - `c` - The string representation of the C version of the name.

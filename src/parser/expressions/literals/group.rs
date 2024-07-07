@@ -353,10 +353,7 @@ impl TranspileToC for GroupDeclaration {
 			"Number_u" => prelude.push("\tfloat internal_value;".to_owned()),
 			"List_u" => prelude.push("\tint size;\n\tint capacity;\n\tvoid** data;".to_owned()),
 
-			// TODO: C doesn't allow empty structs. For now, the temporary fix is just to add this useless char field (char is the smallest data type). However,
-			// this will cause empty structs to have more size than they otherwise would. What should we do here?
-			// ===
-			// You can give an array a size of 0, that would make the sizeof(Struct) == 0
+			// If the struct is empty, give it a `char empty[0];`, because C doesn't allow empty structs. This will give the struct a size of 0.
 			_ => {
 				if self.fields.is_empty() {
 					prelude.push("\tchar empty[0];".to_owned());

@@ -7,7 +7,7 @@ use crate::{
 	object, parse_list,
 	parser::{
 		expressions::{
-			literals::{Literal, LiteralValue},
+			literals::{next_unused_virtual_address, Literal, LiteralValue},
 			run::ParentExpression,
 			util::{name::Name, types::Typed},
 			Expression,
@@ -19,8 +19,6 @@ use crate::{
 use std::{collections::VecDeque, fmt::Write as _};
 
 use colored::Colorize as _;
-
-use super::next_unused_virtual_address;
 
 /// An `either` declaration. This is analogous to an `enum` in other languages; It contains a list of property-less objects, and the variable that the `either` declaration is assigned to acts as a union
 /// type among those variants.

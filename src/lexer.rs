@@ -95,16 +95,12 @@ pub enum TokenType {
 	/// identifier, which will cause issues when parsing. Please be careful when moving around this keyword or the `Identifier` token type!
 	KeywordIf,
 
-	/// The `function` keyword token type. This is used to declare functions.
+	/// The `action` keyword token type. This is used to declare functions.
 	///
 	/// A token created with this type will always have the value "function".
 	///
-	/// Like all keywords, this enum variant declaration *must* come before `Identifier`. If it doesn't, then `function` will be tokenized incorrectly as
+	/// Like all keywords, this enum variant declaration *must* come before `Identifier`. If it doesn't, then `action` will be tokenized incorrectly as
 	/// identifiers, which will cause issues when parsing. Please be careful when moving around this keyword or the `Identifier` token type!
-	///
-	/// TODO: We are considering changing the name of this as well to something more "common English". Originally I called this "action" to indicate that it just
-	/// "does a thing", but that's not always true, because some functions just take an input and spit an output, or get a field, etc., without "doing" anything.
-	/// We should consider what words would be good here and fit the Cabin aesthetic.
 	KeywordAction,
 
 	/// The new keyword. This is used to instantiate a table.
@@ -113,31 +109,6 @@ pub enum TokenType {
 	///
 	/// Like all keywords, this enum variant declaration *must* come before `Identifier`. If it doesn't, then `new` will be tokenized incorrectly as
 	/// identifiers, which will cause issues when parsing. Please be careful when moving around this keyword or the `Identifier` token type!
-	///
-	/// TODO: This keyword isn't strictly necessarily technically, and we should consider if we really need it in
-	/// the language. Many other languages like Rust and C instantiate structs with a very similar syntax without `new`. For example, in Rust:
-	///
-	/// ```rust
-	/// let person = Person {
-	///		name: "John",
-	/// 	age: 30
-	/// };
-	/// ```
-	///
-	/// similarly, in C, although perhaps less conventional:
-	///
-	/// ```c
-	/// Person person = (Person) {
-	/// 	.name = "John",
-	/// 	.age = 30
-	/// };
-	/// ```
-	///
-	/// So yeah, we don't really need `new`, but there is a good case to be made that it conveys intent clearly and shows the programmer that the language is
-	/// specifically creating a `new` object. If we think the language is getting too many keywords to keep it simple and succinct, this likely will be one of
-	/// the first on the chopping block, but for now, I think it does a good job of conveying intention and use.
-	///
-	/// Also, it's easier to parse this way, which is originally why I threw it in here.
 	KeywordNew,
 
 	/// The `group` keyword token type, which is used to declare a type of group of variables in the language, analogous to a `struct` in other languages.
@@ -497,7 +468,7 @@ pub struct Token {
 ///
 /// # Returns
 /// A vector of tokens in the order they appeared in the given source code after tokenization, or an `Err` if an unrecognized token was found.
-/// 
+///
 /// # Errors
 /// If the given code string is not syntactically valid Cabin code. It needn't be semantically valid, but it must be comprised of the proper tokens.
 #[allow(clippy::missing_panics_doc)]

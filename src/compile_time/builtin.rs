@@ -261,15 +261,15 @@ static BUILTINS: phf::Map<&'static str, BuiltinFunction> = phf::phf_map! {
 		},
 	},
 	"List.prepend" => BuiltinFunction {
-		compile_time: |args| { // TODO: This
+		compile_time: |args| {
 			let element = args
 				.get_mut(1)
-				.ok_or_else(|| anyhow::anyhow!("The function \"{}\" takes two arguments (the list to append to and the element to append), but no arguments were given", "List.append".bold().cyan()))?
+				.ok_or_else(|| anyhow::anyhow!("The function \"{}\" takes two arguments (the list to prepend to and the element to append), but no arguments were given", "List.prepend".bold().cyan()))?
 				.clone();
 
 			let list = args
 				.first_mut()
-				.ok_or_else(|| anyhow::anyhow!("The function \"{}\" takes two arguments (the list to append to and the element to append), but no arguments were given", "List.append".bold().cyan()))?
+				.ok_or_else(|| anyhow::anyhow!("The function \"{}\" takes two arguments (the list to prepend to and the element to append), but no arguments were given", "List.prepend".bold().cyan()))?
 				.as_list()
 				.map_err(|_error| anyhow::anyhow!("The first argument to \"{}\" must be a list", "List.append".bold().cyan()))?;
 
