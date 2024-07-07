@@ -332,7 +332,7 @@ impl TranspileToC for Declaration {
 				self.type_annotation
 					.as_ref()
 					.ok_or_else(|| {
-						context.encountered_compiler_bug = true;
+						context.compiler_bug_info = Some((file!(), line!(), column!()));
 						anyhow::anyhow!(
 							"Error: The variable \"{}\" has no type tag, even after type inference.\n\n\t{}", 
 							self.name.unmangled_name().bold().cyan(), 

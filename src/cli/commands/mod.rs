@@ -97,9 +97,10 @@ macro_rules! step {
 					eprintln!("{} {note}\n", "Error Details:".bold().bright_purple().underline())
 				}
 
-				if $context.encountered_compiler_bug {
+				if let Some((file, line, column)) = $context.compiler_bug_info {
 					println!(
-						"\n{} Please run the program again with the {} flag, and report the issue at {}.\n",
+						"\nThis crash occurred in the compiler at {}.\n\n{} Please run the program again with the {} flag, and report the issue at {}.\n",
+						format!("{file}:{line}:{column}").white().bold(),
 						"This is an internal error with the Cabin compiler.".bold().red(),
 						"--show-c-errors".bold().cyan(),
 						"https://github.com/cabin-lang/cabin/issues".bold().bright_blue().underline()

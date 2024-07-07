@@ -53,12 +53,12 @@ impl CompileTime for RunExpression {
 
 impl TranspileToC for RunExpression {
 	fn c_prelude(&self, context: &mut Context) -> anyhow::Result<String> {
-		context.encountered_compiler_bug = true;
+		context.compiler_bug_info = Some((file!(), line!(), column!()));
 		anyhow::bail!("The compiler attempted to convert a \"{run}\" expression into C prelude code, which shouldn't happen;\n\"{run}\" expressions should be evaluated away during compile-time evaluation.\n", run = "run".bold().cyan());
 	}
 
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
-		context.encountered_compiler_bug = true;
+		context.compiler_bug_info = Some((file!(), line!(), column!()));
 		anyhow::bail!("The compiler attempted to convert a \"{run}\" expression into C code, which shouldn't happen;\n\"{run}\" expressions should be evaluated away during compile-time evaluation.\n", run = "run".bold().cyan());
 	}
 }

@@ -119,7 +119,7 @@ impl Literal {
 impl CompileTime for Literal {
 	fn compile_time_evaluate(&self, context: &mut Context, with_side_effects: bool) -> anyhow::Result<Expression> {
 		let Expression::Literal(Self(value, ..)) = self.value().compile_time_evaluate(context, with_side_effects)? else {
-			context.encountered_compiler_bug = true;
+			context.compiler_bug_info = Some((file!(), line!(), column!()));
 			anyhow::bail!("Literal after compile-time evaluation is not a literal");
 		};
 
@@ -131,7 +131,7 @@ impl CompileTime for Literal {
 impl ParentExpression for Literal {
 	fn evaluate_children_at_compile_time(&self, context: &mut Context) -> anyhow::Result<Expression> {
 		let Expression::Literal(Self(value, ..)) = self.value().evaluate_children_at_compile_time(context)? else {
-			context.encountered_compiler_bug = true;
+			context.compiler_bug_info = Some((file!(), line!(), column!()));
 			anyhow::bail!("Literal after compile-time evaluation is not a literal");
 		};
 

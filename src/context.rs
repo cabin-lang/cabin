@@ -83,7 +83,7 @@ pub struct Context {
 	/// Whether the error encountered is an error with the compiler. Whenever "unreachable" code is reached in the compiler, this is set to true before returning
 	/// an error from the enclosing function (generally with `anyhow::bail!`). When the compiler exits, a special message will be printed to the user indicating
 	/// that the error is a compiler bug and not an issue with their code, and that they should report it to the GitHub issues.
-	pub encountered_compiler_bug: bool,
+	pub compiler_bug_info: Option<(&'static str, u32, u32)>,
 
 	/// A list of warnings emitted by the compiler. These are all printed at once when compilation finishes. The warnings should already be pretty-printed and colored when added
 	/// to this list; There is no special formatting done on these when they're printed.
@@ -120,7 +120,7 @@ impl Context {
 			current_bad_identifier: None,
 			theme: ONE_MIDNIGHT,
 			main_function_name: None,
-			encountered_compiler_bug: false,
+			compiler_bug_info: None,
 			structs: Vec::new(),
 			generics_stack: Vec::new(),
 			error_details: Vec::new(),

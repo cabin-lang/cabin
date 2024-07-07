@@ -369,7 +369,7 @@ impl TranspileToC for FunctionDeclaration {
 					// Get the builtin ID
 					let internal_name_value = table.get_field(&Name("internal_name".to_owned())).ok_or_else(|| {
 						// Builtins are only used in the standard library, so this is definitely a compiler bug!
-						context.encountered_compiler_bug = true;
+						context.compiler_bug_info = Some((file!(), line!(), column!()));
 						anyhow::anyhow!("An action marked as #[builtin] has not specified the internal lookup name for the builtin.\n"
 							.bold()
 							.white())

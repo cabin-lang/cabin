@@ -91,7 +91,7 @@ pub fn compile_c_to(file_to_compile: &str, output_path: &str, context: &mut Cont
 	let status = output.status;
 
 	if !status.success() {
-		context.encountered_compiler_bug = true;
+		context.compiler_bug_info = Some((file!(), line!(), column!()));
 		if context.show_c_errors {
 			let out = String::from_utf8(output.stdout).unwrap();
 			let err = String::from_utf8(output.stderr).unwrap();
