@@ -275,23 +275,23 @@ impl ParentExpression for FunctionCall {
 		// Calling a field access like `object.field()`
 		if let Expression::Access(access) = &function {
 			if let Expression::Literal(literal) = &access.left {
-				match literal.value() {
-					LiteralValue::Object(object) => {
-						function = object
-							.get_field(&access.right)
-							.ok_or_else(|| {
-								anyhow::anyhow!(
-									"Attempted to access field {} on an object, but the object doesn't have a field with that name.",
-									access.right.unmangled_name().bold().cyan()
-								)
-							})?
-							.clone();
-					},
-					_ => {},
+				if let LiteralValue::Object(object) = literal.value() {
+					function = object
+						.get_field(&access.right)
+						.ok_or_else(|| {
+							anyhow::anyhow!(
+								"Attempted to access field {} on an object, but the object doesn't have a field with that name.",
+								access.right.unmangled_name().bold().cyan()
+							)
+						})?
+						.clone();
 				}
 			}
 		}
 
+		// If we're calling a function, great! we continue. If it's not a function, it might be some kind of runtime expression (like `(if x { max } else { min })(1, 2, 3)` ).
+		// In this case, we just want to return the function call as-is; There's nothing more we can do with it at compile-time. It'll get passed to C and be
+		// transpiled into a function call in C.
 		let Expression::Literal(Literal(LiteralValue::FunctionDeclaration(function_declaration), ..)) = &mut function else {
 			return Ok(Expression::FunctionCall(Box::new(Self {
 				function,
@@ -299,6 +299,8 @@ impl ParentExpression for FunctionCall {
 				has_been_converted_to_block: true,
 			})));
 		};
+
+		// Convert the function call into a block
 
 		context.scope_data.enter_new_scope(ScopeType::Block);
 
@@ -384,10 +386,6 @@ impl ParentExpression for FunctionCall {
 				has_been_converted_to_block: true,
 			}))));
 		}
-
-		// if let Some(function_body_scope) = function_declaration.inner_scope_id {
-		// 	context.scope_data.move_scope(function_body_scope, block)
-		// }
 
 		context.scope_data.exit_scope()?;
 
