@@ -31,7 +31,7 @@ pub struct RunCommand {
 	pub emit_c: Option<String>,
 
 	#[arg(long)]
-	pub show_c_errors: bool
+	pub show_c_errors: bool,
 }
 
 impl CabinCommand for RunCommand {
@@ -72,7 +72,7 @@ impl CabinCommand for RunCommand {
 		log!(self.quiet, "{}", format!("\t{} token stream... ", "Parsing".green()).bold())?;
 		let ast = step!(parse(&mut tokens.into_iter().collect(), &mut context), "Parsing Error", self.quiet, context, true);
 
-		// compile_time
+		// Compile-time
 		log!(self.quiet, "{}", format!("\t{} compile-time code... ", "Running".green()).bold())?;
 		let compile_time_ast = step!(ast.compile_time_evaluate(&mut context, true), "Compile-Time Evaluation Error", self.quiet, context, false);
 		if IS_FIRST_PRINT.load(Ordering::Relaxed) {
@@ -98,15 +98,12 @@ impl CabinCommand for RunCommand {
 			true
 		);
 
+		// Print warnings
 		if !context.warnings.is_empty() {
 			println!();
-		}
-
-		for warning in &context.warnings {
-			println!("{}", warning.lines().map(|line| format!("\t{line}")).collect::<Vec<_>>().join("\n"));
-		}
-
-		if !context.warnings.is_empty() {
+			for warning in &context.warnings {
+				println!("{}", warning.lines().map(|line| format!("\t{line}")).collect::<Vec<_>>().join("\n"));
+			}
 			println!();
 		}
 

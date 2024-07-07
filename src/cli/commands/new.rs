@@ -14,6 +14,7 @@ pub struct NewCommand {
 impl CabinCommand for NewCommand {
 	fn execute(&self) -> anyhow::Result<()> {
 		let project_name = &self.project_name;
+
 		// Create /src
 		std::fs::create_dir_all(format!("{project_name}/src"))?;
 
@@ -37,32 +38,8 @@ impl CabinCommand for NewCommand {
 			)),
 		)?;
 
-		// Local configuration
-		std::fs::write(
-			format!("{project_name}/cabin.local.toml"),
-			unindent::unindent(
-				"
-				# This file allows local configuration that's not tracked with version control.
-				# You can put personal preference flags here (like --quiet) that will only apply to you.
-				# Do note that only some flags are allowed to be local; It's mostly those that relate to compiler output
-				# and not things that actually affect compilation or the program.
-				
-				[options]
-				# quiet = true 
-				",
-			),
-		)?;
-
 		// .gitignore
-		std::fs::write(
-			format!("{project_name}/.gitignore"),
-			unindent::unindent(
-				"
-				builds/
-				cabin.local.toml
-				",
-			),
-		)?;
+		std::fs::write(format!("{project_name}/.gitignore"), "builds/")?;
 
 		Ok(())
 	}

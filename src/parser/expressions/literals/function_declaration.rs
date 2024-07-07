@@ -366,12 +366,16 @@ impl TranspileToC for FunctionDeclaration {
 			if let Expression::Literal(Literal(LiteralValue::Object(table), ..)) = tag {
 				// Builtin function
 				if table.name.unmangled_name() == "BuiltinTag" {
+					// Get the builtin ID
 					let internal_name_value = table.get_field(&Name("internal_name".to_owned())).ok_or_else(|| {
+						// Builtins are only used in the standard library, so this is definitely a compiler bug!
 						context.encountered_compiler_bug = true;
 						anyhow::anyhow!("An action marked as #[builtin] has not specified the internal lookup name for the builtin.\n"
 							.bold()
 							.white())
 					})?;
+
+					// Convert the ID to a rust string representation
 					let internal_name = internal_name_value.as_string().map_err(|error| {
 						anyhow::anyhow!(
 							"{error}\n\t{}",
@@ -379,7 +383,11 @@ impl TranspileToC for FunctionDeclaration {
 								.dimmed()
 						)
 					})?;
+
+					// Get the names of the parameters
 					let parameter_names = self.parameters.iter().map(|parameter| parameter.0.mangled_name()).collect::<Vec<_>>();
+
+					// Generate the C body for the builtin
 					body = builtin_to_c(&internal_name, parameter_names.as_slice())?
 						.lines()
 						.map(|line| line.to_owned())
@@ -398,6 +406,7 @@ impl TranspileToC for FunctionDeclaration {
 			parameters = parameters.join(", "),
 			body = body.join("\n").lines().map(|line| format!("\t{line}")).collect::<Vec<_>>().join("\n"),
 		);
+
 		Ok([parameter_prelude, return_type_prelude, body_prelude, annotation_prelude, self_prelude].join("\n"))
 	}
 }
