@@ -9,7 +9,7 @@ use crate::{
 		expressions::{
 			binary::AccessExpression,
 			block::Block,
-			literals::{object::Object, LiteralValue},
+			literals::{object::Object, Literal, LiteralValue},
 			run::ParentExpression,
 			util::{name::Name, tags::TagList, types::Typed},
 			Expression,
@@ -24,8 +24,6 @@ use crate::{
 use std::collections::VecDeque;
 
 use colored::Colorize as _;
-
-use super::literals::Literal;
 
 /// A function call expression. This represents a function call with a function and a list of arguments.
 #[derive(Clone, Debug)]

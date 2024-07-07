@@ -1,5 +1,3 @@
-use std::collections::VecDeque;
-
 use crate::{
 	cli::theme::Styled,
 	compile_time::{CompileTime, CompileTimeStatement, TranspileToC},
@@ -17,6 +15,8 @@ use crate::{
 		Parse, TokenQueue,
 	},
 };
+
+use std::collections::VecDeque;
 
 /// A for-in loop. For loops in Cabin are always `foreach <ITEM> in <ITEMS>`. Ranges are iterated such as `foreach index in 0.to(10)`, which creates a range iterator.
 #[derive(Debug, Clone)]

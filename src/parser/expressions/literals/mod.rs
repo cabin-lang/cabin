@@ -1,8 +1,3 @@
-use std::{
-	collections::VecDeque,
-	sync::atomic::{AtomicUsize, Ordering},
-};
-
 use crate::{
 	compile_time::{ambassador_impl_TranspileToC, CompileTime, TranspileToC},
 	context::Context,
@@ -27,6 +22,11 @@ use crate::{
 		},
 		Parse, TokenQueue,
 	},
+};
+
+use std::{
+	collections::VecDeque,
+	sync::atomic::{AtomicUsize, Ordering},
 };
 
 /// The `object` module, which handles object literals.

@@ -7,7 +7,8 @@ use crate::{
 		expressions::{
 			function_call::FunctionCall,
 			literals::{Literal, LiteralValue},
-			util::name::Name,
+			run::ParentExpression,
+			util::{name::Name, types::Typed},
 			Expression,
 		},
 		Parse, TokenQueue,
@@ -15,8 +16,6 @@ use crate::{
 };
 
 use std::collections::VecDeque;
-
-use super::{run::ParentExpression, util::types::Typed};
 
 /// A binary operation. More specifically, this represents not one operation, but a group of operations that share the same precedence.
 /// For example, the `+` and `-` operators share the same precedence, so they are grouped together in the `ADDITIVE` constant.

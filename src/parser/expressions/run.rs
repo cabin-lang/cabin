@@ -4,7 +4,7 @@ use crate::{
 	formatter::{ColoredCabin, ToCabin},
 	lexer::{Token, TokenType},
 	parser::{
-		expressions::{util::types::Typed, Expression},
+		expressions::{literals::Literal, util::types::Typed, Expression},
 		statements::Statement,
 		Parse, TokenQueue,
 	},
@@ -13,8 +13,6 @@ use crate::{
 use std::collections::VecDeque;
 
 use colored::Colorize as _;
-
-use super::literals::Literal;
 
 /// An expression that is forcibly run at runtime. By default, all expressions are evaluated at compile-time (if they are capable),
 /// but this expression will be evaluated at runtime. Note that inner child expressions of this expression will still be run at

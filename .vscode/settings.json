@@ -10,6 +10,7 @@
     "delegatable",
     "Deque",
     "fclose",
+    "ferror",
     "fopen",
     "fprintf",
     "fread",

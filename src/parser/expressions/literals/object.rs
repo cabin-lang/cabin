@@ -7,7 +7,7 @@ use crate::{
 	parse_list,
 	parser::{
 		expressions::{
-			literals::{Literal, LiteralValue, Name},
+			literals::{group::GroupType, Literal, LiteralValue, Name},
 			run::ParentExpression,
 			util::{tags::TagList, types::Typed},
 			Expression,
@@ -21,8 +21,6 @@ use crate::{
 use std::{collections::HashMap, fmt::Write as _, sync::atomic::AtomicUsize};
 
 use colored::Colorize as _;
-
-use super::group::GroupType;
 
 /// An internal value stored in a Cabin object that's not visible to the user (developer). This is used for things
 /// like `Text` and `Number` that need to store internal data (the underlying `String` / `f64`) that can't be represented

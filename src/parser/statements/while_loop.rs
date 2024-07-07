@@ -1,7 +1,3 @@
-use std::collections::VecDeque;
-
-use colored::Colorize;
-
 use crate::{
 	compile_time::{CompileTimeStatement, TranspileToC},
 	context::Context,
@@ -13,6 +9,10 @@ use crate::{
 		Parse, TokenQueue,
 	},
 };
+
+use std::collections::VecDeque;
+
+use colored::Colorize as _;
 
 /// A while loop, which runs while the given condition is true
 #[derive(Debug, Clone)]

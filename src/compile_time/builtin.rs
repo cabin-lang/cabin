@@ -448,30 +448,6 @@ static BUILTINS: phf::Map<&'static str, BuiltinFunction> = phf::phf_map! {
 		},
 
 	},
-
-	"Anything.is" => BuiltinFunction {
-		compile_time: |args| {
-			let Expression::Literal(_this) = args
-				.first()
-				.ok_or_else(|| anyhow::anyhow!("The function \"{}\" takes two arguments (the list to append to and the element to append), but no arguments were given", "List.append".bold().cyan()))? else {
-					anyhow::bail!("First argument to Anything.is is not a literal");
-				};
-
-			let Expression::Literal(_other) = args
-				.get(1)
-				.ok_or_else(|| anyhow::anyhow!("The function \"{}\" takes two arguments (the list to append to and the element to append), but no arguments were given", "List.append".bold().cyan()))? else {
-					anyhow::bail!("Second argument to Anything.is is not a literal");
-				};
-
-			// Ok(boolean!(this.is(other)))
-			todo!()
-		},
-		to_c: |parameter_names| {
-			let _path = parameter_names.first().ok_or_else(|| anyhow::anyhow!("The function \"{}\" takes one arguments (the file path to check if it exists), but no parameter names were given", "File.file_exists".bold().cyan()))?;
-			Ok(String::new()) // TODO: find a cross platform way to do this
-		},
-
-	}
 };
 
 /// Calls a builtin function with the given name and arguments and returns the result. This should only be used

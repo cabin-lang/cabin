@@ -3,10 +3,11 @@ use crate::{
 	compile_time::{CompileTime, CompileTimeStatement, TranspileToC},
 	context::Context,
 	formatter::{ColoredCabin, ToCabin},
-	parser::expressions::{util::name::Name, Expression},
+	parser::{
+		expressions::{util::name::Name, Expression},
+		statements::Statement,
+	},
 };
-
-use super::Statement;
 
 #[derive(Debug, Clone)]
 pub struct Reassignment {

@@ -5,7 +5,7 @@ use crate::{
 	lexer::{Token, TokenType},
 	parser::{
 		expressions::{util::name::Name, Expression},
-		statements::Statement,
+		statements::{reassignment::Reassignment, Statement},
 		Parse, TokenQueue,
 	},
 };
@@ -13,8 +13,6 @@ use crate::{
 use std::collections::VecDeque;
 
 use colored::Colorize as _;
-
-use super::reassignment::Reassignment;
 
 /// A return statement. This is a statement that returns a value from a function.
 #[derive(Clone, Debug)]

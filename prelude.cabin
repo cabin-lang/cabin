@@ -22,13 +22,7 @@ let This = group {};
 /// The `Anything` group. This is a group that is automatically implemented by all other groups. A action can use this as an argument to take any type. Note that the value
 /// given to the action can't have any fields accessed on it, since none are known, and it cannot be unsafely downcasted into another type. This is mostly used for 
 /// compile-time parameters
-let Anything = group {
-
-	/// Returns whether this object is the same as the other object. This checks for reference equality, not value, so it will only return true
-	/// if this object and the given argument literally point to the same data in memory.
-	#[builtin("Anything.is")]
-	is = action(other: This): Boolean
-};
+let Anything = group {};
 
 /// Indicates that a value is unknown at compile-time. This should *never* be used explicity; Rather, this
 /// is inserted automatically at certain positions by the compiler. Specifically, Whenever an expression cannot

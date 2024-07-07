@@ -19,9 +19,6 @@ pub mod function_call;
 /// The `literals` module, which handles literal values.
 pub mod literals;
 
-use binary::AccessExpression;
-use colored::Colorize as _;
-
 use crate::{
 	compile_time::{CompileTime, CompileTimeStatement, TranspileToC},
 	context::Context,
@@ -29,7 +26,7 @@ use crate::{
 	object,
 	parser::{
 		expressions::{
-			binary::BinaryExpression,
+			binary::{AccessExpression, BinaryExpression},
 			block::Block,
 			function_call::FunctionCall,
 			if_expression::IfExpression,
@@ -41,6 +38,8 @@ use crate::{
 		Parse, TokenQueue,
 	},
 };
+
+use colored::Colorize as _;
 
 /// An expression in the language.
 #[enum_dispatch::enum_dispatch(CompileTime)]

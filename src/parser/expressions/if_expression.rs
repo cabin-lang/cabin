@@ -4,7 +4,12 @@ use crate::{
 	formatter::{ColoredCabin, ToCabin},
 	lexer::{Token, TokenType},
 	parser::{
-		expressions::{run::ParentExpression, util::types::Typed, Expression},
+		expressions::{
+			literals::Literal,
+			run::{ParentExpression, ParentStatement},
+			util::{name::Name, types::Typed},
+			Expression,
+		},
 		statements::Statement,
 		Parse, TokenQueue,
 	},
@@ -18,8 +23,6 @@ use crate::{
 use std::{collections::VecDeque, fmt::Write as _};
 
 use colored::Colorize as _;
-
-use super::{literals::Literal, run::ParentStatement, util::name::Name};
 
 /// An if expression. This is a conditional statement that executes a block of code if a condition is true, and optionally
 /// executes another block of code if the condition is false.

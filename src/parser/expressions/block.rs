@@ -5,6 +5,7 @@ use crate::{
 	lexer::{Token, TokenType},
 	parser::{
 		expressions::{
+			literals::{Literal, LiteralValue},
 			run::{ParentExpression, ParentStatement},
 			util::types::Typed,
 			Expression,
@@ -18,8 +19,6 @@ use crate::{
 use std::{collections::VecDeque, fmt::Write as _};
 
 use colored::Colorize as _;
-
-use super::literals::{Literal, LiteralValue};
 
 /// An expression block. This allows running a series of statements inside an expression, and returning a value from one of those statements.
 #[derive(Debug, Clone)]

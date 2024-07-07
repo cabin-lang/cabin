@@ -6,7 +6,7 @@ use crate::{
 	parse_list,
 	parser::{
 		expressions::{
-			literals::LiteralValue,
+			literals::{Literal, LiteralValue},
 			run::ParentExpression,
 			util::{name::Name, tags::TagList, types::Typed},
 			Expression,
@@ -17,8 +17,6 @@ use crate::{
 	var_literal,
 };
 
-use colored::Colorize as _;
-
 // Brings the `write!()` and `writeln!()` macros into scope, which allows appending to a string. This is more efficient than using
 // `string = format!("{string}...")`, because it avoids an extra allocation. We have a clippy warning turned on for this very
 // purpose. We assign this to `_` to indicate clearly that it's just a trait and not used explicitly anywhere outside of bringing its
@@ -28,7 +26,7 @@ use std::{
 	sync::atomic::{AtomicUsize, Ordering},
 };
 
-use super::Literal;
+use colored::Colorize as _;
 
 /// A type declaration. This is equivalent to a struct or interface declaration in other languages.
 #[derive(Clone, Debug)]

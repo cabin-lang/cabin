@@ -5,15 +5,12 @@ use crate::{
 	lexer::{Token, TokenType},
 	parser::{
 		expressions::{run::ParentExpression, run::ParentStatement, Expression},
-		statements::{declaration::Declaration, return_statement::ReturnStatement, tail::TailStatement},
+		statements::{declaration::Declaration, foreach::ForEachLoop, reassignment::Reassignment, return_statement::ReturnStatement, tail::TailStatement, while_loop::WhileLoop},
 		Parse, TokenQueue,
 	},
 };
 
 use colored::Colorize as _;
-use reassignment::Reassignment;
-
-use self::{foreach::ForEachLoop, while_loop::WhileLoop};
 
 /// The declaration module, which handles variable declarations.
 pub mod declaration;

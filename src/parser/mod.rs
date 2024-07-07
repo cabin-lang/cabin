@@ -13,13 +13,13 @@ use crate::{
 	},
 };
 
-use colored::Colorize as _;
-
 // Brings the `write!()` and `writeln!()` macros into scope, which allows appending to a string. This is more efficient than using
 // `string = format!("{string}...")`, because it avoids an extra allocation. We have a clippy warning turned on for this very
 // purpose. We assign this to `_` to indicate clearly that it's just a trait and not used explicitly anywhere outside of bringing its
 // methods into scope.
 use std::{fmt::Write as _, sync::atomic::Ordering};
+
+use colored::Colorize as _;
 
 /// The expressions module, which handles AST nodes that represent expressions.
 pub mod expressions;
@@ -186,7 +186,7 @@ impl TranspileToC for Program {
 							.map(|line| Ok(writeln!(prelude, "{line}")?))
 							.collect::<anyhow::Result<Vec<_>>>()?;
 					},
-					Expression::Literal(Literal( LiteralValue::FunctionDeclaration(_), ..)) => {}
+					Expression::Literal(Literal(LiteralValue::FunctionDeclaration(_), ..)) => {},
 					_ => continue,
 				}
 
