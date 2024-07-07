@@ -397,12 +397,15 @@ static BUILTINS: phf::Map<&'static str, BuiltinFunction> = phf::phf_map! {
 		to_c: |parameter_names| {
 			let path = parameter_names
 				.first()
-				.ok_or_else(|| anyhow::anyhow!("The function \"{}\" takes two arguments (the list to append to and the element to append), but no arguments were given", "List.append".bold().cyan()))?;
+				.ok_or_else(|| anyhow::anyhow!("The function \"{}\" takes two arguments (the path of the file and the contents to write), but no arguments were given", "File.write".bold().cyan()))?;
+			let content = parameter_names
+				.get(1)
+				.ok_or_else(|| anyhow::anyhow!("The function \"{}\" takes two arguments (the path of the file and the contents to write), but only one argument was given", "File.write".bold().cyan()))?;
 
 			Ok(unindent::unindent(&format!(
 				r#"
 				FILE* file = fopen({path}->internal_value, "w");
-				fprintf(file, "Some text");
+				fprintf(file, {content});
 				fclose(file);
 				"#
 			)))
