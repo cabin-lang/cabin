@@ -81,15 +81,21 @@ macro_rules! step {
 		$expression: expr, $error_type: literal, $quiet: expr, $context: expr, $print_done: expr
 	) => {
 		match $expression {
+			// Everything went okay this step of compilation!
 			Ok(ast) => {
 				if $print_done {
 					log!($quiet, "{}", "Done!\n".green().bold())?;
 				}
 				ast
 			},
+
+			// An error occurred at this step in the compiler
 			Err(err) => {
+				// Print the error
 				log!($quiet, "{}", "Error:\n\n".red().bold())?;
 				eprintln!("{}: {err}", $error_type.red().bold().underline());
+
+				// Print extra error details
 				if !$context.error_details.is_empty() {
 					println!();
 				}
@@ -97,15 +103,18 @@ macro_rules! step {
 					eprintln!("{} {note}\n", "Error Details:".bold().bright_purple().underline())
 				}
 
+				// Compiler bug - print debug information
 				if let Some((file, line, column)) = $context.compiler_bug_info {
 					println!(
-						"\nThis crash occurred in the compiler at {}.\n\n{} Please run the program again with the {} flag, and report the issue at {}.\n",
-						format!("{file}:{line}:{column}").white().bold(),
+						"\n{} Please run the program again with the {} flag, and report the issue at {}.\nThis crash occurred in the compiler at {}.\n",
 						"This is an internal error with the Cabin compiler.".bold().red(),
 						"--show-c-errors".bold().cyan(),
-						"https://github.com/cabin-lang/cabin/issues".bold().bright_blue().underline()
+						"https://github.com/cabin-lang/cabin/issues".bold().bright_blue().underline(),
+						format!("{file}:{line}:{column}").white().bold(),
 					);
 				}
+
+				// Exit the program
 				std::process::exit(1);
 			},
 		}

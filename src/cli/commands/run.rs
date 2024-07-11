@@ -111,9 +111,9 @@ impl CabinCommand for RunCommand {
 		if !self.quiet {
 			println!("{}", format!("{} Running compiled executable.\n", "Done!".green()).bold());
 		}
-
 		run_native_executable(&exe_file)?;
 
+		// Remove the C file
 		std::fs::remove_file(&c_file)?;
 
 		Ok(())

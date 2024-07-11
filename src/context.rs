@@ -1,5 +1,6 @@
 use crate::{
 	cli::theme::{Theme, ONE_MIDNIGHT},
+	compile_time::memory::VirtualMemory,
 	formatter::ColoredCabin,
 	parser::{
 		expressions::{
@@ -95,8 +96,8 @@ pub struct Context {
 
 	pub transpiling_group_name: Option<Name>,
 	pub transpiling_either_name: Option<Name>,
-
 	pub show_c_errors: bool,
+	pub virtual_memory: VirtualMemory,
 }
 
 impl Context {
@@ -131,6 +132,7 @@ impl Context {
 			transpiling_group_name: None,
 			transpiling_either_name: None,
 			show_c_errors: false,
+			virtual_memory: VirtualMemory::new(),
 		}
 	}
 

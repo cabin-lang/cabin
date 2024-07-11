@@ -6,6 +6,8 @@ use crate::{
 /// The builtin module, which handles running built-in functions at compile-time and transpiling built-in functions to C code.
 pub mod builtin;
 
+pub mod memory;
+
 /// An expression which can be evaluated at compile-time. This is a trait applied to all expressions.
 #[enum_dispatch::enum_dispatch]
 pub trait CompileTime {
