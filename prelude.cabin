@@ -17,8 +17,6 @@ let AnonymousTable = group {};
 
 let Object = group {};
 
-let This = group {};
-
 /// The `Anything` group. This is a group that is automatically implemented by all other groups. A action can use this as an argument to take any type. Note that the value
 /// given to the action can't have any fields accessed on it, since none are known, and it cannot be unsafely downcasted into another type. This is mostly used for 
 /// compile-time parameters
@@ -30,6 +28,10 @@ let Anything = group {};
 /// evaluation implicitly by the compiler.
 #[cabin_only]
 let Parameter = new Object {};
+
+/// Indicates that the return value of an action can be discarded. If an action has a non-void return value, then not using it when calling the action result in an error. This
+/// tag prevents that on actions where discarding the return value should be valid.
+let discardable = new Object {};
 
 // Tags --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 

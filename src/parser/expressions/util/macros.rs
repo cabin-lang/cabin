@@ -166,3 +166,13 @@ macro_rules! block {
 		}
 	};
 }
+
+/// Indicates that an internal error in the compiler has occurred. The program should exit after this, though this is not handled in the macro; An error
+/// should be thrown after calling this macro. This macro will store the file, line, and column it was called on in the compiler's context, and the
+/// debug information will be printed when the program crashes.
+#[macro_export]
+macro_rules! compiler_error {
+	($context: expr) => {
+		$context.compiler_bug_info = Some((file!(), line!(), column!()));
+	};
+}

@@ -1,6 +1,7 @@
 use crate::{
 	cli::theme::Styled,
 	compile_time::{CompileTime, TranspileToC},
+	compiler_error,
 	context::Context,
 	formatter::{ColoredCabin, ToCabin},
 	lexer::{Token, TokenType},
@@ -254,7 +255,7 @@ impl CompileTime for Object {
 						.scope_data
 						.get_variable_from_id(variable_reference.name(), context.scope_data.unique_id())
 						.ok_or_else(|| {
-							context.compiler_bug_info = Some((file!(), line!(), column!()));
+							compiler_error!(context);
 							anyhow::anyhow!(
 								"The variable {} was referenced in scope ID {} but that scope doesn't have the variable: {:?}",
 								variable_reference.name().unmangled_name(),

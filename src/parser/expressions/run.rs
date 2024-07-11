@@ -1,5 +1,6 @@
 use crate::{
 	compile_time::{CompileTime, TranspileToC},
+	compiler_error,
 	context::Context,
 	formatter::{ColoredCabin, ToCabin},
 	lexer::{Token, TokenType},
@@ -53,12 +54,12 @@ impl CompileTime for RunExpression {
 
 impl TranspileToC for RunExpression {
 	fn c_prelude(&self, context: &mut Context) -> anyhow::Result<String> {
-		context.compiler_bug_info = Some((file!(), line!(), column!()));
+		compiler_error!(context);
 		anyhow::bail!("The compiler attempted to convert a \"{run}\" expression into C prelude code, which shouldn't happen;\n\"{run}\" expressions should be evaluated away during compile-time evaluation.\n", run = "run".bold().cyan());
 	}
 
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
-		context.compiler_bug_info = Some((file!(), line!(), column!()));
+		compiler_error!(context);
 		anyhow::bail!("The compiler attempted to convert a \"{run}\" expression into C code, which shouldn't happen;\n\"{run}\" expressions should be evaluated away during compile-time evaluation.\n", run = "run".bold().cyan());
 	}
 }

@@ -1,5 +1,6 @@
 use crate::{
 	compile_time::{ambassador_impl_TranspileToC, CompileTime, TranspileToC},
+	compiler_error,
 	context::Context,
 	formatter::{ambassador_impl_ColoredCabin, ambassador_impl_ToCabin, ColoredCabin, ToCabin},
 	lexer::{Token, TokenType},
@@ -119,7 +120,7 @@ impl Literal {
 impl CompileTime for Literal {
 	fn compile_time_evaluate(&self, context: &mut Context, with_side_effects: bool) -> anyhow::Result<Expression> {
 		let Expression::Literal(Self(value, ..)) = self.value().compile_time_evaluate(context, with_side_effects)? else {
-			context.compiler_bug_info = Some((file!(), line!(), column!()));
+			compiler_error!(context);
 			anyhow::bail!("Literal after compile-time evaluation is not a literal");
 		};
 
@@ -131,7 +132,7 @@ impl CompileTime for Literal {
 impl ParentExpression for Literal {
 	fn evaluate_children_at_compile_time(&self, context: &mut Context) -> anyhow::Result<Expression> {
 		let Expression::Literal(Self(value, ..)) = self.value().evaluate_children_at_compile_time(context)? else {
-			context.compiler_bug_info = Some((file!(), line!(), column!()));
+			compiler_error!(context);
 			anyhow::bail!("Literal after compile-time evaluation is not a literal");
 		};
 

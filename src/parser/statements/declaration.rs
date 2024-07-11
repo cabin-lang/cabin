@@ -2,19 +2,15 @@ use colored::Colorize;
 use std::collections::VecDeque;
 
 use crate::{
-	compile_time::{CompileTime, CompileTimeStatement, TranspileToC},
-	context::Context,
-	formatter::{ColoredCabin, ToCabin},
-	lexer::{Token, TokenType},
-	parser::{
+	compile_time::{CompileTime, CompileTimeStatement, TranspileToC}, compiler_error, context::Context, formatter::{ColoredCabin, ToCabin}, lexer::{Token, TokenType}, parser::{
 		expressions::{
 			literals::{
 				group::GroupType, Literal, LiteralValue
-			}, run::{ParentExpression, ParentStatement}, util::{tags::TagList, name::Name, types::Typed}, Expression
+			}, run::{ParentExpression, ParentStatement}, util::{name::Name, tags::TagList, types::Typed}, Expression
 		},
 		statements::Statement,
 		Parse, TokenQueue,
-	},
+	}
 };
 
 // Brings the `write!()` and `writeln!()` macros into scope, which allows appending to a string. This is more efficient than using
@@ -332,7 +328,7 @@ impl TranspileToC for Declaration {
 				self.type_annotation
 					.as_ref()
 					.ok_or_else(|| {
-						context.compiler_bug_info = Some((file!(), line!(), column!()));
+						compiler_error!(context);
 						anyhow::anyhow!(
 							"Error: The variable \"{}\" has no type tag, even after type inference.\n\n\t{}", 
 							self.name.unmangled_name().bold().cyan(), 

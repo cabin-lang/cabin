@@ -1,6 +1,7 @@
 use crate::{
 	cli::theme::Styled,
 	compile_time::{builtin::call_builtin_at_compile_time, CompileTime, CompileTimeStatement, TranspileToC},
+	compiler_error,
 	context::Context,
 	formatter::{ColoredCabin, ToCabin},
 	lexer::{Token, TokenType},
@@ -192,7 +193,7 @@ impl CompileTime for FunctionCall {
 					if table.name.unmangled_name() == "BuiltinTag" {
 						let internal_name_value = table.get_field(&Name("internal_name".to_owned())).unwrap_or_else(|| unreachable!());
 						let internal_name = internal_name_value.as_string().map_err(|error| {
-							context.compiler_bug_info = Some((file!(), line!(), column!()));
+							compiler_error!(context);
 							anyhow::anyhow!("{error}\n\t{}", "while evaluating a built-in tag for a function call at compile-time".dimmed())
 						})?;
 						return call_builtin_at_compile_time(&internal_name, &mut arguments);
@@ -333,7 +334,7 @@ impl ParentExpression for FunctionCall {
 				.parameters
 				.last()
 				.ok_or_else(|| {
-					context.compiler_bug_info = Some((file!(), line!(), column!()));
+					compiler_error!(context);
 					anyhow::anyhow!("Attempted to get the return type of a non-void function, but the function has no parameters: {function_declaration:?}")
 				})?
 				.1
