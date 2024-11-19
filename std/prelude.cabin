@@ -1,0 +1,97 @@
+// Indicates that a value should only be used in the Cabin standard library. If a value tagged with `#[cabin_only]` is referenced in
+// user code, outside of the Cabin standard library, the compiler will flag it as an error. This is used for things like the `builtin<...>`
+// tag, which marks a function as a "built-in" function with special handling in the Cabin compiler. Things such as this shouldn't be used
+// outside of the standard library.
+let cabin_only = new Object {};
+
+#[cabin_only]
+let system_side_effects = new Object {};
+
+let Nothing = either {
+	nothing
+};
+let nothing = Nothing.nothing;
+
+let Field = group {
+	name: Text,
+};
+
+let List = group {};
+
+let Either = group {
+	variants: List<Text>
+};
+
+let Boolean = either {
+	true,
+	false
+};
+let true = Boolean.true;
+let false = Boolean.false;
+
+let Text = group {};
+
+// The tag for a built-in function. Functions that are built into the Cabin compiler and run with native code are marked with this, usually
+// via the `builtin<>` function.
+#[cabin_only]
+let BuiltinTag = group {
+	internal_name: Text
+};
+
+#[cabin_only]
+let builtin = action<name: Text> {
+	it is new BuiltinTag {
+		internal_name = name
+	};
+};
+
+let Error = group {
+	message: Text
+};
+
+
+let Optional = oneof<Data> {
+	Data,
+	Nothing
+};
+
+let Result = oneof<Data> {
+	Data,
+	Error	
+};
+
+// The terminal object. This is used for input/output operations, such as printing to the terminal or taking user input
+// from the terminal.
+let terminal = new Object {
+
+	#[builtin<"terminal.print">, system_side_effects] 
+	print = action(text: Text),
+
+	#[builtin<"terminal.input">] 
+	input = action: Text
+};
+
+let file_system = new Object {
+
+	#[builtin<"file_system.read_file">]
+	read_file = action(path: Text): Text,
+
+	#[builtin<"file_system.write_file">]
+	write_file = action(path: Text, contents: Text),
+
+	#[builtin<"file_system.create">]
+	create = action(path: Text): Text
+};
+
+let environment_variables = new Object {
+
+	#[builtin<"environment_variables.get">]
+	get = action(name: Text): Text,
+
+	#[builtin<"environment_variables.set">]
+	set = action(name: Text, value: Text)
+};
+
+if true {
+	terminal.print("Hello world!");
+};
