@@ -4,6 +4,7 @@ use lexer::tokenize;
 use parser::parse;
 
 pub mod builtin;
+pub mod cli;
 pub mod comptime;
 pub mod context;
 pub mod lexer;

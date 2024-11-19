@@ -6,9 +6,9 @@ use crate::{
 	comptime::CompileTime,
 	context::Context,
 	lexer::TokenType,
-	list, object, parse_list,
+	list, literal, object, parse_list,
 	parser::{statements::tag::TagList, ListType, TokenQueue, TokenQueueFunctionality},
-	string,
+	string_literal,
 };
 
 use super::{super::Parse, name::Name, Expression};
@@ -34,14 +34,19 @@ impl ObjectConstructor {
 		self.fields.iter().find_map(|field| if &field.name == name { field.value.as_ref() } else { None })
 	}
 
-	pub fn from_string(string: &str) -> ObjectConstructor {
-		ObjectConstructor {
-			type_name: Name::from("Text"),
-			fields: Vec::new(),
-			internal_fields: HashMap::from([("internal_value".to_owned(), InternalFieldValue::String(string.to_owned()))]),
-			scope_id: 0,
-			object_type: ObjectType::Normal,
-		}
+	pub fn from_string(string: &str, context: &mut Context) -> usize {
+		LiteralObject::try_from_object_constructor(
+			ObjectConstructor {
+				type_name: Name::from("Text"),
+				fields: Vec::new(),
+				internal_fields: HashMap::from([("internal_value".to_owned(), InternalFieldValue::String(string.to_owned()))]),
+				scope_id: 0,
+				object_type: ObjectType::Normal,
+			},
+			context,
+		)
+		.unwrap()
+		.store_in_memory(context)
 	}
 
 	pub fn pop_internal_field(&mut self, name: &str) -> Option<InternalFieldValue> {
@@ -59,9 +64,10 @@ impl ObjectConstructor {
 		let fields = fields
 			.iter()
 			.map(|field| {
-				object! {
+				literal! {
+					context,
 					Field {
-						name = string!(&field.name.unmangled_name()),
+						name = string_literal!(&field.name.unmangled_name(), context),
 						value = object! {
 							Object {}, scope_id
 						}
@@ -81,23 +87,6 @@ impl ObjectConstructor {
 			internal_fields: HashMap::new(),
 			type_name: "Group".into(),
 			object_type: ObjectType::Group,
-		};
-
-		let literal = LiteralObject::try_from_object_constructor(constructor, context).unwrap();
-		context.virtual_memory.store(literal)
-	}
-
-	pub fn oneof(types: Vec<Expression>, scope_id: usize, context: &mut Context) -> usize {
-		let constructor = ObjectConstructor {
-			fields: vec![Field {
-				name: "variants".into(),
-				value: Some(list!(context, scope_id, types)),
-				field_type: None,
-			}],
-			scope_id,
-			internal_fields: HashMap::new(),
-			type_name: "Either".into(),
-			object_type: ObjectType::OneOf,
 		};
 
 		let literal = LiteralObject::try_from_object_constructor(constructor, context).unwrap();

@@ -78,23 +78,12 @@ macro_rules! object {
 }
 
 #[macro_export]
-macro_rules! string {
-	(
-		$value: expr
-	) => {
-		Expression::ObjectConstructor(ObjectConstructor::from_string($value))
-	};
-}
-
-#[macro_export]
 macro_rules! string_literal {
 	(
 		$value: expr, $context: expr
-	) => {{
-		let literal = LiteralObject::try_from_object_constructor(ObjectConstructor::from_string($value), $context).unwrap();
-		let address = $context.virtual_memory.store(literal);
-		Expression::Pointer(address)
-	}};
+	) => {
+		Expression::Pointer(ObjectConstructor::from_string($value, $context))
+	};
 }
 
 pub fn cabin_true(context: &Context) -> Expression {

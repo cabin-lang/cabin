@@ -1,13 +1,9 @@
-use std::collections::VecDeque;
-
 use crate::{
 	comptime::CompileTime,
 	context::Context,
-	lexer::{Token, TokenType},
-	parser::{scope::ScopeType, statements::Statement, TokenQueueFunctionality as _},
+	lexer::TokenType,
+	parser::{expressions::Expression, scope::ScopeType, statements::Statement, Parse, TokenQueue, TokenQueueFunctionality as _},
 };
-
-use super::{Expression, Parse};
 
 #[derive(Debug, Clone)]
 pub struct Block {
@@ -18,7 +14,7 @@ pub struct Block {
 impl Parse for Block {
 	type Output = Block;
 
-	fn parse(tokens: &mut VecDeque<Token>, context: &mut Context) -> anyhow::Result<Self::Output> {
+	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
 		if let Some(scope_label) = &context.scope_label {
 			context.scope_data.enter_new_scope(ScopeType::Block, scope_label);
 		} else {

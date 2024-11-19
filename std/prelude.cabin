@@ -67,7 +67,7 @@ let terminal = new Object {
 	#[builtin<"terminal.print">, system_side_effects] 
 	print = action(text: Text),
 
-	#[builtin<"terminal.input">] 
+	#[builtin<"terminal.input">, system_side_effects] 
 	input = action: Text
 };
 
@@ -76,10 +76,10 @@ let file_system = new Object {
 	#[builtin<"file_system.read_file">]
 	read_file = action(path: Text): Text,
 
-	#[builtin<"file_system.write_file">]
+	#[builtin<"file_system.write_file">, system_side_effects]
 	write_file = action(path: Text, contents: Text),
 
-	#[builtin<"file_system.create">]
+	#[builtin<"file_system.create">, system_side_effects]
 	create = action(path: Text): Text
 };
 
@@ -88,10 +88,14 @@ let environment_variables = new Object {
 	#[builtin<"environment_variables.get">]
 	get = action(name: Text): Text,
 
-	#[builtin<"environment_variables.set">]
+	#[builtin<"environment_variables.set">, system_side_effects]
 	set = action(name: Text, value: Text)
 };
 
-if true {
-	terminal.print("Hello world!");
+let value = if false {
+	it is "first";
+} otherwise {
+	it is "second";
 };
+
+terminal.print(value);

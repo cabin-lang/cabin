@@ -12,7 +12,7 @@ impl Context {
 		Context {
 			scope_data: ScopeData::global(),
 			scope_label: None,
-			virtual_memory: VirtualMemory::new(),
+			virtual_memory: VirtualMemory::empty(),
 			side_effects_stack: Vec::new(),
 		}
 	}

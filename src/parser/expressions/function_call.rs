@@ -21,7 +21,9 @@ pub struct FunctionCall {
 	pub scope_id: usize,
 }
 
-impl Parse for FunctionCall {
+pub struct PostfixOperators;
+
+impl Parse for PostfixOperators {
 	type Output = Expression;
 
 	fn parse(tokens: &mut VecDeque<Token>, context: &mut Context) -> anyhow::Result<Self::Output> {
@@ -99,13 +101,20 @@ impl CompileTime for FunctionCall {
 		if let Ok(Ok(function_declaration)) = function.as_literal(context).map(|literal| FunctionDeclaration::from_literal(literal, context)) {
 			// Non-builtin
 			if let Some(body) = &function_declaration.body {
-				// Add compile-time arguments
 				if let Expression::Block(block) = body.as_ref() {
+					// Add compile-time arguments
 					if let Some(compile_time_arguments) = &compile_time_arguments {
 						for (argument, (parameter_name, _parameter_type)) in compile_time_arguments.iter().zip(function_declaration.compile_time_parameters.iter()) {
 							if !argument.is_literal() {
 								anyhow::bail!("Attempted to pass a value that's not fully known at compile-time to a compile-time parameter.");
 							}
+							context.scope_data.reassign_variable_from_id(parameter_name, argument.clone(), block.inner_scope_id)?;
+						}
+					}
+
+					// Add arguments
+					if let Some(arguments) = &arguments {
+						for (argument, (parameter_name, _parameter_type)) in arguments.iter().zip(function_declaration.compile_time_parameters.iter()) {
 							context.scope_data.reassign_variable_from_id(parameter_name, argument.clone(), block.inner_scope_id)?;
 						}
 					}
@@ -125,6 +134,7 @@ impl CompileTime for FunctionCall {
 				let mut builtin_name = None;
 				let mut system_side_effects = false;
 
+				// Get the address of system_side_effects
 				let system_side_effects_address = context
 					.scope_data
 					.get_global_variable(&"system_side_effects".into())
@@ -133,6 +143,7 @@ impl CompileTime for FunctionCall {
 					.as_literal_address()
 					.unwrap();
 
+				// Get builtin and side effect tags
 				for tag in &function_declaration.tags.values {
 					if let Ok(object) = tag.as_literal(context) {
 						if object.type_name == Name::from("BuiltinTag") {
@@ -146,6 +157,7 @@ impl CompileTime for FunctionCall {
 					}
 				}
 
+				// Call builtin function
 				if let Some(internal_name) = builtin_name {
 					if !system_side_effects || context.has_side_effects() {
 						return call_builtin_at_compile_time(&internal_name, context, self.scope_id, &arguments.unwrap_or(Vec::new()));

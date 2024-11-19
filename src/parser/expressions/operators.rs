@@ -6,7 +6,7 @@ use crate::{
 	comptime::CompileTime,
 	context::Context,
 	lexer::{Token, TokenType},
-	parser::{expressions::object::InternalFieldValue, TokenQueueFunctionality},
+	parser::TokenQueueFunctionality,
 };
 
 use super::{
@@ -14,7 +14,7 @@ use super::{
 	block::Block,
 	either::Either,
 	function::FunctionDeclaration,
-	function_call::FunctionCall,
+	function_call::{FunctionCall, PostfixOperators},
 	group::GroupDeclaration,
 	if_expression::IfExpression,
 	name::Name,
@@ -78,7 +78,7 @@ impl BinaryOperation<'_> {
 		if let Some(precedent) = self.precedent {
 			parse_binary_expression(precedent, tokens, context)
 		} else {
-			FunctionCall::parse(tokens, context)
+			PostfixOperators::parse(tokens, context)
 		}
 	}
 }
@@ -228,7 +228,7 @@ impl Parse for PrimaryExpression {
 			TokenType::String => {
 				let with_quotes = tokens.pop(TokenType::String)?;
 				let without_quotes = with_quotes.get(1..with_quotes.len() - 1).unwrap().to_owned();
-				Expression::ObjectConstructor(ObjectConstructor::from_string(&without_quotes))
+				Expression::Pointer(ObjectConstructor::from_string(&without_quotes, context))
 			},
 			_ => anyhow::bail!("Expected primary expression but found {}", tokens.peek_type()?),
 		})

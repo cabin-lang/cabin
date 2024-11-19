@@ -7,7 +7,7 @@ pub struct VirtualMemory {
 }
 
 impl VirtualMemory {
-	pub fn new() -> VirtualMemory {
+	pub fn empty() -> VirtualMemory {
 		VirtualMemory { memory: HashMap::new() }
 	}
 

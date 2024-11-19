@@ -29,15 +29,26 @@ pub mod operators;
 #[derive(Debug, Clone)]
 pub enum Expression {
 	Block(Block),
+
+	/// This type of expression only exists reliably before compile-time evaluation; During compile-time evaluation all `eithers` will be converted
+	/// into objects and stored in virtual memory.
 	Either(Either),
 	FieldAccess(FieldAccess),
 	FunctionCall(FunctionCall),
+
+	/// This type of expression only exists reliably before compile-time evaluation; During compile-time evaluation all function declarations will be converted
+	/// into objects and stored in virtual memory.
 	FunctionDeclaration(FunctionDeclaration),
 	If(IfExpression),
 	Name(Name),
 	ObjectConstructor(ObjectConstructor),
+
+	/// This type of expression only exists reliably before compile-time evaluation; During compile-time evaluation all `oneofs` will be converted
+	/// into objects and stored in virtual memory.
 	OneOf(OneOf),
+
 	Pointer(usize),
+
 	Void,
 }
 
@@ -54,13 +65,21 @@ impl CompileTime for Expression {
 
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
 		Ok(match self {
-			Self::Block(block) => block.evaluate_at_compile_time(context)?,
-			Self::Either(either) => either.evaluate_at_compile_time(context)?,
+			Self::Block(block) => block
+				.evaluate_at_compile_time(context)
+				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a block at compile-time".dimmed()))?,
+			Self::Either(either) => either
+				.evaluate_at_compile_time(context)
+				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating an either at compile-time".dimmed()))?,
 			Self::FunctionDeclaration(function_declaration) => function_declaration
 				.evaluate_at_compile_time(context)
 				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a function declaration at compile-time".dimmed()))?,
-			Self::FieldAccess(field_access) => field_access.evaluate_at_compile_time(context)?,
-			Self::FunctionCall(function_call) => function_call.evaluate_at_compile_time(context)?,
+			Self::FieldAccess(field_access) => field_access
+				.evaluate_at_compile_time(context)
+				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a field access at compile-time".dimmed()))?,
+			Self::FunctionCall(function_call) => function_call
+				.evaluate_at_compile_time(context)
+				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a function call at compile-time".dimmed()))?,
 			Self::If(if_expression) => if_expression.evaluate_at_compile_time(context)?,
 			Self::Name(name) => name.evaluate_at_compile_time(context)?,
 			Self::ObjectConstructor(object_constructor) => object_constructor.evaluate_at_compile_time(context)?,

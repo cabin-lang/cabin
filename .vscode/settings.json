@@ -1,11 +1,13 @@
 {
   "cSpell.words": [
-    "BUILTINS",
-    "comptime",
-    "Deque",
-    "oneof",
-    "Transpiling",
-    "unmangled",
-    "untoggle"
-  ]
+	"BUILTINS",
+	"comptime",
+	"Deque",
+	"eithers",
+	"oneof",
+	"oneofs",
+	"Transpiling",
+	"unmangled",
+	"untoggle"
+]
 }

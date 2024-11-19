@@ -1,18 +1,21 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 
 use crate::{
 	comptime::CompileTime,
 	context::Context,
-	lexer::{Token, TokenType},
+	lexer::TokenType,
 	literal_list, parse_list,
-	parser::{scope::ScopeType, statements::tag::TagList, ListType, Parse, TokenQueueFunctionality},
+	parser::{
+		expressions::{
+			name::Name,
+			object::{Field, LiteralConvertible, LiteralObject, ObjectConstructor, ObjectType},
+			Expression,
+		},
+		scope::ScopeType,
+		statements::tag::TagList,
+		ListType, Parse, TokenQueue, TokenQueueFunctionality,
+	},
 	string_literal,
-};
-
-use super::{
-	name::Name,
-	object::{Field, LiteralConvertible, LiteralObject, ObjectConstructor, ObjectType},
-	Expression,
 };
 
 #[derive(Debug, Clone)]
@@ -25,7 +28,7 @@ pub struct OneOf {
 impl Parse for OneOf {
 	type Output = OneOf;
 
-	fn parse(tokens: &mut VecDeque<Token>, context: &mut Context) -> anyhow::Result<Self::Output> {
+	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
 		tokens.pop(TokenType::KeywordOneOf)?;
 		context.scope_data.enter_new_unlabeled_scope(ScopeType::OneOf);
 
