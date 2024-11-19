@@ -1,21 +1,26 @@
 use std::collections::HashMap;
 
-use colored::Colorize as _;
+use colored::Colorize;
 
 use crate::{
 	comptime::CompileTime,
 	context::Context,
 	lexer::TokenType,
-	literal, literal_list, parse_list,
+	literal,
+	literal_list,
+	parse_list,
 	parser::{
 		expressions::{
 			block::Block,
 			name::Name,
 			object::{Field, InternalFieldValue, LiteralConvertible, LiteralObject, ObjectConstructor, ObjectType},
-			Expression, Parse,
+			Expression,
+			Parse,
 		},
 		statements::tag::TagList,
-		ListType, TokenQueue, TokenQueueFunctionality as _,
+		ListType,
+		TokenQueue,
+		TokenQueueFunctionality as _,
 	},
 	string_literal,
 };
@@ -28,6 +33,7 @@ pub struct FunctionDeclaration {
 	pub body: Option<Box<Expression>>,
 	pub scope_id: usize,
 	pub tags: TagList,
+	pub this_object: Option<Box<Expression>>,
 }
 
 impl Parse for FunctionDeclaration {
@@ -94,6 +100,7 @@ impl Parse for FunctionDeclaration {
 			return_type,
 			body,
 			scope_id: context.scope_data.unique_id(),
+			this_object: None,
 		})
 	}
 }
@@ -107,6 +114,9 @@ impl CompileTime for FunctionDeclaration {
 			let mut compile_time_parameters = Vec::new();
 			for (parameter_name, parameter_type) in self.compile_time_parameters {
 				let parameter_type = parameter_type.evaluate_at_compile_time(context)?;
+				if !parameter_type.is_literal() {
+					anyhow::bail!("A value that's not fully known at compile-time was used as a function parameter type");
+				}
 				compile_time_parameters.push((parameter_name, parameter_type));
 			}
 			compile_time_parameters
@@ -117,6 +127,12 @@ impl CompileTime for FunctionDeclaration {
 			let mut compile_time_parameters = Vec::new();
 			for (parameter_name, parameter_type) in self.parameters {
 				let parameter_type = parameter_type.evaluate_at_compile_time(context)?;
+				if !parameter_type.is_literal() {
+					anyhow::bail!(
+						"A value that's not fully known at compile-time was used as a function parameter type\n\t{}",
+						format!("while checking the type of the parameter \"{}\"", parameter_name.unmangled_name().bold().cyan()).dimmed()
+					);
+				}
 				compile_time_parameters.push((parameter_name, parameter_type));
 			}
 			compile_time_parameters
@@ -135,6 +151,8 @@ impl CompileTime for FunctionDeclaration {
 			.transpose()
 			.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating the body of a function declaration at compile-time".dimmed()))?;
 
+		let this_object = self.this_object.map(|this| anyhow::Ok(Box::new(this.evaluate_at_compile_time(context)?))).transpose()?;
+
 		// Return
 		let function = FunctionDeclaration {
 			compile_time_parameters,
@@ -143,6 +161,7 @@ impl CompileTime for FunctionDeclaration {
 			return_type,
 			scope_id: self.scope_id,
 			tags: self.tags.evaluate_at_compile_time(context)?,
+			this_object,
 		};
 
 		Ok(Expression::Pointer(
@@ -214,6 +233,14 @@ impl LiteralConvertible for FunctionDeclaration {
 					value: Some(literal_list!(context, self.scope_id, self.tags.values)),
 					field_type: None,
 				},
+				Field {
+					name: "this_object".into(),
+					value: Some(match self.this_object {
+						Some(this_object) => *this_object,
+						None => context.scope_data.get_global_variable(&"nothing".into()).unwrap().value.to_owned_literal()?,
+					}),
+					field_type: None,
+				},
 			],
 			scope_id: self.scope_id,
 			internal_fields: HashMap::from([("body".to_owned(), InternalFieldValue::OptionalExpression(self.body.map(|body| *body)))]),
@@ -277,6 +304,14 @@ impl LiteralConvertible for FunctionDeclaration {
 		// Body
 		let body = literal.get_internal_field("body").unwrap().to_owned().as_optional_expression().unwrap().map(Box::new);
 
+		// This object
+		let this_object_optional = literal.get_field(&"this_object".into()).unwrap().as_literal_address().unwrap();
+		let this_object = if this_object_optional == nothing {
+			None
+		} else {
+			Some(Box::new(Expression::Pointer(this_object_optional)))
+		};
+
 		// Return the value
 		Ok(FunctionDeclaration {
 			compile_time_parameters,
@@ -285,6 +320,7 @@ impl LiteralConvertible for FunctionDeclaration {
 			return_type,
 			scope_id: literal.scope_id,
 			tags: tags.into(),
+			this_object,
 		})
 	}
 }

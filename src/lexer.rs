@@ -4,7 +4,6 @@ use std::collections::VecDeque;
 // which is useful for outputting human-readable errors. We assign this to `as _` to indicate clearly that The trait is not referenced directly and only used
 // to bring its methods into scope to be called.
 use convert_case::Casing as _;
-
 // Bring the `IntoEnumIterator` trait into scope, which allows us to use `::iter()` on enums that `#[derive(strum_macros::EnumIter)]`. Specifically here, this is used
 // on `TokenType` to iterate over the values of the enum to test which one matches a specific string of Cabin code. We assign this to `as _` to indicate clearly that
 // The trait is not referenced directly and only used to bring its methods into scope to be called.

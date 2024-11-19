@@ -1,11 +1,10 @@
+use super::{block::Block, name::Name, Expression};
 use crate::{
 	comptime::CompileTime,
 	context::Context,
 	lexer::TokenType,
 	parser::{statements::tag::TagList, Parse, TokenQueue, TokenQueueFunctionality as _},
 };
-
-use super::{block::Block, name::Name, Expression};
 
 #[derive(Debug, Clone)]
 pub struct ForEachLoop {

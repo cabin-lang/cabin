@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 
 use colored::Colorize;
 
+use super::{function::FunctionDeclaration, name::Name, object::LiteralConvertible, operators::FieldAccess, Expression, Parse};
 use crate::{
 	builtin::call_builtin_at_compile_time,
 	comptime::CompileTime,
@@ -10,8 +11,6 @@ use crate::{
 	parse_list,
 	parser::{ListType, TokenQueueFunctionality},
 };
-
-use super::{function::FunctionDeclaration, name::Name, object::LiteralConvertible, operators::FieldAccess, Expression, Parse};
 
 #[derive(Debug, Clone)]
 pub struct FunctionCall {
@@ -86,7 +85,7 @@ impl CompileTime for FunctionCall {
 		};
 
 		// Arguments
-		let arguments = if let Some(original_arguments) = self.arguments {
+		let mut arguments = if let Some(original_arguments) = self.arguments {
 			let mut arguments = Vec::new();
 			for argument in original_arguments {
 				let evaluated = argument.evaluate_at_compile_time(context)?;
@@ -98,7 +97,17 @@ impl CompileTime for FunctionCall {
 		};
 
 		// Evaluate function
-		if let Ok(Ok(function_declaration)) = function.as_literal(context).map(|literal| FunctionDeclaration::from_literal(literal, context)) {
+		let literal = function.as_literal(context);
+		if let Ok(function_declaration) = literal {
+			let Ok(function_declaration) = FunctionDeclaration::from_literal(function_declaration, context) else {
+                anyhow::bail!("Attempted to call a value that's not a function; Instead it's an instance of \"{}\"", function_declaration.type_name.unmangled_name().bold().cyan()); 
+            };
+
+			if let Some(this_object) = function_declaration.this_object {
+				arguments = Some(arguments.unwrap_or(Vec::new()));
+				arguments.as_mut().unwrap().push(*this_object);
+			}
+
 			// Non-builtin
 			if let Some(body) = &function_declaration.body {
 				if let Expression::Block(block) = body.as_ref() {

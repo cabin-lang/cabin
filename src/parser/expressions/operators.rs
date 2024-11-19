@@ -2,13 +2,6 @@ use std::collections::VecDeque;
 
 use colored::Colorize;
 
-use crate::{
-	comptime::CompileTime,
-	context::Context,
-	lexer::{Token, TokenType},
-	parser::TokenQueueFunctionality,
-};
-
 use super::{
 	super::Parse,
 	block::Block,
@@ -20,9 +13,15 @@ use super::{
 	if_expression::IfExpression,
 	list::List,
 	name::Name,
-	object::{ObjectConstructor, ObjectType},
+	object::{LiteralConvertible, ObjectConstructor, ObjectType},
 	oneof::OneOf,
 	Expression,
+};
+use crate::{
+	comptime::CompileTime,
+	context::Context,
+	lexer::{Token, TokenType},
+	parser::TokenQueueFunctionality,
 };
 
 /// A binary operation. More specifically, this represents not one operation, but a group of operations that share the same precedence.
@@ -163,9 +162,21 @@ impl CompileTime for FieldAccess {
 		if let Ok(literal) = left_evaluated.as_literal(context) {
 			Ok(match literal.object_type() {
 				// Object fields
-				ObjectType::Normal => literal
-					.get_field(&self.right)
-					.ok_or_else(|| anyhow::anyhow!("Attempted to access a field that doesn't exist"))?,
+				ObjectType::Normal => {
+					let field = literal.get_field(&self.right).ok_or_else(|| {
+						anyhow::anyhow!(
+							"Attempted to access a the field \"{}\" on an object, but no field with that name exists on that object.",
+							self.right.unmangled_name().bold().cyan()
+						)
+					})?;
+
+					if let Ok(Ok(mut function_declaration)) = field.as_literal(context).map(|field| FunctionDeclaration::from_literal(field, context)) {
+						function_declaration.this_object = Some(Box::new(left_evaluated));
+						Expression::Pointer(function_declaration.to_literal(context).unwrap().store_in_memory(context))
+					} else {
+						field
+					}
+				},
 
 				// Either fields
 				ObjectType::Either => {
@@ -217,7 +228,7 @@ impl Parse for PrimaryExpression {
 				tokens.pop(TokenType::RightParenthesis)?;
 				expression
 			},
-			TokenType::Number => Expression::Pointer(ObjectConstructor::from_number(tokens.pop(TokenType::Number).unwrap().parse().unwrap(), context)),
+			TokenType::Number => Expression::ObjectConstructor(ObjectConstructor::from_number(tokens.pop(TokenType::Number).unwrap().parse().unwrap())),
 			TokenType::KeywordAction => Expression::FunctionDeclaration(FunctionDeclaration::parse(tokens, context)?),
 			TokenType::LeftBrace => Expression::Block(Block::parse(tokens, context)?),
 			TokenType::Identifier => Expression::Name(Name::parse(tokens, context)?),

@@ -1,19 +1,41 @@
-use crate::{context::Context, parser::expressions::Expression};
+use crate::{
+	comptime::CompileTime,
+	context::Context,
+	parser::expressions::{object::ObjectConstructor, Expression},
+};
 
 #[macro_export]
 macro_rules! list {
 	(
 		$context: expr, $scope_id: expr, $elements: expr
 	) => {{
-		let constructor = ObjectConstructor {
-			type_name: $crate::parser::expressions::name::Name::from("List"),
-			fields: Vec::new(),
-			internal_fields: std::collections::HashMap::from([("elements".to_owned(), $crate::parser::expressions::object::InternalFieldValue::List($elements))]),
-			scope_id: $scope_id,
-			object_type: $crate::parser::expressions::object::ObjectType::Normal,
-		};
+		// Literal
+		if $elements.iter().all(|element| element.can_be_literal()) {
+			let constructor = ObjectConstructor {
+				type_name: $crate::parser::expressions::name::Name::from("List"),
+				fields: Vec::new(),
+				internal_fields: std::collections::HashMap::from([("elements".to_owned(), $crate::parser::expressions::object::InternalFieldValue::List($elements))]),
+				scope_id: $scope_id,
+				object_type: $crate::parser::expressions::object::ObjectType::Normal,
+			};
 
-		$crate::parser::expressions::Expression::ObjectConstructor(constructor)
+			Expression::Pointer(
+				$crate::parser::expressions::object::LiteralObject::try_from_object_constructor(constructor, $context)
+					.unwrap()
+					.store_in_memory($context),
+			)
+		}
+		// Not literal
+		else {
+			let constructor = ObjectConstructor {
+				type_name: $crate::parser::expressions::name::Name::from("List"),
+				fields: Vec::new(),
+				internal_fields: std::collections::HashMap::from([("elements".to_owned(), $crate::parser::expressions::object::InternalFieldValue::List($elements))]),
+				scope_id: $scope_id,
+				object_type: $crate::parser::expressions::object::ObjectType::Normal,
+			};
+			Expression::ObjectConstructor(constructor)
+		}
 	}};
 }
 
@@ -88,4 +110,8 @@ macro_rules! string_literal {
 
 pub fn cabin_true(context: &Context) -> Expression {
 	context.scope_data.get_global_variable(&"true".into()).unwrap().value.to_owned_literal().unwrap()
+}
+
+pub fn number(number: f64, context: &mut Context) -> Expression {
+	ObjectConstructor::from_number(number).evaluate_at_compile_time(context).unwrap()
 }

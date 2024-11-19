@@ -2,16 +2,21 @@ use std::collections::HashMap;
 
 use colored::Colorize;
 
+use super::group::GroupDeclaration;
 use crate::{
-	comptime::CompileTime,
+	comptime::{memory::Pointer, CompileTime},
 	context::Context,
 	lexer::TokenType,
-	list, literal, object, parse_list,
-	parser::{statements::tag::TagList, ListType, TokenQueue, TokenQueueFunctionality},
-	string_literal,
+	parse_list,
+	parser::{
+		expressions::{name::Name, Expression},
+		statements::tag::TagList,
+		ListType,
+		Parse,
+		TokenQueue,
+		TokenQueueFunctionality,
+	},
 };
-
-use super::{super::Parse, name::Name, Expression};
 
 #[derive(Debug, Clone)]
 pub struct ObjectConstructor {
@@ -34,7 +39,7 @@ impl ObjectConstructor {
 		self.fields.iter().find_map(|field| if &field.name == name { field.value.as_ref() } else { None })
 	}
 
-	pub fn from_string(string: &str, context: &mut Context) -> usize {
+	pub fn from_string(string: &str, context: &mut Context) -> Pointer {
 		LiteralObject::try_from_object_constructor(
 			ObjectConstructor {
 				type_name: Name::from("Text"),
@@ -49,19 +54,14 @@ impl ObjectConstructor {
 		.store_in_memory(context)
 	}
 
-	pub fn from_number(number: f64, context: &mut Context) -> usize {
-		LiteralObject::try_from_object_constructor(
-			ObjectConstructor {
-				type_name: Name::from("Number"),
-				fields: Vec::new(),
-				internal_fields: HashMap::from([("internal_value".to_owned(), InternalFieldValue::Number(number))]),
-				scope_id: 0,
-				object_type: ObjectType::Normal,
-			},
-			context,
-		)
-		.unwrap()
-		.store_in_memory(context)
+	pub fn from_number(number: f64) -> ObjectConstructor {
+		ObjectConstructor {
+			type_name: Name::from("Number"),
+			fields: Vec::new(),
+			internal_fields: HashMap::from([("internal_value".to_owned(), InternalFieldValue::Number(number))]),
+			scope_id: 0,
+			object_type: ObjectType::Normal,
+		}
 	}
 
 	pub fn pop_internal_field(&mut self, name: &str) -> Option<InternalFieldValue> {
@@ -75,40 +75,7 @@ impl ObjectConstructor {
 		Ok(internal_value.to_owned())
 	}
 
-	pub fn group(fields: Vec<Field>, scope_id: usize, context: &mut Context) -> usize {
-		let fields = fields
-			.iter()
-			.map(|field| {
-				literal! {
-					context,
-					Field {
-						name = string_literal!(&field.name.unmangled_name(), context),
-						value = object! {
-							Object {}, scope_id
-						}
-					},
-					scope_id
-				}
-			})
-			.collect();
-
-		let constructor = ObjectConstructor {
-			fields: vec![Field {
-				name: "fields".into(),
-				value: Some(list!(context, scope_id, fields)),
-				field_type: None,
-			}],
-			scope_id,
-			internal_fields: HashMap::new(),
-			type_name: "Group".into(),
-			object_type: ObjectType::Group,
-		};
-
-		let literal = LiteralObject::try_from_object_constructor(constructor, context).unwrap();
-		context.virtual_memory.store(literal)
-	}
-
-	fn is_literal(&self) -> bool {
+	pub fn is_literal(&self) -> bool {
 		for field in &self.fields {
 			let value = field.value.as_ref().unwrap();
 			if let Expression::Pointer(_) = value {
@@ -189,6 +156,35 @@ impl CompileTime for ObjectConstructor {
 
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
 		let mut fields = Vec::new();
+
+		// Get object type
+		let object_type = GroupDeclaration::from_literal(
+			context
+				.scope_data
+				.get_variable_from_id(&self.type_name, self.scope_id)
+				.ok_or_else(|| {
+					anyhow::anyhow!(
+						"Attempted to create an object of type \"{}\", but no type with that name was found in the scope it was referenced.",
+						self.type_name.unmangled_name().bold().cyan()
+					)
+				})?
+				.value
+				.as_literal(context)?,
+			context,
+		)?;
+
+		// Default fields
+		for field in object_type.fields {
+			if let Some(value) = field.value {
+				fields.push(Field {
+					name: field.name,
+					value: Some(value),
+					field_type: None,
+				});
+			}
+		}
+
+		// Explicit fields
 		for field in self.fields {
 			let field_value = field.value.unwrap().evaluate_at_compile_time(context).map_err(|error| {
 				anyhow::anyhow!(
@@ -254,12 +250,20 @@ impl InternalFieldValue {
 			anyhow::bail!("Attempted to convert a non-optional-expression internal field value into an optional expression internal field value");
 		}
 	}
+
+	pub fn as_number(&self) -> anyhow::Result<f64> {
+		if let Self::Number(expression) = self {
+			Ok(*expression)
+		} else {
+			anyhow::bail!("Attempted to convert a non-number internal field value into a number internal field value");
+		}
+	}
 }
 
 #[derive(Debug)]
 pub struct LiteralObject {
 	pub type_name: Name,
-	fields: HashMap<Name, usize>,
+	fields: HashMap<Name, Pointer>,
 	internal_fields: HashMap<String, InternalFieldValue>,
 	object_type: ObjectType,
 	pub scope_id: usize,
@@ -332,7 +336,7 @@ impl LiteralObject {
 	}
 
 	/// Stores this value in virtual memory and returns the address of the location stored.
-	pub fn store_in_memory(self, context: &mut Context) -> usize {
+	pub fn store_in_memory(self, context: &mut Context) -> Pointer {
 		context.virtual_memory.store(self)
 	}
 }

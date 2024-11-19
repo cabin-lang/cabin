@@ -1,8 +1,12 @@
+let Object = group {};
+
 // Indicates that a value should only be used in the Cabin standard library. If a value tagged with `#[cabin_only]` is referenced in
 // user code, outside of the Cabin standard library, the compiler will flag it as an error. This is used for things like the `builtin<...>`
 // tag, which marks a function as a "built-in" function with special handling in the Cabin compiler. Things such as this shouldn't be used
 // outside of the standard library.
 let cabin_only = new Object {};
+
+let Anything = group {};
 
 #[cabin_only]
 let system_side_effects = new Object {};
@@ -19,7 +23,7 @@ let Field = group {
 let List = group {};
 
 let Either = group {
-	variants: List<Text>
+	variants: List
 };
 
 let Boolean = either {
@@ -28,8 +32,6 @@ let Boolean = either {
 };
 let true = Boolean.true;
 let false = Boolean.false;
-
-let Number = group {};
 
 let Text = group {};
 
@@ -47,10 +49,14 @@ let builtin = action<name: Text> {
 	};
 };
 
+let Number = group {
+	#[builtin<"Number.plus">]
+	plus = action(this: Anything, other: Anything): Anything
+};
+
 let Error = group {
 	message: Text
 };
-
 
 let Optional = oneof<Data> {
 	Data,
@@ -94,4 +100,4 @@ let environment_variables = new Object {
 	set = action(name: Text, value: Text)
 };
 
-let value = [1, 2, 3, 4];
+let sum = 9 + 10;

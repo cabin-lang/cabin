@@ -1,16 +1,17 @@
 use colored::Colorize as _;
 
+use super::tag::TagList;
 use crate::{
 	comptime::CompileTime,
 	context::Context,
 	lexer::TokenType,
 	parser::{
 		expressions::{name::Name, Expression},
-		Parse, TokenQueue, TokenQueueFunctionality as _,
+		Parse,
+		TokenQueue,
+		TokenQueueFunctionality as _,
 	},
 };
-
-use super::tag::TagList;
 
 #[derive(Debug, Clone)]
 pub struct Declaration {

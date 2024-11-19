@@ -1,12 +1,12 @@
 use std::collections::VecDeque;
 
 use colored::Colorize as _;
-use statements::Statement;
 
 use crate::{
 	comptime::CompileTime,
 	context::Context,
 	lexer::{Token, TokenType},
+	parser::statements::Statement,
 };
 
 pub mod expressions;
@@ -83,6 +83,7 @@ pub trait TokenQueueFunctionality {
 	fn peek(&self) -> anyhow::Result<&str>;
 
 	fn peek_type(&self) -> anyhow::Result<&TokenType>;
+
 	fn peek_type2(&self) -> anyhow::Result<&TokenType>;
 
 	/// Returns whether the next token in the queue matches the given token type.
