@@ -3,6 +3,7 @@ use std::collections::VecDeque;
 use block::Block;
 use colored::Colorize;
 use either::Either;
+use foreach::ForEachLoop;
 use function::FunctionDeclaration;
 use function_call::FunctionCall;
 use if_expression::IfExpression;
@@ -17,10 +18,12 @@ use super::{statements::tag::TagList, Parse};
 
 pub mod block;
 pub mod either;
+pub mod foreach;
 pub mod function;
 pub mod function_call;
 pub mod group;
 pub mod if_expression;
+pub mod list;
 pub mod name;
 pub mod object;
 pub mod oneof;
@@ -42,6 +45,7 @@ pub enum Expression {
 	If(IfExpression),
 	Name(Name),
 	ObjectConstructor(ObjectConstructor),
+	ForEachLoop(ForEachLoop),
 
 	/// This type of expression only exists reliably before compile-time evaluation; During compile-time evaluation all `oneofs` will be converted
 	/// into objects and stored in virtual memory.
@@ -84,6 +88,7 @@ impl CompileTime for Expression {
 			Self::Name(name) => name.evaluate_at_compile_time(context)?,
 			Self::ObjectConstructor(object_constructor) => object_constructor.evaluate_at_compile_time(context)?,
 			Self::OneOf(oneof) => oneof.evaluate_at_compile_time(context)?,
+			Self::ForEachLoop(for_loop) => for_loop.evaluate_at_compile_time(context)?,
 			Self::Void | Self::Pointer(_) => self,
 		})
 	}

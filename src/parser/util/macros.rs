@@ -6,14 +6,14 @@ macro_rules! list {
 		$context: expr, $scope_id: expr, $elements: expr
 	) => {{
 		let constructor = ObjectConstructor {
-			type_name: Name::from("List"),
+			type_name: $crate::parser::expressions::name::Name::from("List"),
 			fields: Vec::new(),
-			internal_fields: HashMap::from([("elements".to_owned(), InternalFieldValue::List($elements))]),
+			internal_fields: std::collections::HashMap::from([("elements".to_owned(), $crate::parser::expressions::object::InternalFieldValue::List($elements))]),
 			scope_id: $scope_id,
-			object_type: ObjectType::Normal,
+			object_type: $crate::parser::expressions::object::ObjectType::Normal,
 		};
 
-		Expression::ObjectConstructor(constructor)
+		$crate::parser::expressions::Expression::ObjectConstructor(constructor)
 	}};
 }
 

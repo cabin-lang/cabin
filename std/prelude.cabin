@@ -29,6 +29,8 @@ let Boolean = either {
 let true = Boolean.true;
 let false = Boolean.false;
 
+let Number = group {};
+
 let Text = group {};
 
 // The tag for a built-in function. Functions that are built into the Cabin compiler and run with native code are marked with this, usually
@@ -92,10 +94,4 @@ let environment_variables = new Object {
 	set = action(name: Text, value: Text)
 };
 
-let value = if false {
-	it is "first";
-} otherwise {
-	it is "second";
-};
-
-terminal.print(value);
+let value = [1, 2, 3, 4];

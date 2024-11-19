@@ -1,13 +1,12 @@
 use std::ops::Deref;
 
-use colored::Colorize;
+use colored::Colorize as _;
 
 use crate::{
 	comptime::CompileTime,
 	context::Context,
-	lexer::TokenType,
 	parse_list,
-	parser::{expressions::Expression, ListType, Parse, TokenQueue, TokenQueueFunctionality},
+	parser::{expressions::Expression, ListType, Parse, TokenQueue},
 };
 
 #[derive(Debug, Clone, Default)]

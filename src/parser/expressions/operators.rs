@@ -13,10 +13,12 @@ use super::{
 	super::Parse,
 	block::Block,
 	either::Either,
+	foreach::ForEachLoop,
 	function::FunctionDeclaration,
 	function_call::{FunctionCall, PostfixOperators},
 	group::GroupDeclaration,
 	if_expression::IfExpression,
+	list::List,
 	name::Name,
 	object::{ObjectConstructor, ObjectType},
 	oneof::OneOf,
@@ -215,6 +217,7 @@ impl Parse for PrimaryExpression {
 				tokens.pop(TokenType::RightParenthesis)?;
 				expression
 			},
+			TokenType::Number => Expression::Pointer(ObjectConstructor::from_number(tokens.pop(TokenType::Number).unwrap().parse().unwrap(), context)),
 			TokenType::KeywordAction => Expression::FunctionDeclaration(FunctionDeclaration::parse(tokens, context)?),
 			TokenType::LeftBrace => Expression::Block(Block::parse(tokens, context)?),
 			TokenType::Identifier => Expression::Name(Name::parse(tokens, context)?),
@@ -225,6 +228,8 @@ impl Parse for PrimaryExpression {
 			TokenType::KeywordOneOf => Expression::OneOf(OneOf::parse(tokens, context)?),
 			TokenType::KeywordEither => Expression::Either(Either::parse(tokens, context)?),
 			TokenType::KeywordIf => Expression::If(IfExpression::parse(tokens, context)?),
+			TokenType::KeywordForEach => Expression::ForEachLoop(ForEachLoop::parse(tokens, context)?),
+			TokenType::LeftBracket => List::parse(tokens, context)?,
 			TokenType::String => {
 				let with_quotes = tokens.pop(TokenType::String)?;
 				let without_quotes = with_quotes.get(1..with_quotes.len() - 1).unwrap().to_owned();

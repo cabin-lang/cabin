@@ -155,19 +155,21 @@ impl TokenQueueFunctionality for std::collections::VecDeque<Token> {
 macro_rules! parse_list {
 	(
 		$tokens: expr, $list_type: expr, $body: block
-	) => {
+	) => {{
+		use $crate::parser::TokenQueueFunctionality as _;
+
 		$tokens.pop($list_type.opening())?;
 		while !$tokens.next_is($list_type.closing()) {
 			$body
-			if $tokens.next_is(TokenType::Comma) {
-				$tokens.pop(TokenType::Comma)?;
+			if $tokens.next_is($crate::lexer::TokenType::Comma) {
+				$tokens.pop($crate::lexer::TokenType::Comma)?;
 			} else {
 				break;
 			}
 		}
 
 		$tokens.pop($list_type.closing())?;
-	};
+	}};
 }
 
 pub enum ListType {

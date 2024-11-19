@@ -49,6 +49,21 @@ impl ObjectConstructor {
 		.store_in_memory(context)
 	}
 
+	pub fn from_number(number: f64, context: &mut Context) -> usize {
+		LiteralObject::try_from_object_constructor(
+			ObjectConstructor {
+				type_name: Name::from("Number"),
+				fields: Vec::new(),
+				internal_fields: HashMap::from([("internal_value".to_owned(), InternalFieldValue::Number(number))]),
+				scope_id: 0,
+				object_type: ObjectType::Normal,
+			},
+			context,
+		)
+		.unwrap()
+		.store_in_memory(context)
+	}
+
 	pub fn pop_internal_field(&mut self, name: &str) -> Option<InternalFieldValue> {
 		self.internal_fields.remove(name)
 	}
