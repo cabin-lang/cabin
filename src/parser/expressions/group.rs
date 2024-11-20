@@ -16,7 +16,9 @@ use crate::{
 			Expression,
 			Parse,
 		},
+		scope::ScopeType,
 		statements::tag::TagList,
+		util::macros::TryAs as _,
 		ListType,
 		TokenQueueFunctionality,
 	},
@@ -34,6 +36,8 @@ impl Parse for GroupDeclaration {
 
 	fn parse(tokens: &mut VecDeque<Token>, context: &mut Context) -> anyhow::Result<Self::Output> {
 		tokens.pop(TokenType::KeywordGroup)?;
+		context.scope_data.enter_new_unlabeled_scope(ScopeType::Group);
+		let inner_scope_id = context.scope_data.unique_id();
 
 		// Fields
 		let mut fields = Vec::new();
@@ -63,7 +67,7 @@ impl Parse for GroupDeclaration {
 				let mut value = Expression::parse(tokens, context)?;
 
 				// Set tags
-				if let Some(expression_tags) = value.tags() {
+				if let Some(expression_tags) = value.tags_mut() {
 					if let Some(declaration_tags) = &tags {
 						*expression_tags = declaration_tags.clone();
 					}
@@ -77,11 +81,9 @@ impl Parse for GroupDeclaration {
 			// Add field
 			fields.push(Field { name, value, field_type });
 		});
+		context.scope_data.exit_scope()?;
 
-		Ok(Expression::Group(GroupDeclaration {
-			fields,
-			scope_id: context.scope_data.unique_id(),
-		}))
+		Ok(Expression::Group(GroupDeclaration { fields, scope_id: inner_scope_id }))
 	}
 }
 
@@ -89,6 +91,7 @@ impl CompileTime for GroupDeclaration {
 	type Output = Expression;
 
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
+		let previous = context.scope_data.set_current_scope(self.scope_id);
 		let mut fields = Vec::new();
 
 		for field in self.fields {
@@ -105,7 +108,7 @@ impl CompileTime for GroupDeclaration {
 					)
 				})?;
 
-				if !evaluated.is_literal() {
+				if !evaluated.is_pointer() {
 					anyhow::bail!(
 						"Attempted to assign a default value to a group field that's not known at compile-time\n\t{}",
 						format!("while checking the default value of the field \"{}\"", field.name.unmangled_name().bold().cyan()).dimmed()
@@ -142,6 +145,7 @@ impl CompileTime for GroupDeclaration {
 		}
 
 		// Store in memory and return a pointer
+		context.scope_data.set_current_scope(previous);
 		Ok(Expression::Pointer(
 			GroupDeclaration { fields, scope_id: self.scope_id }.to_literal(context)?.store_in_memory(context),
 		))
@@ -184,22 +188,22 @@ impl LiteralConvertible for GroupDeclaration {
 
 	fn from_literal(literal: &LiteralObject, context: &Context) -> anyhow::Result<Self> {
 		let fields = literal
-			.get_field_literal(&"fields".into(), context)
+			.get_field_literal("fields", context)
 			.unwrap()
-			.list_elements()
+			.try_as::<Vec<Expression>>()
 			.unwrap()
 			.iter()
 			.map(|field_object| {
 				let name = Name::from(
 					field_object
-						.as_literal(context)
+						.try_as_literal(context)
 						.unwrap()
-						.get_field_literal(&"name".into(), context)
+						.get_field_literal("name", context)
 						.unwrap()
-						.as_string()
+						.try_as::<String>()
 						.unwrap(),
 				);
-				let value = field_object.as_literal(context).unwrap().get_field(&"value".into());
+				let value = field_object.try_as_literal(context).unwrap().get_field("value");
 				Field { name, value, field_type: None }
 			})
 			.collect();

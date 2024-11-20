@@ -6,7 +6,9 @@ use crate::{
 	lexer::TokenType,
 	parser::{
 		expressions::{block::Block, Expression},
-		Parse, TokenQueue, TokenQueueFunctionality,
+		Parse,
+		TokenQueue,
+		TokenQueueFunctionality,
 	},
 };
 
@@ -67,11 +69,11 @@ impl CompileTime for IfExpression {
 
 		// Fully evaluated: return the value (only if true)
 		if condition_is_true {
-			if let Ok(literal) = body.to_owned_literal() {
+			if let Ok(literal) = body.try_clone_pointer() {
 				return Ok(literal);
 			}
 		} else if let Some(else_body) = &else_body {
-			if let Ok(literal) = else_body.to_owned_literal() {
+			if let Ok(literal) = else_body.try_clone_pointer() {
 				return Ok(literal);
 			}
 		}

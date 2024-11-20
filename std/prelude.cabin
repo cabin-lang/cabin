@@ -1,4 +1,33 @@
+let This = group {};
+
+// Optionals -----------------------------------------------------------------------------------------------------------------
+
+let Nothing = either {
+	nothing
+};
+let nothing = Nothing.nothing;
+let Optional = oneof<Data> {
+	Data,
+	Nothing
+};
+
+// Results -------------------------------------------------------------------------------------------------------------------
+
+// Anything ------------------------------------------------------------------------------------------------------------------
+
+let Anything = group {
+
+	#[builtin<"Anything.to_string">]
+	to_string = action(this: This): Text
+};
+
 let Object = group {};
+
+// Text ----------------------------------------------------------------------------------------------------------------------
+
+// Numbers -------------------------------------------------------------------------------------------------------------------
+
+// System --------------------------------------------------------------------------------------------------------------------
 
 // Indicates that a value should only be used in the Cabin standard library. If a value tagged with `#[cabin_only]` is referenced in
 // user code, outside of the Cabin standard library, the compiler will flag it as an error. This is used for things like the `builtin<...>`
@@ -6,15 +35,9 @@ let Object = group {};
 // outside of the standard library.
 let cabin_only = new Object {};
 
-let Anything = group {};
-
 #[cabin_only]
 let system_side_effects = new Object {};
 
-let Nothing = either {
-	nothing
-};
-let nothing = Nothing.nothing;
 
 let Field = group {
 	name: Text,
@@ -58,11 +81,6 @@ let Error = group {
 	message: Text
 };
 
-let Optional = oneof<Data> {
-	Data,
-	Nothing
-};
-
 let Result = oneof<Data> {
 	Data,
 	Error	
@@ -73,7 +91,7 @@ let Result = oneof<Data> {
 let terminal = new Object {
 
 	#[builtin<"terminal.print">, system_side_effects] 
-	print = action(text: Text),
+	print = action(object: Anything),
 
 	#[builtin<"terminal.input">, system_side_effects] 
 	input = action: Text
@@ -101,3 +119,4 @@ let environment_variables = new Object {
 };
 
 let sum = 9 + 10;
+terminal.print(sum);

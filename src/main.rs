@@ -1,7 +1,6 @@
-use comptime::CompileTime as _;
-use context::Context;
-use lexer::tokenize;
-use parser::parse;
+use clap::Parser as _;
+
+use crate::cli::commands::{CabinCommand as _, SubCommand};
 
 pub mod builtin;
 pub mod cli;
@@ -12,13 +11,12 @@ pub mod parser;
 
 pub const PRELUDE: &str = include_str!("../std/prelude.cabin");
 
+#[derive(clap::Parser)]
+pub struct CabinCompilerArguments {
+	#[command(subcommand)]
+	pub command: SubCommand,
+}
+
 fn main() -> anyhow::Result<()> {
-	let mut context = Context::new();
-
-	let source_code = include_str!("../std/prelude.cabin");
-	let mut tokens = tokenize(source_code)?;
-	let ast = parse(&mut tokens, &mut context)?;
-	let _comptime_ast = ast.evaluate_at_compile_time(&mut context)?;
-
-	Ok(())
+	CabinCompilerArguments::parse().command.execute()
 }

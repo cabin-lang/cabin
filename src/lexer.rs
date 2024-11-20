@@ -434,13 +434,19 @@ pub struct Token {
 	/// part of the value; For example, all strings retain their quotes in this field. For information about what is considered part of the `value` for
 	/// a specific token type, refer to the documentation for that specific token type.
 	pub value: String,
-	/// The line number of the token. This is the line number as it appears in the source code passed to `tokenize`. It is up to the caller to do
-	/// arithmetic to find out the actual line number the token was written on, for example, with multiple files. Keep in mind that there is a global
-	/// prelude code (see `/prelude.cbn`) that is added to all Cabin projects, so that must be taken into account as well when error reporting with
-	/// this `line` field.
+	pub position: Position,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Position {
 	pub line: usize,
-	/// The column number of the token.
 	pub column: usize,
+}
+
+impl Position {
+	pub fn zero() -> Position {
+		Position { line: 0, column: 0 }
+	}
 }
 
 /// Tokenizes a string of Cabin source code into a vector of tokens. This is the first step in compiling Cabin source code. The returned vector of tokens
@@ -476,7 +482,11 @@ pub fn tokenize(code: &str) -> anyhow::Result<VecDeque<Token>> {
 
 			// Add the token - ignore whitespace and comments!
 			if token_type != TokenType::Whitespace && token_type != TokenType::LineComment {
-				let token = Token { token_type, value, line, column };
+				let token = Token {
+					token_type,
+					value,
+					position: Position { line, column },
+				};
 				tokens.push(token);
 			}
 			// If it is whitespace, Add to the newlines!

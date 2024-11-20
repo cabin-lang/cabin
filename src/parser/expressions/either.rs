@@ -4,15 +4,20 @@ use crate::{
 	comptime::CompileTime,
 	context::Context,
 	lexer::TokenType,
-	literal, literal_list, parse_list,
+	literal,
+	literal_list,
+	parse_list,
 	parser::{
 		expressions::{
 			name::Name,
-			object::ObjectConstructor,
-			object::{Field, LiteralConvertible, LiteralObject, ObjectType},
+			object::{Field, LiteralConvertible, LiteralObject, ObjectConstructor, ObjectType},
 			Expression,
 		},
-		ListType, Parse, TokenQueue, TokenQueueFunctionality,
+		util::macros::TryAs,
+		ListType,
+		Parse,
+		TokenQueue,
+		TokenQueueFunctionality,
 	},
 	string_literal,
 };
@@ -90,22 +95,10 @@ impl LiteralConvertible for Either {
 		}
 
 		let variants = literal
-			.get_field_literal(&"variants".into(), context)
-			.unwrap()
-			.list_elements()
-			.unwrap()
+			.expect_field_literal("variants", context)
+			.expect_as::<Vec<Expression>>()
 			.iter()
-			.map(|field_object| {
-				Name::from(
-					field_object
-						.as_literal(context)
-						.unwrap()
-						.get_field_literal(&"value".into(), context)
-						.unwrap()
-						.as_string()
-						.unwrap(),
-				)
-			})
+			.map(|field_object| Name::from(field_object.expect_literal(context).expect_field_literal("value", context).expect_as::<String>()))
 			.collect();
 
 		Ok(Either {

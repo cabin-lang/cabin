@@ -63,7 +63,7 @@ pub trait TokenQueueFunctionality {
 	///
 	/// # Returns
 	/// A `Result` containing either the value of the popped token or an `Error`.
-	fn pop(&mut self, token_type: TokenType) -> anyhow::Result<String>;
+	fn pop(&mut self, token_type: TokenType) -> anyhow::Result<Token>;
 
 	/// Removes and returns the next token's type in the queue if the token matches the given token type. If it
 	/// does not (or the token stream is empty), an error is returned.
@@ -114,10 +114,10 @@ impl TokenQueueFunctionality for std::collections::VecDeque<Token> {
 		Ok(&self.get(1).ok_or_else(|| anyhow::anyhow!("Unexpected end of file."))?.token_type)
 	}
 
-	fn pop(&mut self, token_type: TokenType) -> anyhow::Result<String> {
+	fn pop(&mut self, token_type: TokenType) -> anyhow::Result<Token> {
 		if let Some(token) = self.pop_front() {
 			if token.token_type == token_type {
-				return Ok(token.value);
+				return Ok(token);
 			}
 
 			anyhow::bail!(
@@ -150,8 +150,6 @@ impl TokenQueueFunctionality for std::collections::VecDeque<Token> {
 /// Parses a comma-separated list of things. This takes a block of code as one of its parameters. The block is run once at the beginning,
 /// and then while the next token is a comma, a comma is consumed and the block is run again. This is used for many comma-separated lists
 /// in the language like function parameters, function arguments, group fields, group instantiation, etc.
-///
-/// TODO: Currently the language doesn't allow trailing commas. We should consider when/if we want to allow these and how to do so.
 #[macro_export]
 macro_rules! parse_list {
 	(

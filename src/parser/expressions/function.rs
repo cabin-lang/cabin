@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
-use colored::Colorize;
+use colored::Colorize as _;
 
 use crate::{
 	comptime::CompileTime,
 	context::Context,
+	err,
 	lexer::TokenType,
 	literal,
 	literal_list,
@@ -18,6 +19,7 @@ use crate::{
 			Parse,
 		},
 		statements::tag::TagList,
+		util::macros::TryAs as _,
 		ListType,
 		TokenQueue,
 		TokenQueueFunctionality as _,
@@ -85,7 +87,7 @@ impl Parse for FunctionDeclaration {
 			for (parameter_name, _parameter_type) in &compile_time_parameters {
 				context
 					.scope_data
-					.declare_new_variable_from_id(parameter_name.clone(), Expression::Void, TagList::default(), block.inner_scope_id)?;
+					.declare_new_variable_from_id(parameter_name.clone(), Expression::Void(()), block.inner_scope_id)?;
 			}
 			Some(Box::new(Expression::Block(block)))
 		} else {
@@ -114,7 +116,7 @@ impl CompileTime for FunctionDeclaration {
 			let mut compile_time_parameters = Vec::new();
 			for (parameter_name, parameter_type) in self.compile_time_parameters {
 				let parameter_type = parameter_type.evaluate_at_compile_time(context)?;
-				if !parameter_type.is_literal() {
+				if !parameter_type.is_pointer() {
 					anyhow::bail!("A value that's not fully known at compile-time was used as a function parameter type");
 				}
 				compile_time_parameters.push((parameter_name, parameter_type));
@@ -127,7 +129,7 @@ impl CompileTime for FunctionDeclaration {
 			let mut compile_time_parameters = Vec::new();
 			for (parameter_name, parameter_type) in self.parameters {
 				let parameter_type = parameter_type.evaluate_at_compile_time(context)?;
-				if !parameter_type.is_literal() {
+				if !parameter_type.is_pointer() {
 					anyhow::bail!(
 						"A value that's not fully known at compile-time was used as a function parameter type\n\t{}",
 						format!("while checking the type of the parameter \"{}\"", parameter_name.unmangled_name().bold().cyan()).dimmed()
@@ -149,7 +151,7 @@ impl CompileTime for FunctionDeclaration {
 			.body
 			.map(|body| anyhow::Ok(Box::new(body.evaluate_at_compile_time(context)?)))
 			.transpose()
-			.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating the body of a function declaration at compile-time".dimmed()))?;
+			.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating the body of a function declaration at compile-time"))?;
 
 		let this_object = self.this_object.map(|this| anyhow::Ok(Box::new(this.evaluate_at_compile_time(context)?))).transpose()?;
 
@@ -164,10 +166,17 @@ impl CompileTime for FunctionDeclaration {
 			this_object,
 		};
 
+		// Return as a pointer
 		Ok(Expression::Pointer(
 			function
 				.to_literal(context)
-				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while converting a function declaration into an object at compile-time".dimmed()))?
+				.map_err(|error| {
+					err! {
+						base = error,
+						process = "while converting a function declaration into an object at compile-time",
+						context = context,
+					}
+				})?
 				.store_in_memory(context),
 		))
 	}
@@ -214,7 +223,7 @@ impl LiteralConvertible for FunctionDeclaration {
 					name: "return_type".into(),
 					value: Some(match self.return_type {
 						Some(return_type) => *return_type,
-						None => context.scope_data.get_global_variable(&"nothing".into()).unwrap().value.to_owned_literal()?,
+						None => context.nothing(),
 					}),
 					field_type: None,
 				},
@@ -237,7 +246,7 @@ impl LiteralConvertible for FunctionDeclaration {
 					name: "this_object".into(),
 					value: Some(match self.this_object {
 						Some(this_object) => *this_object,
-						None => context.scope_data.get_global_variable(&"nothing".into()).unwrap().value.to_owned_literal()?,
+						None => context.nothing(),
 					}),
 					field_type: None,
 				},
@@ -260,41 +269,39 @@ impl LiteralConvertible for FunctionDeclaration {
 
 		// Tags
 		let tags = literal
-			.get_field(&"tags".into())
+			.get_field("tags")
 			.unwrap()
-			.as_literal(context)
-			.unwrap()
-			.list_elements()
-			.unwrap()
+			.expect_literal(context)
+			.expect_as::<Vec<Expression>>()
 			.iter()
-			.map(|element| element.to_owned_literal().unwrap())
+			.map(|element| element.try_clone_pointer().unwrap())
 			.collect::<Vec<_>>();
 
 		// Compile-time parameters
-		let compile_time_parameters = literal.get_field_literal(&"compile_time_parameters".into(), context).unwrap().list_elements()?;
+		let compile_time_parameters = literal.get_field_literal("compile_time_parameters", context).unwrap().try_as::<Vec<Expression>>()?;
 		let compile_time_parameters = compile_time_parameters
 			.iter()
 			.map(|element| {
-				let parameter_object = element.as_literal(context).unwrap();
-				let name = parameter_object.get_field_literal(&"name".into(), context).unwrap().as_string().unwrap();
-				(Name::from(name), parameter_object.get_field(&"type".into()).unwrap())
+				let parameter_object = element.expect_literal(context);
+				let name = parameter_object.get_field_literal("name", context).unwrap().expect_as::<String>();
+				(Name::from(name), parameter_object.get_field("type").unwrap())
 			})
 			.collect();
 
 		// Parameters
-		let parameters = literal.get_field_literal(&"parameters".into(), context).unwrap().list_elements()?;
+		let parameters = literal.get_field_literal("parameters", context).unwrap().try_as::<Vec<Expression>>()?;
 		let parameters = parameters
 			.iter()
 			.map(|element| {
-				let parameter_object = element.as_literal(context).unwrap();
-				let name = parameter_object.get_field_literal(&"name".into(), context).unwrap().as_string().unwrap();
-				(Name::from(name), parameter_object.get_field(&"type".into()).unwrap())
+				let parameter_object = element.try_as_literal(context).unwrap();
+				let name = parameter_object.get_field_literal("name", context).unwrap().expect_as::<String>();
+				(Name::from(name), parameter_object.get_field("type").unwrap())
 			})
 			.collect();
 
 		// Return type
-		let return_type_optional = literal.get_field(&"return_type".into()).unwrap().as_literal_address().unwrap();
-		let nothing = context.scope_data.get_global_variable(&"nothing".into()).unwrap().value.as_literal_address().unwrap();
+		let return_type_optional = literal.get_field("return_type").unwrap().try_into().unwrap();
+		let nothing = context.nothing().try_into().unwrap();
 		let return_type = if return_type_optional == nothing {
 			None
 		} else {
@@ -302,10 +309,10 @@ impl LiteralConvertible for FunctionDeclaration {
 		};
 
 		// Body
-		let body = literal.get_internal_field("body").unwrap().to_owned().as_optional_expression().unwrap().map(Box::new);
+		let body = literal.get_internal_field::<Option<Expression>>("body").cloned().unwrap().map(Box::new);
 
 		// This object
-		let this_object_optional = literal.get_field(&"this_object".into()).unwrap().as_literal_address().unwrap();
+		let this_object_optional = literal.get_field("this_object").unwrap().try_into().unwrap();
 		let this_object = if this_object_optional == nothing {
 			None
 		} else {

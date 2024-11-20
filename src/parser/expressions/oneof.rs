@@ -4,7 +4,8 @@ use crate::{
 	comptime::CompileTime,
 	context::Context,
 	lexer::TokenType,
-	literal_list, parse_list,
+	literal_list,
+	parse_list,
 	parser::{
 		expressions::{
 			name::Name,
@@ -12,8 +13,11 @@ use crate::{
 			Expression,
 		},
 		scope::ScopeType,
-		statements::tag::TagList,
-		ListType, Parse, TokenQueue, TokenQueueFunctionality,
+		util::macros::TryAs as _,
+		ListType,
+		Parse,
+		TokenQueue,
+		TokenQueueFunctionality,
 	},
 	string_literal,
 };
@@ -37,7 +41,7 @@ impl Parse for OneOf {
 			let mut compile_time_parameters = Vec::new();
 			parse_list!(tokens, ListType::AngleBracketed, {
 				let name = Name::parse(tokens, context)?;
-				context.scope_data.declare_new_variable(name.clone(), Expression::Void, TagList::default())?;
+				context.scope_data.declare_new_variable(name.clone(), Expression::Void(()))?;
 				compile_time_parameters.push(name);
 			});
 			compile_time_parameters
@@ -126,21 +130,21 @@ impl LiteralConvertible for OneOf {
 		}
 
 		let compile_time_parameters = literal
-			.get_field_literal(&"compile_time_parameters".into(), context)
+			.get_field_literal("compile_time_parameters", context)
 			.unwrap()
-			.list_elements()
+			.try_as::<Vec<Expression>>()
 			.unwrap()
 			.iter()
-			.map(|name_string| Name::from(name_string.as_literal(context).unwrap().as_string().unwrap()))
+			.map(|name_string| Name::from(name_string.try_as_literal(context).unwrap().try_as::<String>().unwrap()))
 			.collect();
 
 		let choices = literal
-			.get_field_literal(&"variants".into(), context)
+			.get_field_literal("variants", context)
 			.unwrap()
-			.list_elements()
+			.try_as::<Vec<Expression>>()
 			.unwrap()
 			.iter()
-			.map(|choice| choice.to_owned_literal().unwrap())
+			.map(|choice| choice.try_clone_pointer().unwrap())
 			.collect();
 
 		Ok(OneOf {

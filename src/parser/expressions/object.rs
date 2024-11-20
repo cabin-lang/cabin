@@ -1,21 +1,24 @@
 use std::collections::HashMap;
 
-use colored::Colorize;
+use colored::Colorize as _;
+use try_as::traits::{self as try_as_traits, TryAsRef};
 
-use super::group::GroupDeclaration;
 use crate::{
+	bail_err,
 	comptime::{memory::Pointer, CompileTime},
 	context::Context,
-	lexer::TokenType,
+	lexer::{Position, TokenType},
 	parse_list,
 	parser::{
-		expressions::{name::Name, Expression},
+		expressions::{group::GroupDeclaration, name::Name, Expression},
 		statements::tag::TagList,
+		util::macros::TryAs as _,
 		ListType,
 		Parse,
 		TokenQueue,
 		TokenQueueFunctionality,
 	},
+	uformat,
 };
 
 #[derive(Debug, Clone)]
@@ -126,7 +129,7 @@ impl Parse for ObjectConstructor {
 			let mut value = Expression::parse(tokens, context)?;
 
 			// Set tags
-			if let Some(expression_tags) = value.tags() {
+			if let Some(expression_tags) = value.tags_mut() {
 				if let Some(declaration_tags) = &tags {
 					*expression_tags = declaration_tags.clone();
 				}
@@ -168,10 +171,27 @@ impl CompileTime for ObjectConstructor {
 						self.type_name.unmangled_name().bold().cyan()
 					)
 				})?
-				.value
-				.as_literal(context)?,
+				.try_as_literal(context)?,
 			context,
 		)?;
+
+		// Get `Anything`
+		let anything = GroupDeclaration::from_literal(
+			context.scope_data.get_global_variable(&"Anything".into()).unwrap().try_as_literal(context).unwrap(),
+			context,
+		)
+		.unwrap();
+
+		// Anything fields
+		for field in anything.fields {
+			if let Some(value) = field.value {
+				fields.push(Field {
+					name: field.name,
+					value: Some(value),
+					field_type: None,
+				});
+			}
+		}
 
 		// Default fields
 		for field in object_type.fields {
@@ -232,7 +252,7 @@ pub enum ObjectType {
 	Function,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, try_as::macros::TryInto, try_as::macros::TryAsRef)]
 pub enum InternalFieldValue {
 	Number(f64),
 	String(String),
@@ -240,24 +260,6 @@ pub enum InternalFieldValue {
 	List(Vec<Expression>),
 	Expression(Expression),
 	OptionalExpression(Option<Expression>),
-}
-
-impl InternalFieldValue {
-	pub fn as_optional_expression(self) -> anyhow::Result<Option<Expression>> {
-		if let Self::OptionalExpression(expression) = self {
-			Ok(expression)
-		} else {
-			anyhow::bail!("Attempted to convert a non-optional-expression internal field value into an optional expression internal field value");
-		}
-	}
-
-	pub fn as_number(&self) -> anyhow::Result<f64> {
-		if let Self::Number(expression) = self {
-			Ok(*expression)
-		} else {
-			anyhow::bail!("Attempted to convert a non-number internal field value into a number internal field value");
-		}
-	}
 }
 
 #[derive(Debug)]
@@ -279,16 +281,21 @@ impl LiteralObject {
 				continue;
 			}
 
+			let name = value.kind_name();
 			let Expression::ObjectConstructor(field_object) = value else {
-				anyhow::bail!(
-					"{}\n\t{}",
-					"A value that's not fully known at compile-time was used as a type.".bold().white(),
-					format!("while checking the field \"{}\" of the value at compile-time", field.name.unmangled_name().bold().cyan()).dimmed()
-				);
+                bail_err! {
+                    base = "A value that's not fully known at compile-time was used as a type.".bold(),
+                    process = format!("while checking the field \"{}\" of a value at compile-time", field.name.unmangled_name().bold().cyan()),
+                    context = context,
+                    position = field.name.position().unwrap_or_else(Position::zero),
+                    details = uformat!("
+                        Although Cabin allows arbitrary expressions to be used as types, the expression needs to be able to be fully evaluated at compile-time.
+                        The expression that this error refers to must be a literal object, but instead it's a {name}.
+                    ")
+                };
 			};
 
-			let literal = LiteralObject::try_from_object_constructor(field_object, context)?;
-			let value_address = context.virtual_memory.store(literal);
+			let value_address = LiteralObject::try_from_object_constructor(field_object, context)?.store_in_memory(context);
 			fields.insert(field.name, value_address);
 		}
 
@@ -301,16 +308,23 @@ impl LiteralObject {
 		})
 	}
 
-	pub fn get_field(&self, name: &Name) -> Option<Expression> {
-		self.fields.get(name).map(|address| Expression::Pointer(*address))
+	pub fn get_field(&self, name: impl Into<Name>) -> Option<Expression> {
+		self.fields.get(&name.into()).map(|address| Expression::Pointer(*address))
 	}
 
-	pub fn get_field_literal<'a>(&'a self, name: &Name, context: &'a Context) -> Option<&'a LiteralObject> {
-		self.fields.get(name).and_then(|address| context.virtual_memory.get(*address))
+	pub fn get_field_literal<'a>(&'a self, name: impl Into<Name>, context: &'a Context) -> Option<&'a LiteralObject> {
+		self.fields.get(&name.into()).and_then(|address| context.virtual_memory.get(*address))
 	}
 
-	pub fn get_internal_field(&self, name: &str) -> Option<&InternalFieldValue> {
-		self.internal_fields.get(name)
+	pub fn expect_field_literal<'a>(&'a self, name: impl Into<Name>, context: &'a Context) -> &'a LiteralObject {
+		self.get_field_literal(name, context).unwrap()
+	}
+
+	pub fn get_internal_field<T>(&self, name: &str) -> anyhow::Result<&T>
+	where
+		InternalFieldValue: TryAsRef<T>,
+	{
+		self.internal_fields.get(name).ok_or_else(|| anyhow::anyhow!(""))?.try_as::<T>()
 	}
 
 	pub fn pop_internal_field(&mut self, name: &str) -> Option<InternalFieldValue> {
@@ -321,23 +335,26 @@ impl LiteralObject {
 		&self.object_type
 	}
 
-	pub fn list_elements(&self) -> anyhow::Result<&[Expression]> {
-		let InternalFieldValue::List(elements) = self.get_internal_field("elements").unwrap() else {
-			unreachable!()
-		};
-		Ok(elements)
-	}
-
-	pub fn as_string(&self) -> anyhow::Result<&String> {
-		let InternalFieldValue::String(internal_value) = self.get_internal_field("internal_value").unwrap() else {
-			unreachable!()
-		};
-		Ok(internal_value)
-	}
-
 	/// Stores this value in virtual memory and returns the address of the location stored.
 	pub fn store_in_memory(self, context: &mut Context) -> Pointer {
 		context.virtual_memory.store(self)
+	}
+}
+
+impl TryAsRef<String> for LiteralObject {
+	fn try_as_ref(&self) -> Option<&String> {
+		self.get_internal_field("internal_value").ok()
+	}
+}
+
+impl TryAsRef<f64> for LiteralObject {
+	fn try_as_ref(&self) -> Option<&f64> {
+		self.get_internal_field("internal_value").ok()
+	}
+}
+impl TryAsRef<Vec<Expression>> for LiteralObject {
+	fn try_as_ref(&self) -> Option<&Vec<Expression>> {
+		self.get_internal_field("elements").ok()
 	}
 }
 

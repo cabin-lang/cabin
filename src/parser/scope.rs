@@ -1,20 +1,6 @@
 use std::{collections::HashMap, fmt::Debug};
 
-use super::{
-	expressions::{name::Name, Expression},
-	statements::tag::TagList,
-};
-
-#[derive(Debug)]
-/// Information about a variable declaration
-pub struct Declaration {
-	/// The name of the variable
-	pub name: Name,
-	/// The value of the variable
-	pub value: Expression,
-	/// The tags of the variable
-	pub tags: TagList,
-}
+use super::expressions::{name::Name, Expression};
 
 /// A type of scope in the language. Currently, this is only used for debugging purposes, as scopes are able to be printed as a string representation,
 /// and doing so will show their type. However, in the future, this may be used for other purposes, so it's good to leave here regardless
@@ -22,7 +8,7 @@ pub struct Declaration {
 pub enum ScopeType {
 	/// The function declaration scope type. This is used for the body of a function declaration. Note that this is not in any way related to a scope that
 	/// a function is declared in, but represents the scope *inside* of a function's body.
-	FunctionDeclaration,
+	FunctionExpression,
 
 	Either,
 
@@ -65,7 +51,7 @@ pub struct Scope {
 	/// The variables declared in this scope. Note that this only holds the variables declared in this exact specific scope, and does not count the
 	/// variables declared in any parent scope, even though those are accessible in the language from this one. To get a variable from anywhere up
 	/// the parent tree, use `scope.get_variable`, which will traverse up the scope tree and check all parents.
-	variables: HashMap<Name, Declaration>,
+	variables: HashMap<Name, Expression>,
 
 	/// The index of this scope. This is represented as an index into a `ScopeData`'s `scopes` vector, because trying to create a tree data structure
 	/// in Rust with regular semantics can get *really* tricky - You need to either resort to lots of unsafe code with raw pointers (and probably pinning),
@@ -92,7 +78,7 @@ impl Scope {
 	/// A reference to the declaration data of the variable declared in this scope with the given name. If none exists, `None` is returned. If it does exist
 	/// and `Some` is returned, the returned reference will have the same lifetime as this `Scope` object.
 	#[must_use]
-	pub fn get_variable_direct(&self, name: &Name) -> Option<&Declaration> {
+	pub fn get_variable_direct(&self, name: &Name) -> Option<&Expression> {
 		self.variables.get(name)
 	}
 
@@ -110,7 +96,7 @@ impl Scope {
 	/// A reference to the declaration data of the variable that exists in this scope with the given name. If none exists, `None` is returned. If it does exist
 	/// and `Some` is returned, the returned reference will have the same lifetime as this `Scope` object, as well as the given scopes slice.
 	#[must_use]
-	pub fn get_variable<'scopes>(&'scopes self, name: &Name, scopes: &'scopes [Self]) -> Option<&Declaration> {
+	pub fn get_variable<'scopes>(&'scopes self, name: &Name, scopes: &'scopes [Self]) -> Option<&Expression> {
 		self.variables
 			.get(name)
 			.or_else(|| self.parent.and_then(|parent| scopes.get(parent).unwrap().get_variable(name, scopes)))
@@ -128,7 +114,7 @@ impl Scope {
 	/// # Returns
 	/// All variables that exist in this scope, including those declared in ancestor scopes.
 	#[must_use]
-	pub fn get_variables<'scopes>(&'scopes self, scopes: &'scopes [Self]) -> Vec<(&'scopes Name, &'scopes Declaration)> {
+	pub fn get_variables<'scopes>(&'scopes self, scopes: &'scopes [Self]) -> Vec<(&'scopes Name, &'scopes Expression)> {
 		let mut variables = self.variables.iter().collect::<Vec<_>>();
 		if let Some(parent) = self.parent {
 			for variable in scopes.get(parent).unwrap().get_variables(scopes) {
@@ -151,7 +137,7 @@ impl Scope {
 	/// An `Err` if no variable with the given name exists in the current scope.
 	fn reassign_variable_direct(&mut self, name: &Name, value: Expression) -> Result<(), Expression> {
 		if let Some(variable) = self.variables.get_mut(name) {
-			variable.value = value;
+			*variable = value;
 			Ok(())
 		} else {
 			Err(value)
@@ -271,7 +257,7 @@ impl ScopeData {
 	/// # Returns
 	/// A reference to the variable declaration, or `None` if the variable does not exist in the current scope.
 	#[must_use]
-	pub fn get_variable(&self, name: &Name) -> Option<&Declaration> {
+	pub fn get_variable(&self, name: &Name) -> Option<&Expression> {
 		self.current().get_variable(name, &self.scopes)
 	}
 
@@ -285,7 +271,7 @@ impl ScopeData {
 	/// # Returns
 	/// A reference to the variable declaration, or `None` if the variable does not exist in the current scope.
 	#[must_use]
-	pub fn get_variable_from_id(&self, name: &Name, id: usize) -> Option<&Declaration> {
+	pub fn get_variable_from_id(&self, name: &Name, id: usize) -> Option<&Expression> {
 		self.get_scope_from_id(id).and_then(|scope| scope.get_variable(name, &self.scopes))
 	}
 
@@ -379,7 +365,7 @@ impl ScopeData {
 	///
 	/// # Returns
 	/// An error if a variable already exists with the given name in the scope with the given id.
-	pub fn declare_new_variable_from_id(&mut self, name: Name, value: Expression, tags: TagList, id: usize) -> anyhow::Result<()> {
+	pub fn declare_new_variable_from_id(&mut self, name: Name, value: Expression, id: usize) -> anyhow::Result<()> {
 		let mut current = Some(self.current_scope);
 		while let Some(current_index) = current {
 			if let Some(variable) = self.scopes.get_mut(current_index).unwrap().get_variable_direct(&name) {
@@ -388,7 +374,7 @@ impl ScopeData {
 			current = self.scopes.get(current_index).unwrap().parent;
 		}
 
-		self.scopes.get_mut(id).unwrap().variables.insert(name.clone(), Declaration { name, value, tags });
+		self.scopes.get_mut(id).unwrap().variables.insert(name.clone(), value);
 		Ok(())
 	}
 
@@ -403,8 +389,8 @@ impl ScopeData {
 	///
 	/// # Returns
 	/// An error if a variable already exists with the given name in the current scope.
-	pub fn declare_new_variable(&mut self, name: Name, value: Expression, tags: TagList) -> anyhow::Result<()> {
-		self.declare_new_variable_from_id(name, value, tags, self.current_scope)
+	pub fn declare_new_variable(&mut self, name: Name, value: Expression) -> anyhow::Result<()> {
+		self.declare_new_variable_from_id(name, value, self.current_scope)
 	}
 
 	/// Returns an immutable reference to the global scope in this scope data's scope arena. This does have to traverse up the scope tree,
@@ -474,7 +460,7 @@ impl ScopeData {
 	/// # Returns
 	/// a sorted list, which are sorted by how close they are to the given variable name.
 	#[must_use]
-	pub fn get_variables(&self) -> Vec<(&Name, &Declaration)> {
+	pub fn get_variables(&self) -> Vec<(&Name, &Expression)> {
 		self.current().get_variables(&self.scopes)
 	}
 
@@ -490,7 +476,7 @@ impl ScopeData {
 	/// a sorted list, of at most `max` elements, which are sorted by how close they are to the given variable
 	/// name.
 	#[must_use]
-	pub fn get_closest_variables(&self, name: &Name, max: usize) -> Vec<(&Name, &Declaration)> {
+	pub fn get_closest_variables(&self, name: &Name, max: usize) -> Vec<(&Name, &Expression)> {
 		let mut all_variables = self.get_variables();
 		all_variables.sort_by(|(first, _), (second, _)| {
 			first
@@ -515,7 +501,7 @@ impl ScopeData {
 	/// # Returns
 	/// The declaration data for the variable, or `None` if no global variable with this name exists.
 	#[must_use]
-	pub fn get_global_variable(&self, name: &Name) -> Option<&Declaration> {
+	pub fn get_global_variable(&self, name: &Name) -> Option<&Expression> {
 		self.get_variable_from_id(name, 0)
 	}
 

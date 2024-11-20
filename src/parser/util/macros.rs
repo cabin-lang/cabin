@@ -1,8 +1,86 @@
+use try_as::traits::TryAsRef;
+
 use crate::{
 	comptime::CompileTime,
 	context::Context,
+	lexer::Position,
 	parser::expressions::{object::ObjectConstructor, Expression},
 };
+
+#[macro_export]
+macro_rules! err {
+	(
+        base = $base: expr,
+        process = $process: expr,
+        context = $context: expr,
+        $($field_name: ident = $field_value: expr),* $(,)?
+    ) => {{
+        use colored::Colorize as _;
+
+		let error = $crate::parser::util::macros::CabinError {
+            base: Some(anyhow::anyhow!($base)),
+            process: Some($process.into()),
+            $(
+                $field_name: Some($field_value),
+            )*
+            ..Default::default()
+        };
+
+        if let Some(position) = error.position {
+            $context.set_error_position(&position);
+        }
+
+        if let Some(details) = error.details {
+            $context.set_error_details(&details);
+        }
+
+        anyhow::anyhow!("{}\n\t{}", error.base.unwrap(), error.process.unwrap().dimmed())
+	}};
+}
+
+pub trait TryAs {
+	fn try_as<T>(&self) -> anyhow::Result<&T>
+	where
+		Self: TryAsRef<T>,
+	{
+		self.try_as_ref().ok_or_else(|| anyhow::anyhow!("Incorrect variant"))
+	}
+
+	fn expect_as<T>(&self) -> &T
+	where
+		Self: TryAsRef<T>,
+	{
+		self.try_as().unwrap()
+	}
+}
+
+impl<T> TryAs for T {}
+
+#[macro_export]
+macro_rules! uformat {
+    (
+        $($tokens: tt)*
+    ) => {
+        unindent::unindent(&format!($($tokens)*))
+    }
+}
+
+#[derive(Default)]
+pub struct CabinError {
+	pub base: Option<anyhow::Error>,
+	pub details: Option<String>,
+	pub position: Option<Position>,
+	pub process: Option<String>,
+}
+
+#[macro_export]
+macro_rules! bail_err {
+    (
+        $($tokens: tt)*
+    ) => {
+        return Err($crate::err!($($tokens)*))
+    };
+}
 
 #[macro_export]
 macro_rules! list {
@@ -109,7 +187,7 @@ macro_rules! string_literal {
 }
 
 pub fn cabin_true(context: &Context) -> Expression {
-	context.scope_data.get_global_variable(&"true".into()).unwrap().value.to_owned_literal().unwrap()
+	context.scope_data.get_global_variable(&"true".into()).unwrap().try_clone_pointer().unwrap()
 }
 
 pub fn number(number: f64, context: &mut Context) -> Expression {

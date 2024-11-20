@@ -1,15 +1,16 @@
 use std::collections::VecDeque;
 
 use colored::Colorize;
+use try_as::traits::TryAsRef;
 
 use super::{function::FunctionDeclaration, name::Name, object::LiteralConvertible, operators::FieldAccess, Expression, Parse};
 use crate::{
 	builtin::call_builtin_at_compile_time,
-	comptime::CompileTime,
+	comptime::{memory::Pointer, CompileTime},
 	context::Context,
 	lexer::{Token, TokenType},
 	parse_list,
-	parser::{ListType, TokenQueueFunctionality},
+	parser::{util::macros::TryAs as _, ListType, TokenQueueFunctionality},
 };
 
 #[derive(Debug, Clone)]
@@ -97,12 +98,13 @@ impl CompileTime for FunctionCall {
 		};
 
 		// Evaluate function
-		let literal = function.as_literal(context);
+		let literal = function.try_as_literal(context);
 		if let Ok(function_declaration) = literal {
 			let Ok(function_declaration) = FunctionDeclaration::from_literal(function_declaration, context) else {
                 anyhow::bail!("Attempted to call a value that's not a function; Instead it's an instance of \"{}\"", function_declaration.type_name.unmangled_name().bold().cyan()); 
             };
 
+			// Set this object
 			if let Some(this_object) = function_declaration.this_object {
 				arguments = Some(arguments.unwrap_or(Vec::new()));
 				arguments.as_mut().unwrap().push(*this_object);
@@ -114,7 +116,7 @@ impl CompileTime for FunctionCall {
 					// Add compile-time arguments
 					if let Some(compile_time_arguments) = &compile_time_arguments {
 						for (argument, (parameter_name, _parameter_type)) in compile_time_arguments.iter().zip(function_declaration.compile_time_parameters.iter()) {
-							if !argument.is_literal() {
+							if !argument.is_pointer() {
 								anyhow::bail!("Attempted to pass a value that's not fully known at compile-time to a compile-time parameter.");
 							}
 							context.scope_data.reassign_variable_from_id(parameter_name, argument.clone(), block.inner_scope_id)?;
@@ -134,7 +136,7 @@ impl CompileTime for FunctionCall {
 					.clone()
 					.evaluate_at_compile_time(context)
 					.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while calling a function at compile-time".dimmed()))?;
-				if return_value.as_literal(context).is_ok() {
+				if return_value.try_as_literal(context).is_ok() {
 					return Ok(return_value);
 				}
 			}
@@ -144,23 +146,19 @@ impl CompileTime for FunctionCall {
 				let mut system_side_effects = false;
 
 				// Get the address of system_side_effects
-				let system_side_effects_address = context
-					.scope_data
-					.get_global_variable(&"system_side_effects".into())
-					.unwrap()
-					.value
-					.as_literal_address()
-					.unwrap();
+				let system_side_effects_address: &Pointer = context.scope_data.get_global_variable(&"system_side_effects".into()).unwrap().try_as_ref().unwrap();
 
 				// Get builtin and side effect tags
 				for tag in &function_declaration.tags.values {
-					if let Ok(object) = tag.as_literal(context) {
+					if let Ok(object) = tag.try_as_literal(context) {
 						if object.type_name == Name::from("BuiltinTag") {
-							builtin_name = Some(object.get_field_literal(&Name::from("internal_name"), context).unwrap().as_string().unwrap().to_owned());
+							builtin_name = Some(object.get_field_literal("internal_name", context).unwrap().try_as::<String>().unwrap().to_owned());
 							continue;
 						}
 
-						if tag.as_literal_address().unwrap() == system_side_effects_address {
+						let tag_pointer: &Pointer = tag.try_as_ref().unwrap();
+
+						if tag_pointer == system_side_effects_address {
 							system_side_effects = true;
 						}
 					}
@@ -171,7 +169,7 @@ impl CompileTime for FunctionCall {
 					if !system_side_effects || context.has_side_effects() {
 						return call_builtin_at_compile_time(&internal_name, context, self.scope_id, &arguments.unwrap_or(Vec::new()));
 					} else {
-						return Ok(Expression::Void);
+						return Ok(Expression::Void(()));
 					}
 				}
 

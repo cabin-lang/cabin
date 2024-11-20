@@ -1,11 +1,13 @@
-use colored::Colorize;
+use colored::Colorize as _;
 
 use crate::{
+	comptime::{memory::Pointer, CompileTime},
 	context::Context,
 	parser::{
-		expressions::{object::ObjectConstructor, Expression},
-		util::macros::number,
+		expressions::{function_call::FunctionCall, name::Name, object::ObjectConstructor, operators::FieldAccess, Expression},
+		util::macros::{number, TryAs as _},
 	},
+	string_literal,
 };
 
 pub struct BuiltinFunction {
@@ -15,9 +17,21 @@ pub struct BuiltinFunction {
 static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 	"terminal.print" => BuiltinFunction {
 		evaluate_at_compile_time: |context: &mut Context, _caller_scope_id: usize, arguments: &[Expression]| {
-			let text = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to print"))?.as_literal(context)?.as_string()?;
-			println!("{text}");
-			Ok(Expression::Void)
+			let pointer: Pointer = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to print"))?.try_clone_pointer()?.try_into().unwrap();
+			let object = pointer.virtual_deref(context);
+			let returned_object = FunctionCall {
+				function: Box::new(Expression::FieldAccess(FieldAccess {
+					left: Box::new(Expression::Pointer(pointer)),
+					right: Name::from("to_string"),
+					scope_id: object.scope_id
+				})),
+				compile_time_arguments: None,
+				arguments: None,
+				scope_id: object.scope_id
+			}.evaluate_at_compile_time(context)?;
+			let string_value = returned_object.try_as_literal(context)?.try_as::<String>()?;
+			println!("{string_value}");
+			Ok(Expression::Void(()))
 		}
 	},
 	"terminal.input" => BuiltinFunction {
@@ -30,9 +44,18 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 	},
 	"Number.plus" => BuiltinFunction {
 		evaluate_at_compile_time: |context: &mut Context, _caller_scope_id: usize, arguments: &[Expression]| {
-			let first = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.as_number(context)?;
-			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.as_number(context)?;
+			let first = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.try_as::<f64>().unwrap();
+			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.try_as::<f64>().unwrap();
 			Ok(number(first + second, context))
+		}
+	},
+	"Anything.to_string" => BuiltinFunction {
+		evaluate_at_compile_time: |context: &mut Context, _caller_scope_id: usize, arguments: &[Expression]| {
+			let this = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Anything.to_string"))?.try_as_literal(context)?;
+			Ok(string_literal!(&match this.type_name.unmangled_name().as_str() {
+				"Number" => this.try_as::<f64>().unwrap().to_string(),
+				_ => todo!()
+			}, context))
 		}
 	},
 };

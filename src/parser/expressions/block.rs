@@ -47,7 +47,7 @@ impl CompileTime for Block {
 
 			// Tail statement
 			if let Statement::Tail(tail_statement) = evaluated_statement {
-				if tail_statement.value.as_literal(context).is_ok() {
+				if tail_statement.value.try_as_literal(context).is_ok() {
 					context.scope_data.set_current_scope(previous_scope);
 					return Ok(tail_statement.value);
 				}

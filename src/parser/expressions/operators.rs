@@ -21,7 +21,7 @@ use crate::{
 	comptime::CompileTime,
 	context::Context,
 	lexer::{Token, TokenType},
-	parser::TokenQueueFunctionality,
+	parser::{util::macros::TryAs as _, TokenQueueFunctionality},
 };
 
 /// A binary operation. More specifically, this represents not one operation, but a group of operations that share the same precedence.
@@ -159,18 +159,18 @@ impl CompileTime for FieldAccess {
 		let left_evaluated = self.left.evaluate_at_compile_time(context)?;
 
 		// Resolvable at compile-time
-		if let Ok(literal) = left_evaluated.as_literal(context) {
+		if let Ok(literal) = left_evaluated.try_as_literal(context) {
 			Ok(match literal.object_type() {
 				// Object fields
 				ObjectType::Normal => {
-					let field = literal.get_field(&self.right).ok_or_else(|| {
+					let field = literal.get_field(self.right.clone()).ok_or_else(|| {
 						anyhow::anyhow!(
 							"Attempted to access a the field \"{}\" on an object, but no field with that name exists on that object.",
 							self.right.unmangled_name().bold().cyan()
 						)
 					})?;
 
-					if let Ok(Ok(mut function_declaration)) = field.as_literal(context).map(|field| FunctionDeclaration::from_literal(field, context)) {
+					if let Ok(Ok(mut function_declaration)) = field.try_as_literal(context).map(|field| FunctionDeclaration::from_literal(field, context)) {
 						function_declaration.this_object = Some(Box::new(left_evaluated));
 						Expression::Pointer(function_declaration.to_literal(context).unwrap().store_in_memory(context))
 					} else {
@@ -180,15 +180,15 @@ impl CompileTime for FieldAccess {
 
 				// Either fields
 				ObjectType::Either => {
-					let field = literal.get_field(&"variants".into()).unwrap();
-					let elements = field.as_literal(context).unwrap().list_elements().unwrap();
+					let field = literal.get_field("variants").unwrap();
+					let elements = field.try_as_literal(context).unwrap().try_as::<Vec<Expression>>().unwrap();
 					elements
 						.iter()
 						.find_map(|element| {
-							let variant_object = element.as_literal(context).unwrap();
-							let name = variant_object.get_field_literal(&"name".into(), context).unwrap().as_string().unwrap();
+							let variant_object = element.try_as_literal(context).unwrap();
+							let name = variant_object.get_field_literal("name", context).unwrap().try_as::<String>().unwrap();
 							if name == &self.right.unmangled_name() {
-								Some(variant_object.get_field(&"value".into()).unwrap())
+								Some(variant_object.get_field("value").unwrap())
 							} else {
 								None
 							}
@@ -201,7 +201,7 @@ impl CompileTime for FieldAccess {
 						})?
 						.clone()
 				},
-				_ => todo!(),
+				value => todo!("{value:?}"),
 			})
 		}
 		// Not resolvable at compile-time - return the original expression
@@ -228,7 +228,7 @@ impl Parse for PrimaryExpression {
 				tokens.pop(TokenType::RightParenthesis)?;
 				expression
 			},
-			TokenType::Number => Expression::ObjectConstructor(ObjectConstructor::from_number(tokens.pop(TokenType::Number).unwrap().parse().unwrap())),
+			TokenType::Number => Expression::ObjectConstructor(ObjectConstructor::from_number(tokens.pop(TokenType::Number).unwrap().value.parse().unwrap())),
 			TokenType::KeywordAction => Expression::FunctionDeclaration(FunctionDeclaration::parse(tokens, context)?),
 			TokenType::LeftBrace => Expression::Block(Block::parse(tokens, context)?),
 			TokenType::Identifier => Expression::Name(Name::parse(tokens, context)?),
@@ -242,7 +242,7 @@ impl Parse for PrimaryExpression {
 			TokenType::KeywordForEach => Expression::ForEachLoop(ForEachLoop::parse(tokens, context)?),
 			TokenType::LeftBracket => List::parse(tokens, context)?,
 			TokenType::String => {
-				let with_quotes = tokens.pop(TokenType::String)?;
+				let with_quotes = tokens.pop(TokenType::String)?.value;
 				let without_quotes = with_quotes.get(1..with_quotes.len() - 1).unwrap().to_owned();
 				Expression::Pointer(ObjectConstructor::from_string(&without_quotes, context))
 			},

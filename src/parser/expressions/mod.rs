@@ -1,23 +1,26 @@
 use std::collections::VecDeque;
 
-use block::Block;
-use colored::Colorize;
-use either::Either;
-use foreach::ForEachLoop;
-use function::FunctionDeclaration;
-use function_call::FunctionCall;
-use group::GroupDeclaration;
-use if_expression::IfExpression;
-use name::Name;
-use object::{LiteralObject, ObjectConstructor};
-use oneof::OneOf;
-use operators::{BinaryExpression, FieldAccess};
+use colored::Colorize as _;
+use try_as::traits::{self as try_as_traits, TryAsRef as _};
 
 use super::{statements::tag::TagList, Parse};
 use crate::{
 	comptime::{memory::Pointer, CompileTime},
 	context::Context,
 	lexer::Token,
+	parser::expressions::{
+		block::Block,
+		either::Either,
+		foreach::ForEachLoop,
+		function::FunctionDeclaration,
+		function_call::FunctionCall,
+		group::GroupDeclaration,
+		if_expression::IfExpression,
+		name::Name,
+		object::{LiteralObject, ObjectConstructor},
+		oneof::OneOf,
+		operators::{BinaryExpression, FieldAccess},
+	},
 };
 
 pub mod block;
@@ -33,7 +36,7 @@ pub mod object;
 pub mod oneof;
 pub mod operators;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, try_as::macros::From, try_as::macros::TryInto, try_as::macros::TryAsRef)]
 pub enum Expression {
 	Block(Block),
 
@@ -58,7 +61,7 @@ pub enum Expression {
 
 	Pointer(Pointer),
 
-	Void,
+	Void(()),
 }
 
 impl Parse for Expression {
@@ -107,13 +110,13 @@ impl CompileTime for Expression {
 			Self::ForEachLoop(for_loop) => for_loop
 				.evaluate_at_compile_time(context)
 				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a for-each loop at compile-time".dimmed()))?,
-			Self::Void | Self::Pointer(_) => self,
+			Self::Void(_) | Self::Pointer(_) => self,
 		})
 	}
 }
 
 impl Expression {
-	pub fn as_literal<'a>(&'a self, context: &'a Context) -> anyhow::Result<&'a LiteralObject> {
+	pub fn try_as_literal<'a>(&'a self, context: &'a Context) -> anyhow::Result<&'a LiteralObject> {
 		if let Self::Pointer(address) = self {
 			return context.virtual_memory.get(*address).ok_or_else(|| anyhow::anyhow!("Invalid pointer"));
 		}
@@ -121,11 +124,24 @@ impl Expression {
 		anyhow::bail!("Attempted to coerce a non-literal into a literal");
 	}
 
-	pub fn is_literal(&self) -> bool {
+	pub fn expect_literal<'a>(&'a self, context: &'a Context) -> &'a LiteralObject {
+		self.try_as_literal(context).unwrap()
+	}
+
+	pub fn is_pointer(&self) -> bool {
 		matches!(self, Self::Pointer(_))
 	}
 
-	pub fn name(&self) -> &'static str {
+	/// Returns the name of this type of expression as a string.
+	///
+	/// This is used when the compiler reports errors; For example, if an if-expression is
+	/// used as a type, which should be a literal, the compiler will say something like "attempted
+	/// to parse a literal, but an if-expression was found".
+	///
+	/// # Returns
+	/// The name of the kind of expression of this as a string.
+	#[must_use]
+	pub const fn kind_name(&self) -> &'static str {
 		match self {
 			Self::Block(_) => "block",
 			Self::Either(_) => "either",
@@ -136,7 +152,7 @@ impl Expression {
 			Self::Name(_) => "name",
 			Self::ObjectConstructor(_) => "object constructor",
 			Self::OneOf(_) => "one-of",
-			Self::Void => "non-existent value",
+			Self::Void(_) => "non-existent value",
 			Self::Pointer(_) => "pointer",
 			Self::If(_) => "if expression",
 			Self::ForEachLoop(_) => "for-each loop",
@@ -151,65 +167,50 @@ impl Expression {
 		}
 	}
 
-	pub fn as_literal_mut<'a>(&'a self, context: &'a mut Context) -> anyhow::Result<&'a mut LiteralObject> {
-		if let Self::Pointer(address) = self {
-			return context.virtual_memory.get_mut(*address).ok_or_else(|| anyhow::anyhow!("Invalid pointer"));
-		}
-
-		anyhow::bail!("Attempted to coerce a non-literal into a literal");
-	}
-
-	pub fn as_literal_address(&self) -> anyhow::Result<Pointer> {
-		if let Self::Pointer(address) = self {
-			return Ok(*address);
-		}
-
-		anyhow::bail!("Attempted to coerce a non-literal into a literal");
-	}
-
-	pub fn to_owned_literal(&self) -> anyhow::Result<Expression> {
+	/// Returns a new owned pointer to the same value in virtual memory as this referenced
+	/// pointer. If this expression does indeed refer to a pointer, this is effectively a
+	/// cheap `to_owned()`. If not, an error is returned.
+	///
+	/// # Errors
+	/// If this expression doesn't refer to a pointer.
+	///
+	/// # Performance
+	/// This clone is very cheap; Only the underlying pointer address (a `usize`) is cloned.
+	#[must_use]
+	pub fn try_clone_pointer(&self) -> anyhow::Result<Expression> {
 		if let Self::Pointer(address) = self {
 			return Ok(Expression::Pointer(*address));
 		}
 
-		anyhow::bail!("Attempted to coerce a non-literal into a literal");
-	}
-
-	pub fn as_object(self) -> anyhow::Result<ObjectConstructor> {
-		if let Self::ObjectConstructor(object) = self {
-			Ok(object)
-		} else {
-			anyhow::bail!("");
-		}
-	}
-
-	pub fn as_object_ref(&self) -> anyhow::Result<&ObjectConstructor> {
-		if let Self::ObjectConstructor(object) = self {
-			Ok(object)
-		} else {
-			anyhow::bail!("");
-		}
+		anyhow::bail!("A value that's not fully known at compile-time was used as a type.");
 	}
 
 	pub fn is_true(&self, context: &Context) -> bool {
-		let Ok(literal_address) = self.as_literal_address() else {
+		let Some(literal_address): Option<&Pointer> = self.try_as_ref() else {
 			return false;
 		};
 
-		let true_address = context.scope_data.get_global_variable(&"true".into()).unwrap().value.as_literal_address().unwrap();
+		let true_address = context.scope_data.get_global_variable(&"true".into()).unwrap().try_as_ref().unwrap();
 
 		literal_address == true_address
 	}
 
-	pub fn tags(&mut self) -> Option<&mut TagList> {
+	// Returns a mutable reference to the tags on this expression value. If the type of this
+	// expression doesn't support tags, `None` is returned.
+	//
+	// For example, literal numbers can't have tags, whereas function declarations can.
+	//
+	// This is used, for example in `Declaration::parse` to set the tags on a value after parsing
+	// them before the declaration name.
+	//
+	// # Returns
+	// A mutable reference to the tags on this expression, or `None` if this expression doesn't
+	// support tags.
+	pub fn tags_mut(&mut self) -> Option<&mut TagList> {
 		match self {
 			Self::FunctionDeclaration(function) => Some(&mut function.tags),
 			_ => None,
 		}
-	}
-
-	pub fn as_number(&self, context: &Context) -> anyhow::Result<f64> {
-		self.as_literal(context)?.get_internal_field("internal_value").unwrap().as_number()
 	}
 }
 
