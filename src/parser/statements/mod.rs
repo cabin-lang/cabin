@@ -56,7 +56,7 @@ impl CompileTime for Statement {
 				context = context,
 			})?),
 			Statement::Tail(tail) => Statement::Tail(tail.evaluate_at_compile_time(context).map_err(mapped_err! {
-				while = "evaluating a tail statement at compile-time",
+				while = format!("evaluating a {} at compile-time", "tail statement".bold().cyan()),
 				context = context,
 			})?),
 		})

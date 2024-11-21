@@ -146,6 +146,14 @@ impl Scope {
 		}
 	}
 
+	fn pop_variable_direct(&mut self, name: &Name) -> anyhow::Result<Expression> {
+		if let Some(variable) = self.variables.remove(name) {
+			return Ok(variable);
+		}
+
+		anyhow::bail!("Cannot find variable to pop");
+	}
+
 	/// Converts this scope to a debug string representation. This requires the `Scope` slice because it needs to print information about it's children,
 	/// which are only stored in the variable as an id (usize) (see the `Scope` struct for reasoning behind this).
 	///
@@ -261,6 +269,10 @@ impl ScopeData {
 	#[must_use]
 	pub fn get_variable(&self, name: impl Into<Name> + Clone) -> Option<&Expression> {
 		self.current().get_variable(name, &self.scopes)
+	}
+
+	pub fn pop_variable(&mut self, name: &Name) -> anyhow::Result<(Expression, usize)> {
+		self.pop_variable_from_id(name, self.current_scope)
 	}
 
 	/// Returns the declaration information about a variable that exists in the scope with the given id. The variable may be declared in this scope, or any one
@@ -430,6 +442,26 @@ impl ScopeData {
 				Ok(()) => return Ok(()),
 				Err(returned_value) => value = returned_value,
 			}
+			current = self.scopes.get(current_index).unwrap().parent;
+		}
+
+		// No variable found
+		anyhow::bail!(
+			"Attempted to reassign the variable \"{name}\", but no variable with the name \"{name}\" exists in this scope",
+			name = name.unmangled_name()
+		);
+	}
+
+	pub fn pop_variable_from_id(&mut self, name: &Name, id: usize) -> anyhow::Result<(Expression, usize)> {
+		// Traverse up the parent tree looking for the declaration and reassign it
+		let mut current = Some(id);
+
+		while let Some(current_index) = current {
+			// If we find it, we're done (return Ok), if not, we continue
+			if let Ok(value) = self.scopes.get_mut(current_index).unwrap().pop_variable_direct(name) {
+				return Ok((value, current_index));
+			}
+
 			current = self.scopes.get(current_index).unwrap().parent;
 		}
 

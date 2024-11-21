@@ -93,6 +93,13 @@ impl CompileTime for Declaration {
 
 impl TranspileToC for Declaration {
 	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
-		Ok(format!("int {} = {};", self.name.to_c(context)?, self.value(context).to_c(context)?))
+		Ok(format!(
+			"int {} = {};",
+			self.name.to_c(context)?,
+			self.value(context).to_c(context).map_err(mapped_err! {
+				while = format!("transpiling the value of the initial declaration for the variable \"{}\" to C", self.name.unmangled_name()),
+				context = context,
+			})?
+		))
 	}
 }

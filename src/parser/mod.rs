@@ -64,7 +64,11 @@ impl TranspileToC for Program {
 			.statements
 			.iter()
 			.map(|statement| statement.to_c(context))
-			.collect::<anyhow::Result<Vec<_>>>()?
+			.collect::<anyhow::Result<Vec<_>>>()
+			.map_err(mapped_err! {
+				while = "transpiling the program's global statements to C",
+				context = context,
+			})?
 			.join("\n"))
 	}
 }

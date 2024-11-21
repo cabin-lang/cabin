@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-	api::{context::Context, traits::TryAs as _},
+	api::{context::Context, macros::string, traits::TryAs as _},
 	comptime::CompileTime,
 	lexer::TokenType,
 	literal, literal_list, parse_list,
@@ -14,7 +14,6 @@ use crate::{
 		},
 		ListType, Parse, TokenQueue, TokenQueueFunctionality,
 	},
-	string_literal,
 };
 
 #[derive(Debug, Clone)]
@@ -57,7 +56,7 @@ impl LiteralConvertible for Either {
 				literal! {
 					context,
 					Field {
-						name = string_literal!(&field.unmangled_name(), context),
+						name = string(&field.unmangled_name(), context),
 						value = literal! {
 							context,
 							Object {},
@@ -93,8 +92,12 @@ impl LiteralConvertible for Either {
 			.expect_field_literal("variants", context)
 			.expect_as::<Vec<Expression>>()
 			.iter()
-			.map(|field_object| Name::from(field_object.expect_literal(context).expect_field_literal("value", context).expect_as::<String>()))
-			.collect();
+			.map(|field_object| {
+				anyhow::Ok(Name::from(
+					field_object.expect_literal(context)?.expect_field_literal("value", context).expect_as::<String>(),
+				))
+			})
+			.collect::<anyhow::Result<Vec<_>>>()?;
 
 		Ok(Either {
 			variants,

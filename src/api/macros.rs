@@ -242,13 +242,8 @@ macro_rules! object {
 	};
 }
 
-#[macro_export]
-macro_rules! string_literal {
-	(
-		$value: expr, $context: expr
-	) => {
-		Expression::Pointer(ObjectConstructor::from_string($value, $context))
-	};
+pub fn string(value: &str, context: &mut Context) -> Expression {
+	Expression::Pointer(ObjectConstructor::from_string(value, context))
 }
 
 pub fn cabin_true(context: &Context) -> Expression {
@@ -256,5 +251,9 @@ pub fn cabin_true(context: &Context) -> Expression {
 }
 
 pub fn number(number: f64, context: &mut Context) -> Expression {
-	ObjectConstructor::from_number(number).evaluate_at_compile_time(context).unwrap()
+	let number = ObjectConstructor::from_number(number).evaluate_at_compile_time(context).unwrap();
+	if !number.is_pointer() {
+		panic!("Internal error: Number literal isn't a pointer");
+	}
+	number
 }

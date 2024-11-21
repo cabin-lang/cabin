@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use colored::Colorize as _;
 
 use crate::{
-	api::{context::Context, scope::ScopeType, traits::TryAs as _},
+	api::{context::Context, macros::string, scope::ScopeType, traits::TryAs as _},
 	comptime::CompileTime,
 	lexer::{Token, TokenType},
 	literal, literal_list, mapped_err, parse_list,
@@ -17,7 +17,7 @@ use crate::{
 		statements::tag::TagList,
 		ListType, TokenQueueFunctionality,
 	},
-	string_literal,
+	transpiler::TranspileToC,
 };
 
 #[derive(Debug, Clone)]
@@ -140,6 +140,17 @@ impl CompileTime for GroupDeclaration {
 	}
 }
 
+impl TranspileToC for GroupDeclaration {
+	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+		let mut builder = "{".to_owned();
+		for field in &self.fields {
+			builder += &format!("\n\tvoid* {};", field.name.to_c(context)?);
+		}
+		builder += "\n}";
+		Ok(builder)
+	}
+}
+
 impl LiteralConvertible for GroupDeclaration {
 	fn to_literal(self, context: &mut Context) -> anyhow::Result<LiteralObject> {
 		let fields = self
@@ -150,7 +161,7 @@ impl LiteralConvertible for GroupDeclaration {
 					literal! {
 						context,
 						Field {
-							name = string_literal!(&field.name.unmangled_name(), context),
+							name = string(&field.name.unmangled_name(), context),
 							value = value
 						},
 						self.scope_id
@@ -182,15 +193,15 @@ impl LiteralConvertible for GroupDeclaration {
 			.iter()
 			.map(|field_object| {
 				let name = field_object
-					.expect_literal(context)
+					.expect_literal(context)?
 					.get_field_literal("name", context)
 					.unwrap()
 					.expect_as::<String>()
 					.into();
-				let value = field_object.expect_literal(context).get_field("value");
-				Field { name, value, field_type: None }
+				let value = field_object.expect_literal(context)?.get_field("value");
+				Ok(Field { name, value, field_type: None })
 			})
-			.collect();
+			.collect::<anyhow::Result<Vec<_>>>()?;
 
 		Ok(GroupDeclaration {
 			fields,

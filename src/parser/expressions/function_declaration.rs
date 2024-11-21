@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use colored::Colorize as _;
 
 use crate::{
-	api::{context::Context, traits::TryAs as _},
+	api::{context::Context, macros::string, traits::TryAs as _},
 	comptime::CompileTime,
 	lexer::TokenType,
 	literal, literal_list, mapped_err, parse_list,
@@ -18,7 +18,7 @@ use crate::{
 		statements::tag::TagList,
 		ListType, TokenQueue, TokenQueueFunctionality as _,
 	},
-	string_literal,
+	transpiler::TranspileToC,
 };
 
 #[derive(Debug, Clone)]
@@ -176,6 +176,30 @@ impl CompileTime for FunctionDeclaration {
 	}
 }
 
+impl TranspileToC for FunctionDeclaration {
+	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+		Ok(format!(
+			"({}) {{\n{}\n}}",
+			self.parameters
+				.iter()
+				.map(|(name, parameter_type)| Ok(format!("{} {}", parameter_type.to_c(context)?, name.to_c(context)?)))
+				.collect::<anyhow::Result<Vec<_>>>()?
+				.join(", "),
+			self.body
+				.as_ref()
+				.unwrap_or(&Box::new(Expression::Block(Block {
+					statements: Vec::new(),
+					inner_scope_id: 0
+				})))
+				.to_c(context)?
+				.lines()
+				.map(|line| format!("\n\t{line}"))
+				.collect::<Vec<_>>()
+				.join("\n")
+		))
+	}
+}
+
 impl LiteralConvertible for FunctionDeclaration {
 	fn to_literal(self, context: &mut Context) -> anyhow::Result<LiteralObject> {
 		// Compile-time parameters
@@ -186,7 +210,7 @@ impl LiteralConvertible for FunctionDeclaration {
 				literal! {
 					context,
 					Parameter {
-						name = string_literal!(&parameter_name.unmangled_name(), context),
+						name = string(&parameter_name.unmangled_name(), context),
 						type = parameter_type
 					},
 					self.scope_id
@@ -202,7 +226,7 @@ impl LiteralConvertible for FunctionDeclaration {
 				literal! {
 					context,
 					Parameter {
-						name = string_literal!(&parameter_name.unmangled_name(), context),
+						name = string(&parameter_name.unmangled_name(), context),
 						type = parameter_type
 					},
 					self.scope_id
@@ -262,13 +286,16 @@ impl LiteralConvertible for FunctionDeclaration {
 		}
 
 		// Tags
-		let tags = literal
-			.get_field("tags")
-			.unwrap()
-			.expect_literal(context)
-			.expect_as::<Vec<Expression>>()
+		let tags_field = literal.get_field("tags").unwrap();
+		let tag_refs = tags_field.expect_literal(context)?.expect_as::<Vec<Expression>>();
+		let tags = tag_refs
 			.iter()
-			.map(|element| element.try_clone_pointer(context))
+			.map(|element| {
+				element.try_clone_pointer(context).map_err(mapped_err! {
+					while = format!("attempting to interpret a {} tag expression as a literal", element.kind_name().bold().cyan()),
+					context = context,
+				})
+			})
 			.collect::<anyhow::Result<Vec<_>>>()
 			.map_err(mapped_err! {
 				while = "interpreting the function declaration's tags as literals",
@@ -280,11 +307,11 @@ impl LiteralConvertible for FunctionDeclaration {
 		let compile_time_parameters = compile_time_parameters
 			.iter()
 			.map(|element| {
-				let parameter_object = element.expect_literal(context);
+				let parameter_object = element.expect_literal(context)?;
 				let name = parameter_object.get_field_literal("name", context).unwrap().expect_as::<String>();
-				(Name::from(name), parameter_object.get_field("type").unwrap())
+				anyhow::Ok((Name::from(name), parameter_object.get_field("type").unwrap()))
 			})
-			.collect();
+			.collect::<anyhow::Result<Vec<_>>>()?;
 
 		// Parameters
 		let parameters = literal.get_field_literal("parameters", context).unwrap().try_as::<Vec<Expression>>()?;

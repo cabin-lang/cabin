@@ -186,18 +186,21 @@ impl CompileTime for FieldAccess {
 				// Either fields
 				ObjectType::Either => {
 					let field = literal.get_field("variants").unwrap();
-					let elements = field.expect_literal(context).expect_as::<Vec<Expression>>();
+					let elements = field.expect_literal(context)?.expect_as::<Vec<Expression>>();
 					elements
 						.iter()
-						.find_map(|element| {
-							let variant_object = element.expect_literal(context);
+						.map(|element| {
+							let variant_object = element.expect_literal(context)?;
 							let name = variant_object.get_field_literal("name", context).unwrap().expect_as::<String>();
-							if name == &self.right.unmangled_name() {
+							Ok(if name == &self.right.unmangled_name() {
 								Some(variant_object.get_field("value").unwrap())
 							} else {
 								None
-							}
+							})
 						})
+						.collect::<anyhow::Result<Vec<_>>>()?
+						.into_iter()
+						.find_map(|element| element)
 						.ok_or_else(|| {
 							anyhow::anyhow!(
 								"Attempted to access a variant called \"{}\" on an either, but the either has no variant with that name.",

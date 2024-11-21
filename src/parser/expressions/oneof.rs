@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-	api::{context::Context, scope::ScopeType, traits::TryAs as _},
+	api::{context::Context, macros::string, scope::ScopeType, traits::TryAs as _},
 	comptime::CompileTime,
 	lexer::TokenType,
 	literal_list, parse_list,
@@ -14,7 +14,6 @@ use crate::{
 		},
 		ListType, Parse, TokenQueue, TokenQueueFunctionality,
 	},
-	string_literal,
 };
 
 #[derive(Debug, Clone)]
@@ -105,7 +104,7 @@ impl LiteralConvertible for OneOf {
 					value: Some(literal_list!(
 						context,
 						self.scope_id,
-						self.compile_time_parameters.iter().map(|name| string_literal!(&name.unmangled_name(), context)).collect()
+						self.compile_time_parameters.iter().map(|name| string(&name.unmangled_name(), context)).collect()
 					)),
 					field_type: None,
 				},
@@ -127,8 +126,8 @@ impl LiteralConvertible for OneOf {
 		let compile_time_parameters = literal
 			.expect_field_literal_as::<Vec<Expression>>("compile_time_parameters", context)
 			.iter()
-			.map(|name_string| Name::from(name_string.expect_literal(context).expect_as::<String>()))
-			.collect();
+			.map(|name_string| anyhow::Ok(Name::from(name_string.expect_literal(context)?.expect_as::<String>())))
+			.collect::<anyhow::Result<Vec<_>>>()?;
 
 		let choices = literal
 			.expect_field_literal_as::<Vec<Expression>>("variants", context)

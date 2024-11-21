@@ -5,6 +5,7 @@ use crate::{
 	api::{context::Context, traits::TryAs as _},
 	bail_err,
 	comptime::{memory::Pointer, CompileTime},
+	mapped_err,
 	parser::{
 		expressions::{
 			block::Block,
@@ -101,10 +102,10 @@ impl CompileTime for Expression {
 				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating an if expression at compile-time".dimmed()))?,
 			Self::Name(name) => name
 				.evaluate_at_compile_time(context)
-				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while getting the value of a name at compile-time".dimmed()))?,
+				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a name expression at compile-time".dimmed()))?,
 			Self::ObjectConstructor(object_constructor) => object_constructor
 				.evaluate_at_compile_time(context)
-				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating an object constructor at compile-time".dimmed()))?,
+				.map_err(mapped_err! { while = "evaluating an object constructor at compile-time", context = context, })?,
 			Self::Group(group) => group
 				.evaluate_at_compile_time(context)
 				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a group declaration at compile-time".dimmed()))?,
@@ -125,11 +126,14 @@ impl Expression {
 			return Ok(pointer.virtual_deref(context));
 		}
 
-		anyhow::bail!("Attempted to coerce a non-literal into a literal");
+		bail_err! {
+			base = "A value that's not fully known at compile-time was used as a type",
+			context = context,
+		};
 	}
 
-	pub fn expect_literal<'a>(&'a self, context: &'a Context) -> &'a LiteralObject {
-		self.try_as_literal(context).unwrap()
+	pub fn expect_literal<'a>(&'a self, context: &'a Context) -> anyhow::Result<&'a LiteralObject> {
+		self.try_as_literal(context)
 	}
 
 	pub fn is_pointer(&self) -> bool {

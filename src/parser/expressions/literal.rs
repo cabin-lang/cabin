@@ -8,6 +8,7 @@ use crate::{
 	comptime::memory::Pointer,
 	lexer::Position,
 	parser::expressions::{
+		group::GroupDeclaration,
 		name::Name,
 		object::{InternalFieldValue, ObjectConstructor, ObjectType},
 		Expression,
@@ -209,6 +210,7 @@ impl TranspileToC for LiteralObject {
 		Ok(match self.type_name.unmangled_name().as_str() {
 			"Number" => self.expect_as::<f64>().to_string(),
 			"Text" => format!("\"{}\"", self.expect_as::<String>().to_owned()),
+			"Group" => GroupDeclaration::from_literal(self, context)?.to_c(context)?,
 			_ => {
 				let mut builder = format!("({}) {{", self.type_name.to_c(context)?);
 				for (field_name, field_pointer) in &self.fields {

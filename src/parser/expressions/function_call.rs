@@ -71,7 +71,10 @@ impl CompileTime for FunctionCall {
 	type Output = Expression;
 
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
-		let function = self.function.evaluate_at_compile_time(context)?;
+		let function = self.function.evaluate_at_compile_time(context).map_err(mapped_err! {
+			while = "evaluating the function to call on a function-call expression at compile-time",
+			context = context,
+		})?;
 
 		// Compile-time arguments
 		let compile_time_arguments = if let Some(original_compile_time_arguments) = self.compile_time_arguments {

@@ -169,21 +169,34 @@ impl CompileTime for ObjectConstructor {
 
 		// Get object type
 		let object_type = GroupDeclaration::from_literal(
-			context
-				.scope_data
-				.get_variable_from_id(self.type_name.clone(), self.scope_id)
-				.ok_or_else(|| {
-					anyhow::anyhow!(
-						"Attempted to create an object of type \"{}\", but no type with that name was found in the scope it was referenced.",
-						self.type_name.unmangled_name().bold().cyan()
-					)
+			self.type_name
+				.clone()
+				.evaluate_at_compile_time(context)
+				.map_err(mapped_err! {
+					while = format!("evaluating the type of an object constructor at compile time"),
+					context = context,
 				})?
-				.try_as_literal(context)?,
+				.try_as_literal(context)
+				.map_err(mapped_err! {
+					while = "interpreting an object constructor's type as a literal",
+					context = context,
+				})?,
 			context,
-		)?;
+		)
+		.map_err(mapped_err! {
+			while = "converting an object constructor's type from a literal to a group declaration",
+			context = context,
+		})?;
 
 		// Get `Anything`
-		let anything = GroupDeclaration::from_literal(context.scope_data.expect_global_variable("Anything").expect_literal(context), context).unwrap();
+		let anything = GroupDeclaration::from_literal(
+			Name::from("Anything").evaluate_at_compile_time(context)?.expect_literal(context).map_err(mapped_err! {
+				while = format!("interpreting the value of \"{}\" as a literal", "Anything".bold().cyan()),
+				context = context,
+			})?,
+			context,
+		)
+		.unwrap();
 
 		// Anything fields
 		for field in anything.fields {

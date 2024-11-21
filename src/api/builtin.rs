@@ -6,8 +6,9 @@ use crate::{
 	api::{context::Context, macros::number, traits::TryAs as _},
 	mapped_err,
 	parser::expressions::{object::ObjectConstructor, Expression},
-	string_literal,
 };
+
+use super::macros::string;
 
 pub struct BuiltinFunction {
 	evaluate_at_compile_time: fn(&mut Context, usize, Vec<Expression>) -> anyhow::Result<Expression>,
@@ -62,7 +63,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 	"Anything.to_string" => BuiltinFunction {
 		evaluate_at_compile_time: |context: &mut Context, _caller_scope_id: usize, arguments: Vec<Expression>| {
 			let this = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Anything.to_string"))?.try_as_literal(context)?;
-			Ok(string_literal!(&match this.type_name.unmangled_name().as_str() {
+			Ok(string(&match this.type_name.unmangled_name().as_str() {
 				"Number" => this.expect_as::<f64>().to_string(),
 				"Text" => this.expect_as::<String>().to_owned(),
 				_ => anyhow::bail!("Unsupported expression: {this:?}")

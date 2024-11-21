@@ -66,15 +66,17 @@ impl CompileTime for Name {
 	type Output = Expression;
 
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
-		let value = &context.scope_data.get_variable(self.clone()).ok_or_else(|| {
-			anyhow::anyhow!(
-				"Attempted to reference a variable named \"{}\", but no variable with that name exists where its referenced.\n\t{}",
-				self.unmangled_name().bold().cyan(),
-				format!("evaluating a the name \"{}\" at compile-time", self.unmangled_name().bold().cyan()).dimmed()
-			)
+		let (value, scope_id) = context.scope_data.pop_variable(&self).map_err(mapped_err! {
+			while = format!("attempting to get the original value of the name \"{}\" to evaluate it at compile-time", self.unmangled_name().bold().cyan()),
+			context = context,
 		})?;
-
-		Ok(value.try_clone_pointer(context).unwrap_or(Expression::Name(self)))
+		let evaluated = value.evaluate_at_compile_time(context).map_err(mapped_err! {
+			while = format!("evaluating the value of the name \"{}\" at compile-time", self.unmangled_name().bold().cyan()),
+			context = context,
+		})?;
+		let result = evaluated.try_clone_pointer(context).unwrap_or(Expression::Name(self.clone()));
+		context.scope_data.declare_new_variable_from_id(self.clone(), evaluated, scope_id)?;
+		Ok(result)
 	}
 }
 
