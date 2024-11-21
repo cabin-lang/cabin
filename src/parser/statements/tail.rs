@@ -56,6 +56,6 @@ impl CompileTime for TailStatement {
 
 impl TranspileToC for TailStatement {
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
-		Ok("goto label".to_owned())
+		Ok("goto label;".to_owned())
 	}
 }

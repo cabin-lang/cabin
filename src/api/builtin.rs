@@ -51,7 +51,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 		},
 		to_c: |parameter_names| {
 			let return_address = parameter_names.first().unwrap();
-			format!("char* buffer;\nsize_t length;\ngetline(&buffer, &size, stdin);\n*{return_address} = buffer;")
+			format!("char* buffer;\nsize_t size;\ngetline(&buffer, &size, stdin);\n*{return_address} = buffer;")
 		}
 	},
 	"Number.plus" => BuiltinFunction {

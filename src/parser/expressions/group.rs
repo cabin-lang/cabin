@@ -157,6 +157,11 @@ impl TranspileToC for GroupDeclaration {
 		for field in &self.fields {
 			builder += &format!("\n\tvoid* {};", field.name.to_c(context)?);
 		}
+		if self.name == Some("Text".into()) {
+			builder += "\n\tchar* internal_value;";
+		} else if self.fields.is_empty() {
+			builder += "\n\tchar empty;";
+		}
 		builder += "\n}";
 		Ok(builder)
 	}
@@ -167,18 +172,17 @@ impl LiteralConvertible for GroupDeclaration {
 		let fields = self
 			.fields
 			.into_iter()
-			.filter_map(|field| {
-				field.value.map(|value| {
-					literal! {
-						name = self.name.with_field(&field.name),
-						context = context,
-						Field {
-							name = string(&field.name.unmangled_name(), context),
-							value = value
-						},
-						self.scope_id
-					}
-				})
+			.map(|field| {
+				let value = if let Some(value) = field.value { value } else { context.nothing() };
+				literal! {
+					name = self.name.with_field(&field.name),
+					context = context,
+					Field {
+						name = string(&field.name.unmangled_name(), context),
+						value = value
+					},
+					self.scope_id
+				}
 			})
 			.collect();
 

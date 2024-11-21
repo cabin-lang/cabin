@@ -16,6 +16,8 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
+use super::Type;
+
 #[derive(Debug, Clone)]
 pub struct LiteralObject {
 	pub type_name: Name,
@@ -24,6 +26,7 @@ pub struct LiteralObject {
 	object_type: ObjectType,
 	scope_id: usize,
 	pub name: Option<Name>,
+	pub address: Option<usize>,
 }
 
 impl LiteralObject {
@@ -72,6 +75,7 @@ impl LiteralObject {
 			object_type: object.object_type,
 			scope_id: object.scope_id,
 			name: object.name,
+			address: None,
 		})
 	}
 
@@ -127,6 +131,10 @@ impl LiteralObject {
 	pub fn declared_scope_id(&self) -> usize {
 		self.scope_id
 	}
+
+	pub fn dependencies(&self) -> Vec<&Pointer> {
+		self.fields.values().collect()
+	}
 }
 
 impl TryAsRef<String> for LiteralObject {
@@ -143,6 +151,15 @@ impl TryAsRef<f64> for LiteralObject {
 impl TryAsRef<Vec<Expression>> for LiteralObject {
 	fn try_as_ref(&self) -> Option<&Vec<Expression>> {
 		self.get_internal_field("elements").ok()
+	}
+}
+
+impl Type for LiteralObject {
+	fn get_type(&self, context: &mut Context) -> anyhow::Result<Pointer> {
+		let Expression::Pointer(pointer) = self.type_name.clone().evaluate_at_compile_time(context)? else {
+			anyhow::bail!("Literal object type isn't a pointer");
+		};
+		Ok(pointer)
 	}
 }
 
@@ -214,21 +231,21 @@ impl TranspileToC for LiteralObject {
 			"Text" => {
 				let text_pointer_name = Name::from("Text").evaluate_at_compile_time(context)?.expect_clone_pointer(context);
 				format!(
-					"({}) {{ .internal_value = \"{}\" }}",
+					"&({}) {{ .internal_value = \"{}\" }}",
 					text_pointer_name.to_c(context)?,
 					self.expect_as::<String>().to_owned()
 				)
 			},
 			"Group" => GroupDeclaration::from_literal(self, context)?.to_c(context)?,
 			_ => {
-				let mut builder = format!("({}) {{", self.type_name.clone().evaluate_at_compile_time(context)?.to_c(context)?);
+				let mut builder = format!("&({}) {{", self.type_name.clone().evaluate_at_compile_time(context)?.to_c(context)?);
 				for (field_name, field_pointer) in &self.fields {
 					builder += &format!("\n\t.{} = {},", field_name.to_c(context)?, field_pointer.to_c(context)?);
 				}
-				if !self.fields.is_empty() {
-					builder += "\n";
+				if self.fields.is_empty() {
+					builder += "\n\t.empty = '0'";
 				}
-				builder += "}";
+				builder += "\n}";
 				builder
 			},
 		})

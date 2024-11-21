@@ -20,8 +20,21 @@ let Anything = group {};
 
 let Object = group {};
 let Group = group {};
-let Parameter = group {};
+
+let Parameter = group {
+	name: Text,
+	type: Anything
+};
+
 let OneOf = group {};
+
+let Function = group {
+	parameters: Anything,
+	return_type: Anything,
+	compile_time_parameters: Anything,
+	tags: Anything,
+	this_object: Anything,
+};
 
 // Text ----------------------------------------------------------------------------------------------------------------------
 
@@ -41,6 +54,7 @@ let system_side_effects = new Object {};
 
 let Field = group {
 	name: Text,
+	value: Anything,
 };
 
 let List = group {};

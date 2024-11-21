@@ -1,7 +1,5 @@
 use std::hash::Hash;
 
-use colored::Colorize as _;
-
 use crate::{
 	api::context::Context,
 	comptime::CompileTime,

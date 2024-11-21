@@ -210,11 +210,17 @@ impl TranspileToC for FunctionDeclaration {
 				.map(|(name, parameter_type)| Ok(format!("{}* {}, ", parameter_type.to_c(context)?, name.to_c(context)?)))
 				.collect::<anyhow::Result<String>>()?
 				+ "void* return_address",
-			if let Some(body) = body { body } else { self.body.as_ref().unwrap().to_c(context)? }
-				.lines()
-				.map(|line| format!("\t{line}"))
-				.collect::<Vec<_>>()
-				.join("\n")
+			if let Some(body) = body {
+				body
+			} else {
+				let body = self.body.as_ref().unwrap().to_c(context)?;
+				let body = body.strip_prefix("({").unwrap().strip_suffix("})").unwrap().to_owned();
+				body
+			}
+			.lines()
+			.map(|line| format!("\t{line}"))
+			.collect::<Vec<_>>()
+			.join("\n")
 		))
 	}
 }

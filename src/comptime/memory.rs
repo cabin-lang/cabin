@@ -9,6 +9,14 @@ impl Pointer {
 	pub fn virtual_deref<'a>(&self, context: &'a Context) -> &'a LiteralObject {
 		context.virtual_memory.get(self).unwrap()
 	}
+
+	pub fn unchecked(address: usize) -> Pointer {
+		Pointer(address)
+	}
+
+	pub fn value(&self) -> usize {
+		self.0
+	}
 }
 
 impl TranspileToC for Pointer {
@@ -31,8 +39,9 @@ impl VirtualMemory {
 		VirtualMemory { memory: HashMap::new() }
 	}
 
-	pub fn store(&mut self, value: LiteralObject) -> Pointer {
+	pub fn store(&mut self, mut value: LiteralObject) -> Pointer {
 		let address = self.next_unused_virtual_address();
+		value.address = Some(address);
 		self.memory.insert(address, value);
 		Pointer(address)
 	}

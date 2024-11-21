@@ -1,8 +1,16 @@
+use std::collections::HashSet;
+
 use crate::{
 	api::context::Context,
+	comptime::memory::Pointer,
 	mapped_err,
 	parser::{
-		expressions::{function_declaration::FunctionDeclaration, literal::LiteralConvertible, name::NameOption, Expression},
+		expressions::{
+			function_declaration::FunctionDeclaration,
+			literal::{LiteralConvertible, LiteralObject},
+			name::NameOption,
+			Expression, Type as _,
+		},
 		Program,
 	},
 };
@@ -59,12 +67,7 @@ pub fn transpile_virtual_memory(context: &mut Context) -> anyhow::Result<String>
 					while = "deserializing a function declaration literal into a function declaration",
 					context = context,
 				})?;
-				format!(
-					"{} {}{}\n\n",
-					function.return_type.as_ref().unwrap_or(&Box::new(Expression::Void(()))).to_c(context)?,
-					function.name.to_c_or_pointer(address),
-					function.to_c(context)?
-				)
+				format!("void {}{}\n\n", function.name.to_c_or_pointer(address), function.to_c(context)?)
 			},
 			_ => String::new(),
 		}
@@ -74,17 +77,63 @@ pub fn transpile_virtual_memory(context: &mut Context) -> anyhow::Result<String>
 
 pub fn transpile_main(context: &mut Context) -> anyhow::Result<String> {
 	let mut builder = "int main(int argc, char** argv) {".to_owned();
-	for (address, value) in context.virtual_memory.entries() {
-		match value.type_name.unmangled_name().as_str() {
-			"Group" | "Function" => continue,
-			_ => {},
-		};
 
-		let c = format!("void* {} = &{};\n\n", value.name.to_c_or_pointer(address), value.to_c(context)?);
-		for line in c.lines() {
-			builder += &format!("\n\t{line}");
+	let mut visited = Vec::new();
+	for (address, value) in context.virtual_memory.entries() {
+		if matches!(value.type_name.unmangled_name().as_str(), "Group" | "Function" | "OneOf" | "Either") {
+			continue;
 		}
+
+		let mut current_tree = Vec::new();
+		builder += &transpile_literal(context, &value, address, &mut visited, &mut current_tree)?;
 	}
+	Ok(builder)
+}
+
+pub fn transpile_literal(context: &mut Context, value: &LiteralObject, address: usize, done: &mut Vec<usize>, current_cycle: &mut Vec<usize>) -> anyhow::Result<String> {
+	if matches!(value.type_name.unmangled_name().as_str(), "Group" | "Function" | "OneOf" | "Either") {
+		return Ok(String::new());
+	}
+
+	// Avoid repetition
+	if done.contains(&address) {
+		return Ok(String::new());
+	}
+
+	// Cycle detection
+	if current_cycle.contains(&address) {
+		current_cycle.push(address);
+		dbg!(current_cycle
+			.iter()
+			.map(|addr| (addr, Pointer::unchecked(*addr).virtual_deref(context)))
+			.collect::<Vec<_>>());
+		anyhow::bail!(
+			"Recursive dependency cycle detected: {}",
+			current_cycle.iter().map(usize::to_string).collect::<Vec<_>>().join(" -> "),
+		);
+	}
+	current_cycle.push(address);
+
+	let mut builder = String::new();
+
+	// Transpile dependencies
+	for dependency in value.dependencies() {
+		builder += &transpile_literal(context, &dependency.virtual_deref(context).clone(), dependency.value(), done, current_cycle)?;
+	}
+
+	// Transpile self
+	let c = format!(
+		"{}* {} = {};\n\n",
+		value.get_type(context)?.to_c(context)?,
+		value.name.to_c_or_pointer(address),
+		value.to_c(context)?
+	);
+	for line in c.lines() {
+		builder += &format!("\n\t{line}");
+	}
+	done.push(address);
+
+	// Return the string
 	Ok(builder)
 }
 

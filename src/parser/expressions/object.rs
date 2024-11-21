@@ -3,7 +3,6 @@ use std::{
 	sync::atomic::{AtomicUsize, Ordering},
 };
 
-use colored::Colorize as _;
 use try_as::traits::{self as try_as_traits};
 
 use crate::{
