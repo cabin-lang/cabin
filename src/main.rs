@@ -7,6 +7,7 @@ pub mod cli;
 pub mod comptime;
 pub mod lexer;
 pub mod parser;
+pub mod transpiler;
 
 pub const PRELUDE: &str = include_str!("../std/prelude.cabin");
 

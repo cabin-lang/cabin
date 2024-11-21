@@ -1,16 +1,16 @@
 use std::collections::VecDeque;
 
-use colored::Colorize as _;
-
 use crate::{
 	api::{builtin::call_builtin_at_compile_time, context::Context, traits::TryAs as _},
+	bail_err,
 	comptime::{memory::Pointer, CompileTime},
 	lexer::{Token, TokenType},
 	mapped_err, parse_list,
 	parser::{
-		expressions::{function::FunctionDeclaration, literal::LiteralConvertible, name::Name, operators::FieldAccess, Expression, Parse},
+		expressions::{function_declaration::FunctionDeclaration, literal::LiteralConvertible, name::Name, operators::FieldAccess, Expression, Parse},
 		ListType, TokenQueueFunctionality,
 	},
+	transpiler::TranspileToC,
 };
 
 #[derive(Debug, Clone)]
@@ -100,17 +100,25 @@ impl CompileTime for FunctionCall {
 		// Evaluate function
 		let literal = function.try_as_literal(context);
 		if let Ok(function_declaration) = literal {
-			let Ok(function_declaration) = FunctionDeclaration::from_literal(function_declaration, context) else {
-				anyhow::bail!(
-					"Attempted to call a value that's not a function; Instead it's an instance of \"{}\"",
-					function_declaration.type_name.unmangled_name().bold().cyan()
-				);
+			let function_declaration = match FunctionDeclaration::from_literal(function_declaration, context) {
+				Ok(function_declaration) => function_declaration,
+				Err(error) => {
+					bail_err! {
+						base = error,
+						while = "calling a function at compile-time",
+						context = context,
+					};
+				},
 			};
 
 			// Set this object
 			if let Some(this_object) = function_declaration.this_object {
 				arguments = Some(arguments.unwrap_or(Vec::new()));
-				arguments.as_mut().unwrap().push(*this_object);
+				if let Some((parameter_name, _)) = function_declaration.parameters.first() {
+					if parameter_name.unmangled_name() == "this" {
+						arguments.as_mut().unwrap().insert(0, *this_object);
+					}
+				}
 			}
 
 			// Non-builtin
@@ -128,7 +136,7 @@ impl CompileTime for FunctionCall {
 
 					// Add arguments
 					if let Some(arguments) = &arguments {
-						for (argument, (parameter_name, _parameter_type)) in arguments.iter().zip(function_declaration.compile_time_parameters.iter()) {
+						for (argument, (parameter_name, _parameter_type)) in arguments.iter().zip(function_declaration.parameters.iter()) {
 							context.scope_data.reassign_variable_from_id(parameter_name, argument.clone(), block.inner_scope_id)?;
 						}
 					}
@@ -169,7 +177,7 @@ impl CompileTime for FunctionCall {
 				// Call builtin function
 				if let Some(internal_name) = builtin_name {
 					if !system_side_effects || context.has_side_effects() {
-						return call_builtin_at_compile_time(&internal_name, context, self.scope_id, &arguments.unwrap_or(Vec::new()));
+						return call_builtin_at_compile_time(&internal_name, context, self.scope_id, arguments.unwrap_or(Vec::new()));
 					} else {
 						return Ok(Expression::Void(()));
 					}
@@ -185,5 +193,21 @@ impl CompileTime for FunctionCall {
 			arguments,
 			scope_id: self.scope_id,
 		}))
+	}
+}
+
+impl TranspileToC for FunctionCall {
+	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+		Ok(format!(
+			"{}({})",
+			self.function.to_c(context)?,
+			self.arguments
+				.as_ref()
+				.unwrap_or(&Vec::new())
+				.iter()
+				.map(|argument| argument.to_c(context))
+				.collect::<anyhow::Result<Vec<_>>>()?
+				.join(", ")
+		))
 	}
 }

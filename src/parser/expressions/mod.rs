@@ -3,14 +3,15 @@ use try_as::traits as try_as_traits;
 
 use crate::{
 	api::{context::Context, traits::TryAs as _},
+	bail_err,
 	comptime::{memory::Pointer, CompileTime},
 	parser::{
 		expressions::{
 			block::Block,
 			either::Either,
 			foreach::ForEachLoop,
-			function::FunctionDeclaration,
 			function_call::FunctionCall,
+			function_declaration::FunctionDeclaration,
 			group::GroupDeclaration,
 			if_expression::IfExpression,
 			literal::LiteralObject,
@@ -22,13 +23,14 @@ use crate::{
 		statements::tag::TagList,
 		Parse, TokenQueue,
 	},
+	transpiler::TranspileToC,
 };
 
 pub mod block;
 pub mod either;
 pub mod foreach;
-pub mod function;
 pub mod function_call;
+pub mod function_declaration;
 pub mod group;
 pub mod if_expression;
 pub mod list;
@@ -119,8 +121,8 @@ impl CompileTime for Expression {
 
 impl Expression {
 	pub fn try_as_literal<'a>(&'a self, context: &'a Context) -> anyhow::Result<&'a LiteralObject> {
-		if let Self::Pointer(address) = self {
-			return context.virtual_memory.get(*address).ok_or_else(|| anyhow::anyhow!("Invalid pointer"));
+		if let Self::Pointer(pointer) = self {
+			return Ok(pointer.virtual_deref(context));
 		}
 
 		anyhow::bail!("Attempted to coerce a non-literal into a literal");
@@ -178,16 +180,19 @@ impl Expression {
 	///
 	/// # Performance
 	/// This clone is very cheap; Only the underlying pointer address (a `usize`) is cloned.
-	pub fn try_clone_pointer(&self) -> anyhow::Result<Expression> {
+	pub fn try_clone_pointer(&self, context: &Context) -> anyhow::Result<Expression> {
 		if let Self::Pointer(address) = self {
 			return Ok(Expression::Pointer(*address));
 		}
 
-		anyhow::bail!("A value that's not fully known at compile-time was used as a type.");
+		bail_err! {
+			base = "A value that's not fully known at compile-time was used as a type.",
+			context = context,
+		};
 	}
 
-	pub fn expect_clone_pointer(&self) -> Expression {
-		self.try_clone_pointer()
+	pub fn expect_clone_pointer(&self, context: &Context) -> Expression {
+		self.try_clone_pointer(context)
 			.expect("Attempted to clone a pointer, but the expression to clone wasn't a pointer.")
 	}
 
@@ -217,6 +222,23 @@ impl Expression {
 			Self::FunctionDeclaration(function) => Some(&mut function.tags),
 			_ => None,
 		}
+	}
+}
+
+impl TranspileToC for Expression {
+	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+		Ok(match self {
+			Self::If(if_expression) => if_expression.to_c(context)?,
+			Self::Block(block) => block.to_c(context)?,
+			Self::FieldAccess(field_access) => field_access.to_c(context)?,
+			Self::Name(name) => name.to_c(context)?,
+			Self::FunctionCall(function_call) => function_call.to_c(context)?,
+			Self::ForEachLoop(for_each_loop) => for_each_loop.to_c(context)?,
+			Self::Pointer(pointer) => pointer.to_c(context)?,
+			Self::ObjectConstructor(object_constructor) => object_constructor.to_c(context)?,
+			Self::Void(_) => "void".to_owned(),
+			Self::Either(_) | Self::FunctionDeclaration(_) | Self::Group(_) | Self::OneOf(_) => anyhow::bail!("Attempted to transpile a literal to C as an expression"),
+		})
 	}
 }
 

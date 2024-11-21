@@ -133,7 +133,7 @@ impl LiteralConvertible for OneOf {
 		let choices = literal
 			.expect_field_literal_as::<Vec<Expression>>("variants", context)
 			.iter()
-			.map(|choice| choice.try_clone_pointer().unwrap())
+			.map(|choice| choice.try_clone_pointer(context).unwrap())
 			.collect();
 
 		Ok(OneOf {

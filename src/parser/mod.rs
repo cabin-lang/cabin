@@ -8,6 +8,7 @@ use crate::{
 	lexer::{Position, Token, TokenType},
 	mapped_err,
 	parser::statements::Statement,
+	transpiler::TranspileToC,
 };
 
 pub mod expressions;
@@ -29,7 +30,7 @@ impl Parse for Program {
 		let mut statements = Vec::new();
 		while !tokens.is_empty() {
 			statements.push(Statement::parse(tokens, context).map_err(mapped_err! {
-				while = "while parsing the program's top-level statements",
+				while = "parsing the program's top-level statements",
 				context = context,
 			})?);
 		}
@@ -54,6 +55,17 @@ impl CompileTime for Program {
 				.into_iter()
 				.collect(),
 		})
+	}
+}
+
+impl TranspileToC for Program {
+	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+		Ok(self
+			.statements
+			.iter()
+			.map(|statement| statement.to_c(context))
+			.collect::<anyhow::Result<Vec<_>>>()?
+			.join("\n"))
 	}
 }
 

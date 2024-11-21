@@ -8,6 +8,7 @@ use crate::{
 	lexer::{Position, TokenType},
 	mapped_err,
 	parser::{expressions::Expression, Parse, ToCabin, TokenQueue, TokenQueueFunctionality as _},
+	transpiler::TranspileToC,
 };
 
 #[derive(Debug, Clone, Eq)]
@@ -31,6 +32,10 @@ impl Hash for Name {
 impl Name {
 	pub fn unmangled_name(&self) -> String {
 		self.name.clone()
+	}
+
+	pub fn mangled_name(&self) -> String {
+		format!("u_{}", self.name)
 	}
 
 	pub fn position(&self) -> Option<Position> {
@@ -65,11 +70,17 @@ impl CompileTime for Name {
 			anyhow::anyhow!(
 				"Attempted to reference a variable named \"{}\", but no variable with that name exists where its referenced.\n\t{}",
 				self.unmangled_name().bold().cyan(),
-				format!("while evaluating a the name \"{}\" at compile-time", self.unmangled_name().bold().cyan()).dimmed()
+				format!("evaluating a the name \"{}\" at compile-time", self.unmangled_name().bold().cyan()).dimmed()
 			)
 		})?;
 
-		Ok(value.try_clone_pointer().unwrap_or(Expression::Name(self)))
+		Ok(value.try_clone_pointer(context).unwrap_or(Expression::Name(self)))
+	}
+}
+
+impl TranspileToC for Name {
+	fn to_c(&self, _context: &Context) -> anyhow::Result<String> {
+		Ok(self.mangled_name())
 	}
 }
 

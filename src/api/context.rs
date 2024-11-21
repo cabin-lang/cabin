@@ -1,20 +1,14 @@
+use std::{cell::RefCell, path::PathBuf};
+
 use smart_default::SmartDefault;
 
-use crate::{api::scope::ScopeData, comptime::memory::VirtualMemory, lexer::Position, parser::expressions::Expression};
-
-#[derive(SmartDefault)]
-pub struct CompilerConfiguration {
-	#[default = 4]
-	pub code_tab_size: usize,
-	#[default = false]
-	pub quiet: bool,
-}
-
-impl CompilerConfiguration {
-	pub fn tab(&self) -> String {
-		" ".repeat(self.code_tab_size)
-	}
-}
+use crate::{
+	api::scope::ScopeData,
+	cli::{Project, RunningContext},
+	comptime::memory::VirtualMemory,
+	lexer::Position,
+	parser::expressions::Expression,
+};
 
 pub struct Context {
 	// Publicly mutable
@@ -22,28 +16,39 @@ pub struct Context {
 	pub scope_label: Option<String>,
 	pub virtual_memory: VirtualMemory,
 	pub config: CompilerConfiguration,
+	pub running_context: RunningContext,
+	pub lines_printed: usize,
 
 	// Privately mutable
 	side_effects_stack: Vec<bool>,
-	error_location: Option<Position>,
-	error_details: Option<String>,
-
+	error_location: RefCell<Option<Position>>,
+	error_details: RefCell<Option<String>>,
+	compiler_error_position: RefCell<Vec<SourceFilePosition>>,
 	// Completely immutable
-	filename: String,
 }
 
 impl Context {
-	pub fn new(filename: &str) -> Context {
-		Context {
+	pub fn new(path: &PathBuf) -> anyhow::Result<Context> {
+		let running_context = if PathBuf::from(path).is_dir() {
+			RunningContext::Project(Project::new(path)?)
+		} else if PathBuf::from(path).is_file() {
+			RunningContext::SingleFile(path.to_owned())
+		} else {
+			anyhow::bail!("Invalid path");
+		};
+
+		Ok(Context {
 			scope_data: ScopeData::global(),
 			scope_label: None,
 			virtual_memory: VirtualMemory::empty(),
 			side_effects_stack: Vec::new(),
-			error_location: None,
-			filename: filename.to_owned(),
-			error_details: None,
+			error_location: RefCell::new(None),
+			error_details: RefCell::new(None),
+			compiler_error_position: RefCell::new(Vec::new()),
 			config: CompilerConfiguration::default(),
-		}
+			lines_printed: 0,
+			running_context,
+		})
 	}
 
 	pub fn toggle_side_effects(&mut self, side_effects: bool) {
@@ -59,30 +64,91 @@ impl Context {
 	}
 
 	pub fn nothing(&self) -> Expression {
-		self.scope_data.expect_global_variable("nothing").expect_clone_pointer()
+		self.scope_data.expect_global_variable("nothing").expect_clone_pointer(self)
 	}
 
-	pub fn set_error_position(&mut self, position: &Position) {
-		if self.error_location.is_none() {
-			self.error_location = Some(position.clone());
+	pub fn set_error_position(&self, position: &Position) {
+		if self.error_location.borrow().is_none() {
+			*self.error_location.borrow_mut() = Some(position.clone());
 		}
 	}
 
-	pub fn file_name(&self) -> String {
-		self.filename.clone()
-	}
-
-	pub fn set_error_details(&mut self, error_details: &str) {
-		if self.error_details.is_none() {
-			self.error_details = Some(error_details.to_owned());
+	pub fn set_error_details(&self, error_details: &str) {
+		if self.error_details.borrow().is_none() {
+			*self.error_details.borrow_mut() = Some(error_details.to_owned());
 		}
 	}
 
-	pub fn error_details(&self) -> Option<&String> {
-		self.error_details.as_ref()
+	pub fn error_details(&self) -> Option<String> {
+		self.error_details.borrow().clone()
 	}
 
 	pub fn error_position(&self) -> Option<Position> {
-		self.error_location.clone()
+		self.error_location.borrow().clone()
+	}
+
+	pub fn set_compiler_error_position(&self, position: SourceFilePosition) {
+		self.compiler_error_position.borrow_mut().push(position);
+	}
+
+	pub fn get_compiler_error_position(&self) -> Vec<SourceFilePosition> {
+		self.compiler_error_position.borrow().clone()
+	}
+}
+
+#[derive(SmartDefault)]
+pub struct CompilerConfiguration {
+	#[default = 4]
+	pub code_tab_size: usize,
+	#[default = false]
+	pub quiet: bool,
+	#[default = true]
+	pub developer_mode: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct SourceFilePosition {
+	line: u32,
+	column: u32,
+	name: &'static str,
+	function: String,
+}
+
+impl SourceFilePosition {
+	pub fn new(line: u32, column: u32, name: &'static str, function: String) -> Self {
+		Self { line, column, name, function }
+	}
+
+	pub fn line(&self) -> u32 {
+		self.line
+	}
+
+	pub fn column(&self) -> u32 {
+		self.column
+	}
+
+	pub fn file_name(&self) -> &'static str {
+		self.name
+	}
+
+	pub fn function_name(&self) -> String {
+		self.function.clone()
+	}
+}
+
+#[macro_export]
+macro_rules! here {
+	() => {
+		$crate::api::context::SourceFilePosition::new(std::line!(), std::column!(), std::file!(), $crate::function!())
+	};
+}
+
+impl CompilerConfiguration {
+	pub fn tab(&self) -> String {
+		" ".repeat(self.code_tab_size)
+	}
+
+	pub fn tabs(&self, count: usize) -> String {
+		self.tab().repeat(count)
 	}
 }

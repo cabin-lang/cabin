@@ -8,6 +8,7 @@ use crate::{
 		expressions::{name::Name, Expression},
 		Parse, TokenQueue, TokenQueueFunctionality as _,
 	},
+	transpiler::TranspileToC,
 };
 
 #[derive(Debug, Clone)]
@@ -50,7 +51,7 @@ impl Parse for Declaration {
 
 		// Add the name declaration to the scope
 		context.scope_data.declare_new_variable(name.clone(), value).map_err(mapped_err! {
-			while = format!("while attempting to add the variable \"{}\" to its scope", name.unmangled_name().bold().cyan()),
+			while = format!("attempting to add the variable \"{}\" to its scope", name.unmangled_name().bold().cyan()),
 			context = context,
 		})?;
 
@@ -69,7 +70,7 @@ impl CompileTime for Declaration {
 		let value = context.scope_data.get_variable_from_id(self.name.clone(), self.scope_id).unwrap().clone();
 		let evaluated = value.evaluate_at_compile_time(context).map_err(mapped_err! {
 			while = format!(
-				"while evaluating value of the initial declaration for the variable \"{}\" at compile-time",
+				"evaluating value of the initial declaration for the variable \"{}\" at compile-time",
 				self.name.unmangled_name().bold().cyan()
 			),
 			context = context,
@@ -77,7 +78,7 @@ impl CompileTime for Declaration {
 
 		context.scope_data.reassign_variable_from_id(&self.name, evaluated, self.scope_id).map_err(mapped_err! {
 			while = format!(
-				"while attempting to reassign the variable \"{}\" to its evaluated value",
+				"attempting to reassign the variable \"{}\" to its evaluated value",
 				self.name.unmangled_name().bold().cyan()
 			),
 			context = context,
@@ -87,5 +88,11 @@ impl CompileTime for Declaration {
 			name: self.name,
 			scope_id: self.scope_id,
 		})
+	}
+}
+
+impl TranspileToC for Declaration {
+	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+		Ok(format!("int {} = {};", self.name.to_c(context)?, self.value(context).to_c(context)?))
 	}
 }

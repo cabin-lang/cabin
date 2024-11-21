@@ -12,6 +12,7 @@ use crate::{
 		object::{InternalFieldValue, ObjectConstructor, ObjectType},
 		Expression,
 	},
+	transpiler::TranspileToC,
 };
 
 #[derive(Debug)]
@@ -76,7 +77,7 @@ impl LiteralObject {
 	}
 
 	pub fn get_field_literal<'a>(&'a self, name: impl Into<Name>, context: &'a Context) -> Option<&'a LiteralObject> {
-		self.fields.get(&name.into()).and_then(|address| context.virtual_memory.get(*address))
+		self.fields.get(&name.into()).and_then(|address| context.virtual_memory.get(address))
 	}
 
 	pub fn expect_field_literal<'a>(&'a self, name: impl Into<Name>, context: &'a Context) -> &'a LiteralObject {
@@ -201,4 +202,24 @@ pub trait LiteralConvertible: Sized {
 	///
 	/// The instance of `Self` that the literal object was
 	fn from_literal(literal: &LiteralObject, context: &Context) -> anyhow::Result<Self>;
+}
+
+impl TranspileToC for LiteralObject {
+	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+		Ok(match self.type_name.unmangled_name().as_str() {
+			"Number" => self.expect_as::<f64>().to_string(),
+			"Text" => format!("\"{}\"", self.expect_as::<String>().to_owned()),
+			_ => {
+				let mut builder = format!("({}) {{", self.type_name.to_c(context)?);
+				for (field_name, field_pointer) in &self.fields {
+					builder += &format!("\n\t.{} = {}", field_name.to_c(context)?, field_pointer.to_c(context)?);
+				}
+				if !self.fields.is_empty() {
+					builder += "\n";
+				}
+				builder += "}";
+				builder
+			},
+		})
+	}
 }

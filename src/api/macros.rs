@@ -6,6 +6,38 @@ use crate::{
 };
 
 #[macro_export]
+macro_rules! bail_err {
+	(
+        base = $base: expr,
+        $(while = $process: expr,)?
+        context = $context: expr,
+        $($field_name: ident = $field_value: expr),* $(,)?
+    ) => {{
+        use colored::Colorize as _;
+
+		#[allow(clippy::needless_update)]
+		let error = $crate::api::macros::CabinError {
+            base: Some(anyhow::anyhow!($base)),
+            $(process: Some("while ".to_owned() + &$process),)?
+            $($field_name: Some($field_value),)*
+            .. Default::default()
+        };
+
+        if let Some(position) = error.position {
+            $context.set_error_position(&position);
+        }
+
+        if let Some(details) = error.details {
+            $context.set_error_details(&details);
+        }
+
+		$context.set_compiler_error_position($crate::here!());
+
+        anyhow::bail!("{}{}", error.base.unwrap(), if let Some(process) = error.process { format!("\n\t{}", process).dimmed() } else { String::new().bold() })
+	}};
+}
+
+#[macro_export]
 macro_rules! err {
 	(
         base = $base: expr,
@@ -19,9 +51,7 @@ macro_rules! err {
 		let error = $crate::api::macros::CabinError {
             base: Some(anyhow::anyhow!($base)),
             process: Some("while ".to_owned() + &$process),
-            $(
-                $field_name: Some($field_value),
-            )*
+            $($field_name: Some($field_value),)*
             .. Default::default()
         };
 
@@ -33,7 +63,9 @@ macro_rules! err {
             $context.set_error_details(&details);
         }
 
-        anyhow::anyhow!("{}\n\t{}", error.base.unwrap(), error.process.unwrap().dimmed())
+		$context.set_compiler_error_position($crate::here!());
+
+        anyhow::anyhow!("{}{}", error.base.unwrap(), if let Some(process) = error.process { format!("\n\t{}", process).dimmed() } else { String::new().bold() })
 	}};
 }
 
@@ -49,6 +81,21 @@ macro_rules! mapped_err {
 			}
 		}
 	};
+}
+
+/// modified from https://stackoverflow.com/a/40234666
+#[macro_export]
+macro_rules! function {
+	() => {{
+		fn f() {}
+		fn type_name_of<T>(_: T) -> &'static str {
+			std::any::type_name::<T>()
+		}
+		let name = type_name_of(f);
+		let stripped = name.strip_suffix("::f").unwrap();
+		let simplified = regex_macro::regex!("^<([^>< ]+) as ([^>< ]+)>(.*)$").replace(stripped, "${1}${3}").to_string();
+		simplified.strip_suffix("::{{closure}}").unwrap_or(&simplified).to_owned()
+	}};
 }
 
 #[macro_export]
@@ -98,15 +145,6 @@ pub struct CabinError {
 	pub details: Option<String>,
 	pub position: Option<Position>,
 	pub process: Option<String>,
-}
-
-#[macro_export]
-macro_rules! bail_err {
-    (
-        $($tokens: tt)*
-    ) => {
-        return Err($crate::err!($($tokens)*))
-    };
 }
 
 #[macro_export]
@@ -214,7 +252,7 @@ macro_rules! string_literal {
 }
 
 pub fn cabin_true(context: &Context) -> Expression {
-	context.scope_data.expect_global_variable("true").expect_clone_pointer()
+	context.scope_data.expect_global_variable("true").expect_clone_pointer(context)
 }
 
 pub fn number(number: f64, context: &mut Context) -> Expression {

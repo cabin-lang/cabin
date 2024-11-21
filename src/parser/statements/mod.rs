@@ -2,11 +2,13 @@ use crate::{
 	api::context::Context,
 	comptime::CompileTime,
 	lexer::TokenType,
+	mapped_err,
 	parser::{
 		expressions::Expression,
 		statements::{declaration::Declaration, tail::TailStatement},
 		Parse, TokenQueue, TokenQueueFunctionality as _,
 	},
+	transpiler::TranspileToC,
 };
 
 pub mod declaration;
@@ -45,9 +47,28 @@ impl CompileTime for Statement {
 
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
 		Ok(match self {
-			Statement::Declaration(declaration) => Statement::Declaration(declaration.evaluate_at_compile_time(context)?),
-			Statement::Expression(expression) => Statement::Expression(expression.evaluate_at_compile_time(context)?),
-			Statement::Tail(tail) => Statement::Tail(tail.evaluate_at_compile_time(context)?),
+			Statement::Declaration(declaration) => Statement::Declaration(declaration.evaluate_at_compile_time(context).map_err(mapped_err! {
+				while = "evaluating a name declaration at compile-time",
+				context = context,
+			})?),
+			Statement::Expression(expression) => Statement::Expression(expression.evaluate_at_compile_time(context).map_err(mapped_err! {
+				while = "evaluating an expression statement at compile-time",
+				context = context,
+			})?),
+			Statement::Tail(tail) => Statement::Tail(tail.evaluate_at_compile_time(context).map_err(mapped_err! {
+				while = "evaluating a tail statement at compile-time",
+				context = context,
+			})?),
+		})
+	}
+}
+
+impl TranspileToC for Statement {
+	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+		Ok(match self {
+			Statement::Declaration(declaration) => declaration.to_c(context)?,
+			Statement::Tail(tail_statement) => tail_statement.to_c(context)?,
+			Statement::Expression(expression) => expression.to_c(context)? + ";",
 		})
 	}
 }

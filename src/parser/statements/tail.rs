@@ -6,6 +6,7 @@ use crate::{
 		expressions::{name::Name, Expression},
 		Parse, TokenQueue, TokenQueueFunctionality,
 	},
+	transpiler::TranspileToC,
 };
 
 #[derive(Debug, Clone)]
@@ -50,5 +51,11 @@ impl CompileTime for TailStatement {
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
 		let value = self.value.evaluate_at_compile_time(context)?;
 		Ok(TailStatement { label: self.label, value })
+	}
+}
+
+impl TranspileToC for TailStatement {
+	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+		Ok("goto label".to_owned())
 	}
 }

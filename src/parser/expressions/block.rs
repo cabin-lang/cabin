@@ -3,6 +3,7 @@ use crate::{
 	comptime::CompileTime,
 	lexer::TokenType,
 	parser::{expressions::Expression, statements::Statement, Parse, TokenQueue, TokenQueueFunctionality as _},
+	transpiler::TranspileToC,
 };
 
 #[derive(Debug, Clone)]
@@ -68,5 +69,20 @@ impl CompileTime for Block {
 			statements,
 			inner_scope_id: self.inner_scope_id,
 		}))
+	}
+}
+
+impl TranspileToC for Block {
+	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+		let mut builder = String::new();
+		builder += "({";
+		for statement in &self.statements {
+			for line in statement.to_c(context)?.lines() {
+				builder += &format!("\n{line}");
+			}
+		}
+		builder += "\n})";
+
+		Ok(builder)
 	}
 }

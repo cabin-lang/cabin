@@ -13,6 +13,7 @@ use crate::{
 		statements::tag::TagList,
 		ListType, Parse, ToCabin, TokenQueue, TokenQueueFunctionality,
 	},
+	transpiler::TranspileToC,
 };
 
 use super::literal::LiteralConvertible as _;
@@ -112,7 +113,7 @@ impl Parse for ObjectConstructor {
 
 			// Name
 			let name = Name::parse(tokens, context).map_err(mapped_err! {
-				while = "while attempting to parse an object constructor",
+				while = "attempting to parse an object constructor",
 				context = context,
 			})?;
 
@@ -259,4 +260,10 @@ pub enum InternalFieldValue {
 	List(Vec<Expression>),
 	Expression(Expression),
 	OptionalExpression(Option<Expression>),
+}
+
+impl TranspileToC for ObjectConstructor {
+	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+		Ok("(Object) {}".to_owned())
+	}
 }

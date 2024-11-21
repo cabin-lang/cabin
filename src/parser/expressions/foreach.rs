@@ -4,6 +4,7 @@ use crate::{
 	comptime::CompileTime,
 	lexer::TokenType,
 	parser::{Parse, TokenQueue, TokenQueueFunctionality as _},
+	transpiler::TranspileToC,
 };
 
 #[derive(Debug, Clone)]
@@ -53,5 +54,15 @@ impl CompileTime for ForEachLoop {
 		}
 
 		Ok(Expression::ForEachLoop(self))
+	}
+}
+
+impl TranspileToC for ForEachLoop {
+	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+		Ok(format!(
+			"({{\n\tlet elements = {};\n\tfor (int index = 0; index < elements->length(); index++) {{\n\t{}\n\t}}\n}})",
+			self.iterable.to_c(context)?,
+			self.body.to_c(context)?.lines().map(|line| format!("\t\t{line}")).collect::<Vec<_>>().join("\n")
+		))
 	}
 }

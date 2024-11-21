@@ -7,6 +7,7 @@ use crate::{
 		expressions::{block::Block, Expression},
 		Parse, TokenQueue, TokenQueueFunctionality,
 	},
+	transpiler::TranspileToC,
 };
 
 #[derive(Debug, Clone)]
@@ -39,7 +40,7 @@ impl CompileTime for IfExpression {
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
 		// Check condition
 		let condition = self.condition.evaluate_at_compile_time(context).map_err(mapped_err! {
-			while = "while evaluating the condition of an if-expression at compile-time",
+			while = "evaluating the condition of an if-expression at compile-time",
 			context = context,
 		})?;
 		let condition_is_true = condition.is_true(context);
@@ -67,11 +68,11 @@ impl CompileTime for IfExpression {
 
 		// Fully evaluated: return the value (only if true)
 		if condition_is_true {
-			if let Ok(literal) = body.try_clone_pointer() {
+			if let Ok(literal) = body.try_clone_pointer(context) {
 				return Ok(literal);
 			}
 		} else if let Some(else_body) = &else_body {
-			if let Ok(literal) = else_body.try_clone_pointer() {
+			if let Ok(literal) = else_body.try_clone_pointer(context) {
 				return Ok(literal);
 			}
 		}
@@ -82,5 +83,27 @@ impl CompileTime for IfExpression {
 			body: Box::new(body),
 			else_body,
 		}))
+	}
+}
+
+impl TranspileToC for IfExpression {
+	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+		let mut builder = format!("({}) ? (", self.condition.to_c(context)?);
+		for line in self.body.to_c(context)?.lines() {
+			builder += &format!("\n\t{line}");
+		}
+		builder += "\n) : (";
+
+		if let Some(else_body) = &self.else_body {
+			for line in else_body.to_c(context)?.lines() {
+				builder += &format!("\n\t{line}");
+			}
+		} else {
+			builder += "\nNULL"
+		}
+
+		builder += "\n) ";
+
+		Ok(builder)
 	}
 }

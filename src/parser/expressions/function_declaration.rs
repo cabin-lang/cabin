@@ -268,8 +268,12 @@ impl LiteralConvertible for FunctionDeclaration {
 			.expect_literal(context)
 			.expect_as::<Vec<Expression>>()
 			.iter()
-			.map(|element| element.try_clone_pointer().unwrap())
-			.collect::<Vec<_>>();
+			.map(|element| element.try_clone_pointer(context))
+			.collect::<anyhow::Result<Vec<_>>>()
+			.map_err(mapped_err! {
+				while = "interpreting the function declaration's tags as literals",
+				context = context,
+			})?;
 
 		// Compile-time parameters
 		let compile_time_parameters = literal.get_field_literal("compile_time_parameters", context).unwrap().try_as::<Vec<Expression>>()?;

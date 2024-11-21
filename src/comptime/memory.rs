@@ -1,13 +1,19 @@
 use std::collections::HashMap;
 
-use crate::{api::context::Context, parser::expressions::literal::LiteralObject};
+use crate::{api::context::Context, parser::expressions::literal::LiteralObject, transpiler::TranspileToC};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pointer(usize);
 
 impl Pointer {
 	pub fn virtual_deref<'a>(&self, context: &'a Context) -> &'a LiteralObject {
-		context.virtual_memory.get(self.to_owned()).unwrap()
+		context.virtual_memory.get(self).unwrap()
+	}
+}
+
+impl TranspileToC for Pointer {
+	fn to_c(&self, _context: &Context) -> anyhow::Result<String> {
+		Ok(format!("POINTER_{}", self.0))
 	}
 }
 
@@ -26,7 +32,7 @@ impl VirtualMemory {
 		Pointer(address)
 	}
 
-	pub fn get(&self, address: Pointer) -> Option<&LiteralObject> {
+	pub fn get(&self, address: &Pointer) -> Option<&LiteralObject> {
 		self.memory.get(&address.0)
 	}
 
@@ -40,5 +46,9 @@ impl VirtualMemory {
 			next_unused_virtual_address += 1;
 		}
 		next_unused_virtual_address
+	}
+
+	pub fn entries(&self) -> Vec<(&usize, &LiteralObject)> {
+		self.memory.iter().collect()
 	}
 }

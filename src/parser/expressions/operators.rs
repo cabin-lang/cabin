@@ -12,8 +12,8 @@ use crate::{
 			block::Block,
 			either::Either,
 			foreach::ForEachLoop,
-			function::FunctionDeclaration,
 			function_call::{FunctionCall, PostfixOperators},
+			function_declaration::FunctionDeclaration,
 			group::GroupDeclaration,
 			if_expression::IfExpression,
 			list::List,
@@ -25,6 +25,7 @@ use crate::{
 		},
 		Parse, TokenQueueFunctionality,
 	},
+	transpiler::TranspileToC,
 };
 
 /// A binary operation. More specifically, this represents not one operation, but a group of operations that share the same precedence.
@@ -216,6 +217,12 @@ impl CompileTime for FieldAccess {
 				scope_id: self.scope_id,
 			}))
 		}
+	}
+}
+
+impl TranspileToC for FieldAccess {
+	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+		Ok(format!("{}->{}", self.left.to_c(context)?, self.right.mangled_name()))
 	}
 }
 
