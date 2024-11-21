@@ -1,0 +1,2 @@
+let sum = 9 + 10;
+terminal.print(sum);
