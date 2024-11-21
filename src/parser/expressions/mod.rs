@@ -1,12 +1,9 @@
-use std::collections::VecDeque;
-
 use colored::Colorize as _;
 use try_as::traits as try_as_traits;
 
 use crate::{
 	api::{context::Context, traits::TryAs as _},
 	comptime::{memory::Pointer, CompileTime},
-	lexer::Token,
 	parser::{
 		expressions::{
 			block::Block,
@@ -16,13 +13,14 @@ use crate::{
 			function_call::FunctionCall,
 			group::GroupDeclaration,
 			if_expression::IfExpression,
+			literal::LiteralObject,
 			name::Name,
-			object::{LiteralObject, ObjectConstructor},
+			object::ObjectConstructor,
 			oneof::OneOf,
 			operators::{BinaryExpression, FieldAccess},
 		},
 		statements::tag::TagList,
-		Parse,
+		Parse, TokenQueue,
 	},
 };
 
@@ -34,6 +32,7 @@ pub mod function_call;
 pub mod group;
 pub mod if_expression;
 pub mod list;
+pub mod literal;
 pub mod name;
 pub mod object;
 pub mod oneof;
@@ -70,7 +69,7 @@ pub enum Expression {
 impl Parse for Expression {
 	type Output = Expression;
 
-	fn parse(tokens: &mut VecDeque<Token>, context: &mut Context) -> anyhow::Result<Self::Output> {
+	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
 		BinaryExpression::parse(tokens, context)
 	}
 }
@@ -222,5 +221,5 @@ impl Expression {
 }
 
 pub trait Type {
-	fn get_type(tokens: &mut VecDeque<Token>, context: &mut Context) -> anyhow::Result<Expression>;
+	fn get_type(&self, context: &mut Context) -> anyhow::Result<Pointer>;
 }

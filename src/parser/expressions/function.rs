@@ -10,8 +10,9 @@ use crate::{
 	parser::{
 		expressions::{
 			block::Block,
+			literal::{LiteralConvertible, LiteralObject},
 			name::Name,
-			object::{Field, InternalFieldValue, LiteralConvertible, LiteralObject, ObjectConstructor, ObjectType},
+			object::{Field, InternalFieldValue, ObjectConstructor, ObjectType},
 			Expression, Parse,
 		},
 		statements::tag::TagList,

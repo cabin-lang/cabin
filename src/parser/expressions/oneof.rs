@@ -7,8 +7,9 @@ use crate::{
 	literal_list, parse_list,
 	parser::{
 		expressions::{
+			literal::{LiteralConvertible, LiteralObject},
 			name::Name,
-			object::{Field, LiteralConvertible, LiteralObject, ObjectConstructor, ObjectType},
+			object::{Field, ObjectConstructor, ObjectType},
 			Expression,
 		},
 		ListType, Parse, TokenQueue, TokenQueueFunctionality,
@@ -124,17 +125,13 @@ impl LiteralConvertible for OneOf {
 		}
 
 		let compile_time_parameters = literal
-			.get_field_literal("compile_time_parameters", context)
-			.unwrap()
-			.expect_as::<Vec<Expression>>()
+			.expect_field_literal_as::<Vec<Expression>>("compile_time_parameters", context)
 			.iter()
 			.map(|name_string| Name::from(name_string.expect_literal(context).expect_as::<String>()))
 			.collect();
 
 		let choices = literal
-			.get_field_literal("variants", context)
-			.unwrap()
-			.expect_as::<Vec<Expression>>()
+			.expect_field_literal_as::<Vec<Expression>>("variants", context)
 			.iter()
 			.map(|choice| choice.try_clone_pointer().unwrap())
 			.collect();

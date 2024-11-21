@@ -1,10 +1,10 @@
 use std::collections::VecDeque;
 
-use colored::Colorize;
+use colored::Colorize as _;
 
 use crate::{
 	api::{context::Context, traits::TryAs as _},
-	comptime::CompileTime,
+	comptime::{memory::Pointer, CompileTime},
 	lexer::{Token, TokenType},
 	mapped_err,
 	parser::{
@@ -17,8 +17,9 @@ use crate::{
 			group::GroupDeclaration,
 			if_expression::IfExpression,
 			list::List,
+			literal::LiteralConvertible,
 			name::Name,
-			object::{LiteralConvertible, ObjectConstructor, ObjectType},
+			object::{ObjectConstructor, ObjectType},
 			oneof::OneOf,
 			Expression,
 		},
@@ -161,7 +162,8 @@ impl CompileTime for FieldAccess {
 		let left_evaluated = self.left.evaluate_at_compile_time(context)?;
 
 		// Resolvable at compile-time
-		if let Ok(literal) = left_evaluated.try_as_literal(context) {
+		if let Ok(pointer) = left_evaluated.try_as::<Pointer>() {
+			let literal = pointer.virtual_deref(context);
 			Ok(match literal.object_type() {
 				// Object fields
 				ObjectType::Normal => {

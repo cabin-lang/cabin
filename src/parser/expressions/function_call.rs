@@ -8,7 +8,7 @@ use crate::{
 	lexer::{Token, TokenType},
 	mapped_err, parse_list,
 	parser::{
-		expressions::{function::FunctionDeclaration, name::Name, object::LiteralConvertible, operators::FieldAccess, Expression, Parse},
+		expressions::{function::FunctionDeclaration, literal::LiteralConvertible, name::Name, operators::FieldAccess, Expression, Parse},
 		ListType, TokenQueueFunctionality,
 	},
 };

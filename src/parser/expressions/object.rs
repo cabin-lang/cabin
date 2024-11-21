@@ -1,20 +1,21 @@
 use std::collections::HashMap;
 
 use colored::Colorize as _;
-use try_as::traits::{self as try_as_traits, TryAsRef};
+use try_as::traits::{self as try_as_traits};
 
 use crate::{
 	api::{context::Context, traits::TryAs as _},
-	bail_err, compiler_message,
 	comptime::{memory::Pointer, CompileTime},
-	lexer::{Position, TokenType},
+	lexer::TokenType,
 	mapped_err, parse_list,
 	parser::{
-		expressions::{group::GroupDeclaration, name::Name, Expression},
+		expressions::{group::GroupDeclaration, literal::LiteralObject, name::Name, Expression},
 		statements::tag::TagList,
 		ListType, Parse, ToCabin, TokenQueue, TokenQueueFunctionality,
 	},
 };
+
+use super::literal::LiteralConvertible as _;
 
 #[derive(Debug, Clone)]
 pub struct ObjectConstructor {
@@ -258,123 +259,4 @@ pub enum InternalFieldValue {
 	List(Vec<Expression>),
 	Expression(Expression),
 	OptionalExpression(Option<Expression>),
-}
-
-#[derive(Debug)]
-pub struct LiteralObject {
-	pub type_name: Name,
-	fields: HashMap<Name, Pointer>,
-	internal_fields: HashMap<String, InternalFieldValue>,
-	object_type: ObjectType,
-	scope_id: usize,
-}
-
-impl LiteralObject {
-	pub fn try_from_object_constructor(object: ObjectConstructor, context: &mut Context) -> anyhow::Result<Self> {
-		let mut fields = HashMap::new();
-		for field in object.fields {
-			let value = field.value.unwrap();
-			if let Expression::Pointer(address) = value {
-				fields.insert(field.name, address);
-				continue;
-			}
-
-			let name = value.kind_name();
-			let Expression::ObjectConstructor(field_object) = value else {
-				bail_err! {
-					base = "A value that's not fully known at compile-time was used as a type.",
-					while = format!("checking the field \"{}\" of a value at compile-time", field.name.unmangled_name().bold().cyan()),
-					context = context,
-					position = field.name.position().unwrap_or_else(Position::zero),
-					details = compiler_message!(
-						"
-                        Although Cabin allows arbitrary expressions to be used as types, the expression needs to be able to 
-						be fully evaluated at compile-time. The expression that this error refers to must be a literal object, 
-						but instead it's a {name}. {}
-						", 
-						if &name.to_lowercase() == "name" {
-							"
-							This means that you put a variable name where a type is required, but the value of that variable
-							is some kind of expression that can't be fully evaluated at compile-time.
-							"
-						} else {
-							""
-						}
-					)
-				};
-			};
-
-			let value_address = LiteralObject::try_from_object_constructor(field_object, context)?.store_in_memory(context);
-			fields.insert(field.name, value_address);
-		}
-
-		Ok(LiteralObject {
-			type_name: object.type_name,
-			fields,
-			internal_fields: object.internal_fields,
-			object_type: object.object_type,
-			scope_id: object.scope_id,
-		})
-	}
-
-	pub fn get_field(&self, name: impl Into<Name>) -> Option<Expression> {
-		self.fields.get(&name.into()).map(|address| Expression::Pointer(*address))
-	}
-
-	pub fn get_field_literal<'a>(&'a self, name: impl Into<Name>, context: &'a Context) -> Option<&'a LiteralObject> {
-		self.fields.get(&name.into()).and_then(|address| context.virtual_memory.get(*address))
-	}
-
-	pub fn expect_field_literal<'a>(&'a self, name: impl Into<Name>, context: &'a Context) -> &'a LiteralObject {
-		self.get_field_literal(name, context).unwrap()
-	}
-
-	pub fn get_internal_field<T>(&self, name: &str) -> anyhow::Result<&T>
-	where
-		InternalFieldValue: TryAsRef<T>,
-	{
-		self.internal_fields
-			.get(name)
-			.ok_or_else(|| anyhow::anyhow!("Attempted to get an internal field that doesn't exist"))?
-			.try_as::<T>()
-	}
-
-	pub fn pop_internal_field(&mut self, name: &str) -> Option<InternalFieldValue> {
-		self.internal_fields.remove(name)
-	}
-
-	pub fn object_type(&self) -> &ObjectType {
-		&self.object_type
-	}
-
-	/// Stores this value in virtual memory and returns the address of the location stored.
-	pub fn store_in_memory(self, context: &mut Context) -> Pointer {
-		context.virtual_memory.store(self)
-	}
-
-	pub fn declared_scope_id(&self) -> usize {
-		self.scope_id
-	}
-}
-
-impl TryAsRef<String> for LiteralObject {
-	fn try_as_ref(&self) -> Option<&String> {
-		self.get_internal_field("internal_value").ok()
-	}
-}
-
-impl TryAsRef<f64> for LiteralObject {
-	fn try_as_ref(&self) -> Option<&f64> {
-		self.get_internal_field("internal_value").ok()
-	}
-}
-impl TryAsRef<Vec<Expression>> for LiteralObject {
-	fn try_as_ref(&self) -> Option<&Vec<Expression>> {
-		self.get_internal_field("elements").ok()
-	}
-}
-
-pub trait LiteralConvertible: Sized {
-	fn to_literal(self, context: &mut Context) -> anyhow::Result<LiteralObject>;
-	fn from_literal(literal: &LiteralObject, context: &Context) -> anyhow::Result<Self>;
 }

@@ -125,7 +125,7 @@ macro_rules! list {
 			};
 
 			Expression::Pointer(
-				$crate::parser::expressions::object::LiteralObject::try_from_object_constructor(constructor, $context)
+				$crate::parser::expressions::literal::LiteralObject::try_from_object_constructor(constructor, $context)
 					.unwrap()
 					.store_in_memory($context),
 			)

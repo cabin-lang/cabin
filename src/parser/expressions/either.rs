@@ -7,8 +7,9 @@ use crate::{
 	literal, literal_list, parse_list,
 	parser::{
 		expressions::{
+			literal::{LiteralConvertible, LiteralObject},
 			name::Name,
-			object::{Field, LiteralConvertible, LiteralObject, ObjectConstructor, ObjectType},
+			object::{Field, ObjectConstructor, ObjectType},
 			Expression,
 		},
 		ListType, Parse, TokenQueue, TokenQueueFunctionality,

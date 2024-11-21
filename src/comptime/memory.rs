@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{api::context::Context, parser::expressions::object::LiteralObject};
+use crate::{api::context::Context, parser::expressions::literal::LiteralObject};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pointer(usize);

@@ -9,8 +9,9 @@ use crate::{
 	literal, literal_list, mapped_err, parse_list,
 	parser::{
 		expressions::{
+			literal::{LiteralConvertible, LiteralObject},
 			name::Name,
-			object::{Field, LiteralConvertible, LiteralObject, ObjectConstructor, ObjectType},
+			object::{Field, ObjectConstructor, ObjectType},
 			Expression, Parse,
 		},
 		statements::tag::TagList,
