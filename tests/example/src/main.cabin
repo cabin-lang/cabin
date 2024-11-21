@@ -1,2 +1,2 @@
-let sum = 9 + 10;
+let sum = 10 - 20;
 terminal.print(sum);
