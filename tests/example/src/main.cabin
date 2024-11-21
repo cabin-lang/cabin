@@ -1,2 +1,1 @@
-let sum = 10 - 20;
-terminal.print(sum);
+terminal.print("Hello world!");
