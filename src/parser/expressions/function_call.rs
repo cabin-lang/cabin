@@ -200,7 +200,7 @@ impl CompileTime for FunctionCall {
 }
 
 impl TranspileToC for FunctionCall {
-	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		Ok(format!(
 			"{}({})",
 			self.function.to_c(context)?,

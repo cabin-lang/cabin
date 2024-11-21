@@ -16,7 +16,6 @@ use crate::{
 			function_declaration::FunctionDeclaration,
 			group::GroupDeclaration,
 			if_expression::IfExpression,
-			list::List,
 			literal::LiteralConvertible,
 			name::Name,
 			object::{ObjectConstructor, ObjectType},
@@ -27,6 +26,8 @@ use crate::{
 	},
 	transpiler::TranspileToC,
 };
+
+use super::sugar::list::List;
 
 /// A binary operation. More specifically, this represents not one operation, but a group of operations that share the same precedence.
 /// For example, the `+` and `-` operators share the same precedence, so they are grouped together in the `ADDITIVE` constant.
@@ -224,7 +225,7 @@ impl CompileTime for FieldAccess {
 }
 
 impl TranspileToC for FieldAccess {
-	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		Ok(format!("{}->{}", self.left.to_c(context)?, self.right.mangled_name()))
 	}
 }

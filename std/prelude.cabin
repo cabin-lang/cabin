@@ -20,6 +20,8 @@ let Anything = group {};
 
 let Object = group {};
 let Group = group {};
+let Parameter = group {};
+let OneOf = group {};
 
 // Text ----------------------------------------------------------------------------------------------------------------------
 
@@ -95,25 +97,4 @@ let terminal = new Object {
 
 	#[builtin<"terminal.input">, system_side_effects] 
 	input = action: Text
-};
-
-let file_system = new Object {
-
-	#[builtin<"file_system.read_file">]
-	read_file = action(path: Text): Text,
-
-	#[builtin<"file_system.write_file">, system_side_effects]
-	write_file = action(path: Text, contents: Text),
-
-	#[builtin<"file_system.create">, system_side_effects]
-	create = action(path: Text): Text
-};
-
-let environment_variables = new Object {
-
-	#[builtin<"environment_variables.get">]
-	get = action(name: Text): Text,
-
-	#[builtin<"environment_variables.set">, system_side_effects]
-	set = action(name: Text, value: Text)
 };

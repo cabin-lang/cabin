@@ -4,6 +4,7 @@ use crate::cli::commands::{CabinCommand as _, SubCommand};
 
 pub mod api;
 pub mod cli;
+pub mod compiler;
 pub mod comptime;
 pub mod lexer;
 pub mod parser;

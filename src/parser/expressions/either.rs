@@ -54,11 +54,11 @@ impl LiteralConvertible for Either {
 			.iter()
 			.map(|field| {
 				literal! {
-					context,
+					context = context,
 					Field {
 						name = string(&field.unmangled_name(), context),
 						value = literal! {
-							context,
+							context = context,
 							Object {},
 							self.scope_id
 						}
@@ -74,6 +74,7 @@ impl LiteralConvertible for Either {
 				value: Some(literal_list!(context, self.scope_id, variants)),
 				field_type: None,
 			}],
+			name: None,
 			scope_id: self.scope_id,
 			internal_fields: HashMap::new(),
 			type_name: "Either".into(),

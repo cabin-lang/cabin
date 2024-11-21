@@ -15,6 +15,7 @@ use crate::{
 pub struct Name {
 	name: String,
 	position: Option<Position>,
+	should_mangle: bool,
 }
 
 impl PartialEq for Name {
@@ -30,12 +31,24 @@ impl Hash for Name {
 }
 
 impl Name {
+	pub fn non_mangled<T: AsRef<str>>(name: T) -> Name {
+		Name {
+			name: name.as_ref().to_owned(),
+			position: None,
+			should_mangle: false,
+		}
+	}
+
 	pub fn unmangled_name(&self) -> String {
 		self.name.clone()
 	}
 
 	pub fn mangled_name(&self) -> String {
-		format!("u_{}", self.name)
+		if self.should_mangle {
+			format!("u_{}", self.name)
+		} else {
+			self.unmangled_name()
+		}
 	}
 
 	pub fn position(&self) -> Option<Position> {
@@ -58,6 +71,7 @@ impl Parse for Name {
 		Ok(Name {
 			name: token.value,
 			position: Some(token.position),
+			should_mangle: true,
 		})
 	}
 }
@@ -81,7 +95,7 @@ impl CompileTime for Name {
 }
 
 impl TranspileToC for Name {
-	fn to_c(&self, _context: &Context) -> anyhow::Result<String> {
+	fn to_c(&self, _context: &mut Context) -> anyhow::Result<String> {
 		Ok(self.mangled_name())
 	}
 }
@@ -91,6 +105,7 @@ impl<T: AsRef<str>> From<T> for Name {
 		Name {
 			name: value.as_ref().to_owned(),
 			position: None,
+			should_mangle: true,
 		}
 	}
 }
@@ -104,5 +119,20 @@ impl AsRef<Name> for Name {
 impl ToCabin for Name {
 	fn to_cabin(&self) -> String {
 		self.unmangled_name()
+	}
+}
+
+pub trait NameOption {
+	fn to_c_or_pointer(&self, address: usize) -> String;
+	fn with_field(&self, field_name: &Name) -> Option<Name>;
+}
+
+impl NameOption for Option<Name> {
+	fn to_c_or_pointer(&self, address: usize) -> String {
+		self.clone().map(|name| name.mangled_name()).unwrap_or_else(|| format!("POINTER_{address}"))
+	}
+
+	fn with_field(&self, field_name: &Name) -> Option<Name> {
+		self.clone().map(|name| format!("{}_{}", name.unmangled_name(), field_name.unmangled_name()).into())
 	}
 }

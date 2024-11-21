@@ -12,6 +12,7 @@ use super::macros::string;
 
 pub struct BuiltinFunction {
 	evaluate_at_compile_time: fn(&mut Context, usize, Vec<Expression>) -> anyhow::Result<Expression>,
+	to_c: fn(&[String]) -> String,
 }
 
 static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
@@ -36,6 +37,9 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			}
 
 			Ok(Expression::Void(()))
+		},
+		to_c: |parameter_names| {
+			format!("printf(\"%s\", {});", parameter_names.first().unwrap())
 		}
 	},
 	"terminal.input" => BuiltinFunction {
@@ -44,6 +48,10 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			std::io::stdin().read_line(&mut line)?;
 			line = line.get(0..line.len() - 1).unwrap().to_owned();
 			Ok(Expression::Pointer(ObjectConstructor::from_string(&line, context)))
+		},
+		to_c: |parameter_names| {
+			let return_address = parameter_names.first().unwrap();
+			format!("char* buffer;\nsize_t length;\ngetline(&buffer, &size, stdin);\n*{return_address} = buffer;")
 		}
 	},
 	"Number.plus" => BuiltinFunction {
@@ -51,6 +59,9 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			let first = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.expect_as::<f64>();
 			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.expect_as::<f64>();
 			Ok(number(first + second, context))
+		},
+		to_c: |parameter_names| {
+			format!("printf(\"%s\", {});", parameter_names.first().unwrap())
 		}
 	},
 	"Number.minus" => BuiltinFunction {
@@ -58,6 +69,9 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			let first = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.expect_as::<f64>();
 			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.expect_as::<f64>();
 			Ok(number(first - second, context))
+		},
+		to_c: |parameter_names| {
+			format!("printf(\"%s\", {});", parameter_names.first().unwrap())
 		}
 	},
 	"Anything.to_string" => BuiltinFunction {
@@ -68,6 +82,11 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 				"Text" => this.expect_as::<String>().to_owned(),
 				_ => anyhow::bail!("Unsupported expression: {this:?}")
 			}, context))
+		},
+		to_c: |parameter_names| {
+			let this = parameter_names.first().unwrap();
+			let return_address = parameter_names.get(1).unwrap();
+			format!("*{return_address} = {this};")
 		}
 	},
 };
@@ -86,4 +105,16 @@ pub fn call_builtin_at_compile_time(name: &str, context: &mut Context, caller_sc
 		while = format!("calling the built-in function \"{}\" at compile-time", name.bold().cyan()).dimmed(),
 		context = context,
 	})
+}
+
+pub fn transpile_builtin_to_c(name: &str, parameters: &[String]) -> anyhow::Result<String> {
+	Ok((BUILTINS
+		.get(name)
+		.ok_or_else(|| {
+			anyhow::anyhow!(
+				"Attempted to call the built-in function \"{}\", but no built-in function with that name exists.",
+				name.bold().cyan()
+			)
+		})?
+		.to_c)(parameters))
 }

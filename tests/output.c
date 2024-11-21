@@ -1,496 +1,339 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-typedef struct POINTER_11 POINTER_11;
-typedef struct POINTER_26 POINTER_26;
-typedef struct POINTER_22 POINTER_22;
-typedef struct POINTER_28 POINTER_28;
-typedef struct POINTER_78 POINTER_78;
-typedef struct POINTER_36 POINTER_36;
-typedef struct POINTER_24 POINTER_24;
-typedef struct POINTER_32 POINTER_32;
-typedef struct POINTER_76 POINTER_76;
-typedef struct POINTER_34 POINTER_34;
-typedef struct POINTER_46 POINTER_46;
-void* POINTER_57 = (u_Parameter) {
-	.u_name = POINTER_56
-	.u_type = POINTER_24
+typedef struct u_This u_This;
+typedef struct u_List u_List;
+typedef struct u_Object u_Object;
+typedef struct u_Error u_Error;
+typedef struct u_Text u_Text;
+typedef struct u_Field u_Field;
+typedef struct u_Either u_Either;
+typedef struct u_Anything u_Anything;
+typedef struct u_Number u_Number;
+typedef struct u_OneOf u_OneOf;
+typedef struct u_Parameter u_Parameter;
+typedef struct u_BuiltinTag u_BuiltinTag;
+typedef struct u_Group u_Group;
+
+struct u_This {
 };
 
-void* POINTER_12 = "nothing";
-
-void* POINTER_85 = (u_Parameter) {
-	.u_name = POINTER_84
-	.u_type = POINTER_24
+struct u_List {
 };
 
-void* POINTER_101 = (u_List) {};
-
-void* POINTER_38 = (u_Object) {};
-
-void* POINTER_31 = (u_List) {};
-
-void* POINTER_41 = (u_Object) {};
-
-void* POINTER_64 = (u_Parameter) {
-	.u_type = POINTER_24
-	.u_name = POINTER_63
+struct u_Object {
 };
 
-struct POINTER_11 {
+struct u_Error {
 };
 
-void* POINTER_82 = (u_OneOf) {
-	.u_variants = POINTER_79
-	.u_compile_time_parameters = POINTER_81
+struct u_Text {
 };
 
-void* POINTER_2 = "terminal.print";
-
-void* POINTER_93 = (u_List) {};
-
-POINTER_24 POINTER_61(POINTER_24 u_this, POINTER_24 u_other) {
-
-	({
-
-	})
+u_Anything anonymous_function_1(u_Anything* u_this, u_Anything* u_other, void* return_address) {
+	printf("%s", u_this);
 }
 
-struct POINTER_26 {
+struct u_Field {
 };
 
-void* POINTER_7 = "environment_variables.get";
-
-void* POINTER_53 = (u_BuiltinTag) {
-	.u_internal_name = POINTER_0
+struct u_Either {
 };
 
-void* POINTER_66 = (u_Parameter) {
-	.u_name = POINTER_65
-	.u_type = POINTER_24
-};
-
-void* POINTER_40 = "false";
-
-POINTER_24 POINTER_70(POINTER_24 u_this, POINTER_24 u_other) {
-
-	({
-
-	})
+void anonymous_function_3(u_Anything* u_object, void* return_address) {
+	printf("%s", u_object);
 }
 
-void* POINTER_137 = "object";
+struct u_Anything {
+};
 
-void* POINTER_73 = "minus";
-
-void POINTER_89(POINTER_24 u_object) {
-
+void u_builtin(void* return_address) {
 	({
-
-	})
-}
-
-void* POINTER_1 = "Number.minus";
-
-void* POINTER_20 = (u_OneOf) {
-	.u_variants = POINTER_17
-	.u_compile_time_parameters = POINTER_19
-};
-
-void* POINTER_129 = (u_Parameter) {
-	.u_name = POINTER_128
-	.u_type = POINTER_22
-};
-
-void* POINTER_72 = (u_Field) {
-	.u_name = POINTER_71
-	.u_value = POINTER_61
-};
-
-void* POINTER_88 = (u_List) {};
-
-struct POINTER_22 {
-};
-
-void* POINTER_15 = (u_List) {};
-
-void* POINTER_141 = (u_List) {};
-
-void* POINTER_25 = (u_List) {};
-
-void* POINTER_58 = (u_List) {};
-
-void* POINTER_60 = (u_List) {};
-
-void* POINTER_67 = (u_List) {};
-
-void* POINTER_122 = (u_Parameter) {
-	.u_name = POINTER_121
-	.u_type = POINTER_22
-};
-
-void* POINTER_117 = (u_List) {};
-
-void* POINTER_43 = (u_List) {};
-
-void POINTER_52() {
-
-	({
-
 	goto label
-
 	})
 }
 
-void* POINTER_71 = "plus";
-
-struct POINTER_28 {
-};
-
-POINTER_22 POINTER_118(POINTER_22 u_path) {
-
-	({
-
-	})
+u_Text anonymous_function_4(void* return_address) {
+	char* buffer;
+	size_t length;
+	getline(&buffer, &size, stdin);
+	*return_address = buffer;
 }
 
-void* POINTER_55 = (u_Parameter) {
-	.u_type = POINTER_24
-	.u_name = POINTER_54
-};
-
-void* POINTER_87 = (u_List) {};
-
-void* POINTER_128 = "name";
-
-void* POINTER_80 = "Data";
-
-void* POINTER_119 = (u_Object) {
-	.u_read_file = POINTER_102
-	.u_write_file = POINTER_111
-	.u_create = POINTER_118
-};
-
-void* POINTER_21 = (u_List) {};
-
-void* POINTER_91 = (u_List) {};
-
-void* POINTER_48 = (u_Parameter) {
-	.u_name = POINTER_47
-	.u_type = POINTER_22
-};
-
-void* POINTER_37 = "true";
-
-struct POINTER_78 {
-};
-
-void* POINTER_97 = "path";
-
-struct POINTER_36 {
-};
-
-struct POINTER_24 {
-};
-
-POINTER_22 POINTER_102(POINTER_22 u_path) {
-
-	({
-
-	})
+void anonymous_function_3(u_Anything* u_object, void* return_address) {
+	printf("%s", u_object);
 }
 
-void* POINTER_115 = (u_List) {};
-
-void* POINTER_133 = (u_List) {};
-
-void* POINTER_105 = (u_Parameter) {
-	.u_type = POINTER_22
-	.u_name = POINTER_104
-};
-
-void* POINTER_16 = (u_Either) {
-	.u_variants = POINTER_15
-};
-
-void* POINTER_42 = (u_Field) {
-	.u_name = POINTER_40
-	.u_value = POINTER_41
-};
-
-void* POINTER_56 = "other";
-
-void POINTER_111(POINTER_22 u_path, POINTER_22 u_contents) {
-
-	({
-
-	})
-}
-
-void* POINTER_33 = (u_List) {};
-
-void* POINTER_6 = "file_system.create";
-
-void* POINTER_13 = (u_Object) {};
-
-void* POINTER_47 = "name";
-
-void* POINTER_63 = "this";
-
-void* POINTER_130 = "value";
-
-void* POINTER_9 = "Hello world!";
-
-void* POINTER_121 = "name";
-
-void* POINTER_136 = (u_Object) {
-	.u_get = POINTER_126
-	.u_set = POINTER_135
-};
-
-void* POINTER_19 = (u_List) {};
-
-void* POINTER_95 = (u_Object) {
-	.u_print = POINTER_89
-	.u_input = POINTER_94
-};
-
-void* POINTER_103 = (u_BuiltinTag) {
-	.u_internal_name = POINTER_5
-};
-
-void* POINTER_29 = (u_Object) {};
-
-void* POINTER_104 = "path";
-
-void* POINTER_90 = (u_BuiltinTag) {
-	.u_internal_name = POINTER_3
-};
-
-void* POINTER_112 = (u_BuiltinTag) {
-	.u_internal_name = POINTER_6
-};
-
-void* POINTER_84 = "object";
-
-void* POINTER_5 = "file_system.write_file";
-
-void* POINTER_143 = "Hello world!";
-
-void* POINTER_17 = (u_List) {};
-
-void* POINTER_49 = (u_List) {};
-
-void* POINTER_50 = (u_List) {};
-
-void* POINTER_131 = (u_Parameter) {
-	.u_type = POINTER_22
-	.u_name = POINTER_130
-};
-
-void* POINTER_108 = (u_List) {};
-
-void* POINTER_109 = (u_List) {};
-
-void* POINTER_124 = (u_List) {};
-
-void* POINTER_113 = "path";
-
-void* POINTER_30 = (u_Object) {};
-
-struct POINTER_32 {
-};
-
-void* POINTER_4 = "file_system.read_file";
-
-void* POINTER_125 = (u_List) {};
-
-void* POINTER_140 = (u_List) {};
-
-void* POINTER_0 = "Number.plus";
-
-void* POINTER_18 = "Data";
-
-void* POINTER_86 = (u_List) {};
-
-void* POINTER_51 = (u_List) {};
-
-void* POINTER_127 = (u_BuiltinTag) {
-	.u_internal_name = POINTER_8
-};
-
-void* POINTER_69 = (u_List) {};
-
-void* POINTER_139 = (u_List) {};
-
-void* POINTER_81 = (u_List) {};
-
-void* POINTER_35 = (u_List) {};
-
-struct POINTER_76 {
+struct u_Number {
 	void* u_plus;
 	void* u_minus;
 };
 
-void POINTER_135(POINTER_22 u_name, POINTER_22 u_value) {
+struct u_OneOf {
+};
 
-	({
+struct u_Parameter {
+};
 
-	})
+u_Anything anonymous_function_2(u_Anything* u_this, u_Anything* u_other, void* return_address) {
+	printf("%s", u_this);
 }
 
-void* POINTER_99 = (u_List) {};
-
-void* POINTER_110 = (u_List) {};
-
-void* POINTER_74 = (u_Field) {
-	.u_name = POINTER_73
-	.u_value = POINTER_70
+struct u_BuiltinTag {
 };
 
-void POINTER_142(POINTER_24 u_object) {
+struct u_Group {
+};
 
-	({
+int main(int argc, char** argv) {
+	void* POINTER_98 = &(u_List) {};
+	
+	void* POINTER_87 = &(u_List) {};
+	
+	void* POINTER_91 = &(u_List) {};
+	
+	void* POINTER_68 = &(u_List) {};
+	
+	void* anonymous_string_literal_2 = &(u_Text) { .internal_value = "terminal.print" };
+	
+	void* POINTER_22 = &(u_List) {};
+	
+	void* POINTER_67 = &(u_List) {};
+	
+	void* POINTER_15 = &(u_OneOf) {
+		.u_variants = POINTER_12,
+		.u_compile_time_parameters = POINTER_14,
+	};
+	
+	void* anonymous_string_literal_14 = &(u_Text) { .internal_value = "plus" };
+	
+	void* anonymous_string_literal_12 = &(u_Text) { .internal_value = "this" };
+	
+	void* POINTER_44 = &(u_List) {};
+	
+	void* POINTER_99 = &(u_List) {};
+	
+	void* POINTER_18 = &(u_List) {};
+	
+	void* POINTER_38 = &(u_Field) {
+		.u_name = anonymous_string_literal_7,
+		.u_value = POINTER_37,
+	};
+	
+	void* POINTER_42 = &(u_List) {};
+	
+	void* POINTER_49 = &(u_List) {};
+	
+	void* anonymous_string_literal_6 = &(u_Text) { .internal_value = "Data" };
+	
+	void* u_anonymous_function_1_this = &(u_Parameter) {
+		.u_type = u_Anything,
+		.u_name = anonymous_string_literal_10,
+	};
+	
+	void* POINTER_30 = &(u_List) {};
+	
+	void* u_anonymous_function_2_other = &(u_Parameter) {
+		.u_name = anonymous_string_literal_13,
+		.u_type = u_Anything,
+	};
+	
+	void* POINTER_97 = &(u_List) {};
+	
+	void* POINTER_9 = &(u_Field) {
+		.u_name = anonymous_string_literal_5,
+		.u_value = POINTER_8,
+	};
+	
+	void* POINTER_37 = &(u_Object) {};
+	
+	void* POINTER_76 = &(u_List) {};
+	
+	void* anonymous_string_literal_19 = &(u_Text) { .internal_value = "Hello world!" };
+	
+	void* POINTER_85 = &(u_List) {};
+	
+	void* u_Number_minus = &(u_Field) {
+		.u_name = anonymous_string_literal_15,
+		.u_value = anonymous_function_2,
+	};
+	
+	void* POINTER_40 = &(u_Object) {};
+	
+	void* anonymous_string_literal_13 = &(u_Text) { .internal_value = "other" };
+	
+	void* anonymous_string_literal_4 = &(u_Text) { .internal_value = "Hello world!" };
+	
+	void* POINTER_5 = &(u_List) {};
+	
+	void* POINTER_43 = &(u_Either) {
+		.u_variants = POINTER_42,
+	};
+	
+	void* u_anonymous_function_1_other = &(u_Parameter) {
+		.u_type = u_Anything,
+		.u_name = anonymous_string_literal_11,
+	};
+	
+	void* u_builtin_name = &(u_Parameter) {
+		.u_name = anonymous_string_literal_9,
+		.u_type = u_Text,
+	};
+	
+	void* POINTER_24 = &(u_List) {};
+	
+	void* anonymous_string_literal_7 = &(u_Text) { .internal_value = "true" };
+	
+	void* anonymous_string_literal_9 = &(u_Text) { .internal_value = "name" };
+	
+	void* anonymous_string_literal_15 = &(u_Text) { .internal_value = "minus" };
+	
+	void* anonymous_object_2 = &(u_BuiltinTag) {
+		.u_internal_name = anonymous_string_literal_2,
+	};
+	
+	void* POINTER_80 = &(u_List) {};
+	
+	void* u_system_side_effects = &(u_Object) {};
+	
+	void* anonymous_string_literal_17 = &(u_Text) { .internal_value = "object" };
+	
+	void* POINTER_92 = &(u_List) {};
+	
+	void* POINTER_90 = &(u_List) {};
+	
+	void* anonymous_string_literal_1 = &(u_Text) { .internal_value = "Number.minus" };
+	
+	void* u_anonymous_function_2_this = &(u_Parameter) {
+		.u_type = u_Anything,
+		.u_name = anonymous_string_literal_12,
+	};
+	
+	void* u_cabin_only = &(u_Object) {};
+	
+	void* POINTER_32 = &(u_List) {};
+	
+	void* POINTER_12 = &(u_List) {};
+	
+	void* anonymous_object_2 = &(u_BuiltinTag) {
+		.u_internal_name = anonymous_string_literal_0,
+	};
+	
+	void* anonymous_string_literal_5 = &(u_Text) { .internal_value = "nothing" };
+	
+	void* POINTER_26 = &(u_List) {};
+	
+	void* POINTER_57 = &(u_List) {};
+	
+	void* POINTER_59 = &(u_List) {};
+	
+	void* u_Number_plus = &(u_Field) {
+		.u_value = anonymous_function_1,
+		.u_name = anonymous_string_literal_14,
+	};
+	
+	void* POINTER_20 = &(u_List) {};
+	
+	void* anonymous_string_literal_16 = &(u_Text) { .internal_value = "Data" };
+	
+	void* anonymous_string_literal_18 = &(u_Text) { .internal_value = "object" };
+	
+	void* POINTER_14 = &(u_List) {};
+	
+	void* u_anonymous_function_3_object = &(u_Parameter) {
+		.u_name = anonymous_string_literal_18,
+		.u_type = u_Anything,
+	};
+	
+	void* POINTER_8 = &(u_Object) {};
+	
+	void* u_anonymous_function_3_object = &(u_Parameter) {
+		.u_type = u_Anything,
+		.u_name = anonymous_string_literal_17,
+	};
+	
+	void* POINTER_81 = &(u_OneOf) {
+		.u_compile_time_parameters = POINTER_80,
+		.u_variants = POINTER_78,
+	};
+	
+	void* anonymous_object_2 = &(u_BuiltinTag) {
+		.u_internal_name = anonymous_string_literal_3,
+	};
+	
+	void* u_terminal = &(u_Object) {
+		.u_input = anonymous_function_4,
+		.u_print = anonymous_function_3,
+	};
+	
+	void* anonymous_string_literal_11 = &(u_Text) { .internal_value = "other" };
+	
+	void* POINTER_58 = &(u_List) {};
+	
+	void* POINTER_48 = &(u_List) {};
+	
+	void* anonymous_string_literal_8 = &(u_Text) { .internal_value = "false" };
+	
+	void* POINTER_66 = &(u_List) {};
+	
+	void* anonymous_string_literal_0 = &(u_Text) { .internal_value = "Number.plus" };
+	
+	void* POINTER_78 = &(u_List) {};
+	
+	void* POINTER_34 = &(u_List) {};
+	
+	void* POINTER_86 = &(u_List) {};
+	
+	void* anonymous_string_literal_10 = &(u_Text) { .internal_value = "this" };
+	
+	void* anonymous_string_literal_3 = &(u_Text) { .internal_value = "terminal.input" };
+	
+	void* POINTER_11 = &(u_Either) {
+		.u_variants = POINTER_10,
+	};
+	
+	void* POINTER_50 = &(u_List) {};
+	
+	void* POINTER_16 = &(u_List) {};
+	
+	void* anonymous_object_2 = &(u_BuiltinTag) {
+		.u_internal_name = anonymous_string_literal_1,
+	};
+	
+	void* POINTER_74 = &(u_List) {};
+	
+	void* POINTER_10 = &(u_List) {};
+	
+	void* POINTER_41 = &(u_Field) {
+		.u_value = POINTER_40,
+		.u_name = anonymous_string_literal_8,
+	};
+	
+	void* u_This = &u_This;
+	void* u_Nothing = &POINTER_11;
+	void* u_nothing = &POINTER_8;
+	void* u_Optional = &POINTER_15;
+	void* u_Text = &u_Text;
+	void* u_Anything = &u_Anything;
+	void* u_Object = &u_Object;
+	void* u_Group = &u_Group;
+	void* u_Parameter = &u_Parameter;
+	void* u_OneOf = &u_OneOf;
+	void* u_cabin_only = &u_cabin_only;
+	void* u_system_side_effects = &u_system_side_effects;
+	void* u_Field = &u_Field;
+	void* u_List = &u_List;
+	void* u_Either = &u_Either;
+	void* u_Boolean = &POINTER_43;
+	void* u_true = &POINTER_37;
+	void* u_false = &POINTER_40;
+	void* u_BuiltinTag = &u_BuiltinTag;
+	void* u_builtin = &u_builtin;
+	void* u_Number = &u_Number;
+	void* u_Error = &u_Error;
+	void* u_Result = &POINTER_81;
+	void* u_terminal = &u_terminal;
+	void;
 
-	})
+	return 0;
 }
-
-void* POINTER_134 = (u_List) {};
-
-void* POINTER_8 = "environment_variables.set";
-
-void* POINTER_68 = (u_List) {};
-
-void* POINTER_83 = (u_BuiltinTag) {
-	.u_internal_name = POINTER_2
-};
-
-void* POINTER_79 = (u_List) {};
-
-void* POINTER_44 = (u_Either) {
-	.u_variants = POINTER_43
-};
-
-POINTER_22 POINTER_126(POINTER_22 u_name) {
-
-	({
-
-	})
-}
-
-void* POINTER_106 = "contents";
-
-void* POINTER_39 = (u_Field) {
-	.u_name = POINTER_37
-	.u_value = POINTER_38
-};
-
-void* POINTER_138 = (u_Parameter) {
-	.u_name = POINTER_137
-	.u_type = POINTER_24
-};
-
-void* POINTER_107 = (u_Parameter) {
-	.u_name = POINTER_106
-	.u_type = POINTER_22
-};
-
-struct POINTER_34 {
-};
-
-void* POINTER_62 = (u_BuiltinTag) {
-	.u_internal_name = POINTER_1
-};
-
-void* POINTER_14 = (u_Field) {
-	.u_name = POINTER_12
-	.u_value = POINTER_13
-};
-
-void* POINTER_123 = (u_List) {};
-
-POINTER_22 POINTER_94() {
-
-	({
-
-	})
-}
-
-void* POINTER_100 = (u_List) {};
-
-void* POINTER_114 = (u_Parameter) {
-	.u_name = POINTER_113
-	.u_type = POINTER_22
-};
-
-void* POINTER_116 = (u_List) {};
-
-void* POINTER_27 = (u_List) {};
-
-void* POINTER_120 = (u_BuiltinTag) {
-	.u_internal_name = POINTER_7
-};
-
-void* POINTER_3 = "terminal.input";
-
-void* POINTER_10 = (u_List) {};
-
-void* POINTER_75 = (u_List) {};
-
-void* POINTER_98 = (u_Parameter) {
-	.u_type = POINTER_22
-	.u_name = POINTER_97
-};
-
-void* POINTER_96 = (u_BuiltinTag) {
-	.u_internal_name = POINTER_4
-};
-
-void* POINTER_23 = (u_List) {};
-
-void* POINTER_77 = (u_List) {};
-
-void* POINTER_92 = (u_List) {};
-
-void* POINTER_59 = (u_List) {};
-
-struct POINTER_46 {
-};
-
-void* POINTER_65 = "other";
-
-void* POINTER_45 = (u_List) {};
-
-void* POINTER_54 = "this";
-
-void* POINTER_132 = (u_List) {};
-
-
-
-// User program starts here -----------------------------------------------------------
-
-int u_This = POINTER_11;
-int u_Nothing = POINTER_16;
-int u_nothing = POINTER_13;
-int u_Optional = POINTER_20;
-int u_Text = POINTER_22;
-int u_Anything = POINTER_24;
-int u_Object = POINTER_26;
-int u_Group = POINTER_28;
-int u_cabin_only = POINTER_29;
-int u_system_side_effects = POINTER_30;
-int u_Field = POINTER_32;
-int u_List = POINTER_34;
-int u_Either = POINTER_36;
-int u_Boolean = POINTER_44;
-int u_true = POINTER_38;
-int u_false = POINTER_41;
-int u_BuiltinTag = POINTER_46;
-int u_builtin = POINTER_52;
-int u_Number = POINTER_76;
-int u_Error = POINTER_78;
-int u_Result = POINTER_82;
-int u_terminal = POINTER_95;
-int u_file_system = POINTER_119;
-int u_environment_variables = POINTER_136;
-void;

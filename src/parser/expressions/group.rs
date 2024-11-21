@@ -10,7 +10,7 @@ use crate::{
 	parser::{
 		expressions::{
 			literal::{LiteralConvertible, LiteralObject},
-			name::Name,
+			name::{Name, NameOption},
 			object::{Field, ObjectConstructor, ObjectType},
 			Expression, Parse,
 		},
@@ -24,6 +24,7 @@ use crate::{
 pub struct GroupDeclaration {
 	pub fields: Vec<Field>,
 	pub scope_id: usize,
+	pub name: Option<Name>,
 }
 
 impl Parse for GroupDeclaration {
@@ -80,7 +81,11 @@ impl Parse for GroupDeclaration {
 		});
 		context.scope_data.exit_scope()?;
 
-		Ok(Expression::Group(GroupDeclaration { fields, scope_id: inner_scope_id }))
+		Ok(Expression::Group(GroupDeclaration {
+			fields,
+			scope_id: inner_scope_id,
+			name: None,
+		}))
 	}
 }
 
@@ -135,13 +140,19 @@ impl CompileTime for GroupDeclaration {
 		// Store in memory and return a pointer
 		context.scope_data.set_current_scope(previous);
 		Ok(Expression::Pointer(
-			GroupDeclaration { fields, scope_id: self.scope_id }.to_literal(context)?.store_in_memory(context),
+			GroupDeclaration {
+				fields,
+				scope_id: self.scope_id,
+				name: self.name,
+			}
+			.to_literal(context)?
+			.store_in_memory(context),
 		))
 	}
 }
 
 impl TranspileToC for GroupDeclaration {
-	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		let mut builder = "{".to_owned();
 		for field in &self.fields {
 			builder += &format!("\n\tvoid* {};", field.name.to_c(context)?);
@@ -159,7 +170,8 @@ impl LiteralConvertible for GroupDeclaration {
 			.filter_map(|field| {
 				field.value.map(|value| {
 					literal! {
-						context,
+						name = self.name.with_field(&field.name),
+						context = context,
 						Field {
 							name = string(&field.name.unmangled_name(), context),
 							value = value
@@ -176,6 +188,7 @@ impl LiteralConvertible for GroupDeclaration {
 				value: Some(literal_list!(context, self.scope_id, fields)),
 				field_type: None,
 			}],
+			name: self.name,
 			scope_id: self.scope_id,
 			internal_fields: HashMap::new(),
 			type_name: "Group".into(),
@@ -206,6 +219,7 @@ impl LiteralConvertible for GroupDeclaration {
 		Ok(GroupDeclaration {
 			fields,
 			scope_id: literal.declared_scope_id(),
+			name: literal.name.clone(),
 		})
 	}
 }

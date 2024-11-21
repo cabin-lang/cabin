@@ -1,17 +1,20 @@
-use std::collections::HashMap;
+use std::{
+	collections::HashMap,
+	sync::atomic::{AtomicUsize, Ordering},
+};
 
 use colored::Colorize as _;
 
 use crate::{
-	api::{context::Context, macros::string, traits::TryAs as _},
-	comptime::CompileTime,
+	api::{builtin::transpile_builtin_to_c, context::Context, macros::string, traits::TryAs as _},
+	comptime::{memory::Pointer, CompileTime},
 	lexer::TokenType,
 	literal, literal_list, mapped_err, parse_list,
 	parser::{
 		expressions::{
 			block::Block,
 			literal::{LiteralConvertible, LiteralObject},
-			name::Name,
+			name::{Name, NameOption},
 			object::{Field, InternalFieldValue, ObjectConstructor, ObjectType},
 			Expression, Parse,
 		},
@@ -30,7 +33,10 @@ pub struct FunctionDeclaration {
 	pub scope_id: usize,
 	pub tags: TagList,
 	pub this_object: Option<Box<Expression>>,
+	pub name: Option<Name>,
 }
+
+static ANONYMOUS_FUNCTION_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 impl Parse for FunctionDeclaration {
 	type Output = FunctionDeclaration;
@@ -97,6 +103,10 @@ impl Parse for FunctionDeclaration {
 			body,
 			scope_id: context.scope_data.unique_id(),
 			this_object: None,
+			name: Some(Name::non_mangled(format!(
+				"anonymous_function_{}",
+				ANONYMOUS_FUNCTION_COUNT.fetch_add(1, Ordering::Relaxed)
+			))),
 		})
 	}
 }
@@ -161,6 +171,7 @@ impl CompileTime for FunctionDeclaration {
 			scope_id: self.scope_id,
 			tags: self.tags.evaluate_at_compile_time(context)?,
 			this_object,
+			name: self.name,
 		};
 
 		// Return as a pointer
@@ -177,23 +188,31 @@ impl CompileTime for FunctionDeclaration {
 }
 
 impl TranspileToC for FunctionDeclaration {
-	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
+		let mut body = None;
+
+		// Get builtin and side effect tags
+		for tag in &self.tags.values {
+			if let Ok(object) = tag.try_as_literal(context) {
+				if object.type_name == Name::from("BuiltinTag") {
+					let builtin_name = object.get_field_literal("internal_name", context).unwrap().expect_as::<String>().to_owned();
+					let mut parameters = self.parameters.iter().map(|(parameter_name, _)| parameter_name.to_c(context).unwrap()).collect::<Vec<_>>();
+					parameters.push("return_address".to_string());
+					body = Some(transpile_builtin_to_c(&builtin_name, &parameters)?);
+				}
+			}
+		}
+
 		Ok(format!(
 			"({}) {{\n{}\n}}",
 			self.parameters
 				.iter()
-				.map(|(name, parameter_type)| Ok(format!("{} {}", parameter_type.to_c(context)?, name.to_c(context)?)))
-				.collect::<anyhow::Result<Vec<_>>>()?
-				.join(", "),
-			self.body
-				.as_ref()
-				.unwrap_or(&Box::new(Expression::Block(Block {
-					statements: Vec::new(),
-					inner_scope_id: 0
-				})))
-				.to_c(context)?
+				.map(|(name, parameter_type)| Ok(format!("{}* {}, ", parameter_type.to_c(context)?, name.to_c(context)?)))
+				.collect::<anyhow::Result<String>>()?
+				+ "void* return_address",
+			if let Some(body) = body { body } else { self.body.as_ref().unwrap().to_c(context)? }
 				.lines()
-				.map(|line| format!("\n\t{line}"))
+				.map(|line| format!("\t{line}"))
 				.collect::<Vec<_>>()
 				.join("\n")
 		))
@@ -208,7 +227,8 @@ impl LiteralConvertible for FunctionDeclaration {
 			.into_iter()
 			.map(|(parameter_name, parameter_type)| {
 				literal! {
-					context,
+					name = self.name.with_field(&parameter_name),
+					context = context,
 					Parameter {
 						name = string(&parameter_name.unmangled_name(), context),
 						type = parameter_type
@@ -224,7 +244,8 @@ impl LiteralConvertible for FunctionDeclaration {
 			.into_iter()
 			.map(|(parameter_name, parameter_type)| {
 				literal! {
-					context,
+					name = self.name.with_field(&parameter_name),
+					context = context,
 					Parameter {
 						name = string(&parameter_name.unmangled_name(), context),
 						type = parameter_type
@@ -236,6 +257,7 @@ impl LiteralConvertible for FunctionDeclaration {
 
 		// Create the object
 		let constructor = ObjectConstructor {
+			name: self.name,
 			fields: vec![
 				Field {
 					name: "return_type".into(),
@@ -353,6 +375,7 @@ impl LiteralConvertible for FunctionDeclaration {
 			scope_id: literal.declared_scope_id(),
 			tags: tags.into(),
 			this_object,
+			name: literal.name.clone(),
 		})
 	}
 }

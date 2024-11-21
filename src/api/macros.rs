@@ -160,6 +160,7 @@ macro_rules! list {
 				internal_fields: std::collections::HashMap::from([("elements".to_owned(), $crate::parser::expressions::object::InternalFieldValue::List($elements))]),
 				scope_id: $scope_id,
 				object_type: $crate::parser::expressions::object::ObjectType::Normal,
+				name: None,
 			};
 
 			Expression::Pointer(
@@ -176,6 +177,7 @@ macro_rules! list {
 				internal_fields: std::collections::HashMap::from([("elements".to_owned(), $crate::parser::expressions::object::InternalFieldValue::List($elements))]),
 				scope_id: $scope_id,
 				object_type: $crate::parser::expressions::object::ObjectType::Normal,
+				name: None,
 			};
 			Expression::ObjectConstructor(constructor)
 		}
@@ -193,6 +195,7 @@ macro_rules! literal_list {
 			internal_fields: HashMap::from([("elements".to_owned(), $crate::parser::expressions::object::InternalFieldValue::List($elements))]),
 			scope_id: $scope_id,
 			object_type: ObjectType::Normal,
+			name: None,
 		};
 
 		let literal = LiteralObject::try_from_object_constructor(constructor, $context).unwrap();
@@ -218,7 +221,8 @@ macro_rules! new_object {
 			),*],
 			internal_fields: std::collections::HashMap::new(),
 			scope_id: $scope_id,
-			object_type: $crate::parser::expressions::object::ObjectType::Normal
+			object_type: $crate::parser::expressions::object::ObjectType::Normal,
+			name: None,
 		}
 	};
 }
@@ -226,10 +230,12 @@ macro_rules! new_object {
 #[macro_export]
 macro_rules! literal {
 	(
-		$context: expr, $($tokens: tt)*
+		$(name = $name: expr,)? context = $context: expr, $($tokens: tt)*
 	) => {{
 		let constructor = $crate::new_object!($($tokens)*);
-		let literal = LiteralObject::try_from_object_constructor(constructor, $context).unwrap();
+		#[allow(unused_mut)]
+		let mut literal = LiteralObject::try_from_object_constructor(constructor, $context).unwrap();
+		$(literal.name = $name;)?
 		let address = $context.virtual_memory.store(literal);
 		Expression::Pointer(address)
 	}};

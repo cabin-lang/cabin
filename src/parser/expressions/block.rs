@@ -73,7 +73,7 @@ impl CompileTime for Block {
 }
 
 impl TranspileToC for Block {
-	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		let mut builder = String::new();
 		builder += "({";
 		for statement in &self.statements {

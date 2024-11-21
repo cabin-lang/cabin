@@ -58,7 +58,7 @@ impl CompileTime for ForEachLoop {
 }
 
 impl TranspileToC for ForEachLoop {
-	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		Ok(format!(
 			"({{\n\tlet elements = {};\n\tfor (int index = 0; index < elements->length(); index++) {{\n\t{}\n\t}}\n}})",
 			self.iterable.to_c(context)?,

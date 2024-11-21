@@ -49,6 +49,11 @@ impl Parse for Declaration {
 			}
 		}
 
+		// Set name
+		if let Some(expression_name) = value.name_mut() {
+			*expression_name = Some(name.clone());
+		}
+
 		// Add the name declaration to the scope
 		context.scope_data.declare_new_variable(name.clone(), value).map_err(mapped_err! {
 			while = format!("attempting to add the variable \"{}\" to its scope", name.unmangled_name().bold().cyan()),
@@ -92,11 +97,11 @@ impl CompileTime for Declaration {
 }
 
 impl TranspileToC for Declaration {
-	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		Ok(format!(
-			"int {} = {};",
+			"void* {} = &{};",
 			self.name.to_c(context)?,
-			self.value(context).to_c(context).map_err(mapped_err! {
+			self.value(context).clone().to_c(context).map_err(mapped_err! {
 				while = format!("transpiling the value of the initial declaration for the variable \"{}\" to C", self.name.unmangled_name()),
 				context = context,
 			})?

@@ -12,8 +12,13 @@ impl Pointer {
 }
 
 impl TranspileToC for Pointer {
-	fn to_c(&self, _context: &Context) -> anyhow::Result<String> {
-		Ok(format!("POINTER_{}", self.0))
+	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
+		Ok(self
+			.virtual_deref(context)
+			.name
+			.clone()
+			.map(|name| name.to_c(context).unwrap())
+			.unwrap_or(format!("POINTER_{}", self.0)))
 	}
 }
 
@@ -48,7 +53,12 @@ impl VirtualMemory {
 		next_unused_virtual_address
 	}
 
-	pub fn entries(&self) -> Vec<(&usize, &LiteralObject)> {
-		self.memory.iter().collect()
+	pub fn entries(&self) -> Vec<(usize, LiteralObject)> {
+		self.memory
+			.iter()
+			.collect::<Vec<_>>()
+			.into_iter()
+			.map(|(address, object)| (*address, object.clone()))
+			.collect()
 	}
 }

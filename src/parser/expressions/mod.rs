@@ -34,12 +34,12 @@ pub mod function_call;
 pub mod function_declaration;
 pub mod group;
 pub mod if_expression;
-pub mod list;
 pub mod literal;
 pub mod name;
 pub mod object;
 pub mod oneof;
 pub mod operators;
+pub mod sugar;
 
 #[derive(Debug, Clone, try_as::macros::From, try_as::macros::TryInto, try_as::macros::TryAsRef)]
 pub enum Expression {
@@ -210,27 +210,39 @@ impl Expression {
 		literal_address == true_address
 	}
 
-	// Returns a mutable reference to the tags on this expression value. If the type of this
-	// expression doesn't support tags, `None` is returned.
-	//
-	// For example, literal numbers can't have tags, whereas function declarations can.
-	//
-	// This is used, for example in `Declaration::parse` to set the tags on a value after parsing
+	/// Returns a mutable reference to the tags on this expression value. If the type of this
+	/// expression doesn't support tags, `None` is returned.
+	///
+	/// For example, literal numbers can't have tags, whereas function declarations can.
+	///
+	/// This is used, for example in `Declaration::parse` to set the tags on a value after parsing
 	// them before the declaration name.
-	//
-	// # Returns
-	// A mutable reference to the tags on this expression, or `None` if this expression doesn't
-	// support tags.
+	///
+	/// This function should only be called during parse-time.
+	///
+	/// # Returns
+	/// A mutable reference to the tags on this expression, or `None` if this expression doesn't
+	/// support tags.
 	pub fn tags_mut(&mut self) -> Option<&mut TagList> {
 		match self {
 			Self::FunctionDeclaration(function) => Some(&mut function.tags),
 			_ => None,
 		}
 	}
+
+	/// This function should only be called during parse-time.
+	pub fn name_mut(&mut self) -> Option<&mut Option<Name>> {
+		match self {
+			Self::FunctionDeclaration(function) => Some(&mut function.name),
+			Self::Group(group) => Some(&mut group.name),
+			Self::ObjectConstructor(object) => Some(&mut object.name),
+			_ => None,
+		}
+	}
 }
 
 impl TranspileToC for Expression {
-	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		Ok(match self {
 			Self::If(if_expression) => if_expression.to_c(context)?,
 			Self::Block(block) => block.to_c(context)?,

@@ -87,7 +87,7 @@ impl CompileTime for IfExpression {
 }
 
 impl TranspileToC for IfExpression {
-	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		let mut builder = format!("({}) ? (", self.condition.to_c(context)?);
 		for line in self.body.to_c(context)?.lines() {
 			builder += &format!("\n\t{line}");

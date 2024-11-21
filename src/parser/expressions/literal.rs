@@ -5,7 +5,7 @@ use try_as::traits::TryAsRef;
 use crate::{
 	api::{context::Context, traits::TryAs as _},
 	bail_err, compiler_message,
-	comptime::memory::Pointer,
+	comptime::{memory::Pointer, CompileTime},
 	lexer::Position,
 	parser::expressions::{
 		group::GroupDeclaration,
@@ -16,13 +16,14 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LiteralObject {
 	pub type_name: Name,
 	fields: HashMap<Name, Pointer>,
 	internal_fields: HashMap<String, InternalFieldValue>,
 	object_type: ObjectType,
 	scope_id: usize,
+	pub name: Option<Name>,
 }
 
 impl LiteralObject {
@@ -70,6 +71,7 @@ impl LiteralObject {
 			internal_fields: object.internal_fields,
 			object_type: object.object_type,
 			scope_id: object.scope_id,
+			name: object.name,
 		})
 	}
 
@@ -206,15 +208,22 @@ pub trait LiteralConvertible: Sized {
 }
 
 impl TranspileToC for LiteralObject {
-	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		Ok(match self.type_name.unmangled_name().as_str() {
 			"Number" => self.expect_as::<f64>().to_string(),
-			"Text" => format!("\"{}\"", self.expect_as::<String>().to_owned()),
+			"Text" => {
+				let text_pointer_name = Name::from("Text").evaluate_at_compile_time(context)?.expect_clone_pointer(context);
+				format!(
+					"({}) {{ .internal_value = \"{}\" }}",
+					text_pointer_name.to_c(context)?,
+					self.expect_as::<String>().to_owned()
+				)
+			},
 			"Group" => GroupDeclaration::from_literal(self, context)?.to_c(context)?,
 			_ => {
-				let mut builder = format!("({}) {{", self.type_name.to_c(context)?);
+				let mut builder = format!("({}) {{", self.type_name.clone().evaluate_at_compile_time(context)?.to_c(context)?);
 				for (field_name, field_pointer) in &self.fields {
-					builder += &format!("\n\t.{} = {}", field_name.to_c(context)?, field_pointer.to_c(context)?);
+					builder += &format!("\n\t.{} = {},", field_name.to_c(context)?, field_pointer.to_c(context)?);
 				}
 				if !self.fields.is_empty() {
 					builder += "\n";

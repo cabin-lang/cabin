@@ -64,7 +64,7 @@ impl CompileTime for Statement {
 }
 
 impl TranspileToC for Statement {
-	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		Ok(match self {
 			Statement::Declaration(declaration) => declaration.to_c(context)?,
 			Statement::Tail(tail_statement) => tail_statement.to_c(context)?,

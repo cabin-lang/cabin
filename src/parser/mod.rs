@@ -59,7 +59,7 @@ impl CompileTime for Program {
 }
 
 impl TranspileToC for Program {
-	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		Ok(self
 			.statements
 			.iter()

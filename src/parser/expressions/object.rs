@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+	collections::HashMap,
+	sync::atomic::{AtomicUsize, Ordering},
+};
 
 use colored::Colorize as _;
 use try_as::traits::{self as try_as_traits};
@@ -25,6 +28,7 @@ pub struct ObjectConstructor {
 	pub internal_fields: HashMap<String, InternalFieldValue>,
 	pub scope_id: usize,
 	pub object_type: ObjectType,
+	pub name: Option<Name>,
 }
 
 #[derive(Debug, Clone)]
@@ -33,6 +37,8 @@ pub struct Field {
 	pub field_type: Option<Expression>,
 	pub value: Option<Expression>,
 }
+
+static STRING_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 impl ObjectConstructor {
 	pub fn get_field(&self, name: &Name) -> Option<&Expression> {
@@ -47,6 +53,7 @@ impl ObjectConstructor {
 				internal_fields: HashMap::from([("internal_value".to_owned(), InternalFieldValue::String(string.to_owned()))]),
 				scope_id: 0,
 				object_type: ObjectType::Normal,
+				name: Some(Name::non_mangled(format!("anonymous_string_literal_{}", STRING_COUNT.fetch_add(1, Ordering::Relaxed)))),
 			},
 			context,
 		)
@@ -61,6 +68,7 @@ impl ObjectConstructor {
 			internal_fields: HashMap::from([("internal_value".to_owned(), InternalFieldValue::Number(number))]),
 			scope_id: 0,
 			object_type: ObjectType::Normal,
+			name: None,
 		}
 	}
 
@@ -91,6 +99,8 @@ impl ObjectConstructor {
 		self.internal_fields.get(name)
 	}
 }
+
+static ANONYMOUS_OBJECT_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 impl Parse for ObjectConstructor {
 	type Output = ObjectConstructor;
@@ -143,6 +153,7 @@ impl Parse for ObjectConstructor {
 			scope_id: context.scope_data.unique_id(),
 			internal_fields: HashMap::new(),
 			object_type: ObjectType::Normal,
+			name: Some(Name::non_mangled(format!("anonymous_object_{}", ANONYMOUS_OBJECT_COUNT.fetch_add(1, Ordering::Relaxed)))),
 		})
 	}
 }
@@ -244,6 +255,7 @@ impl CompileTime for ObjectConstructor {
 			scope_id: self.scope_id,
 			internal_fields: self.internal_fields,
 			object_type: self.object_type,
+			name: self.name,
 		};
 
 		if constructor.is_literal() {
@@ -276,7 +288,7 @@ pub enum InternalFieldValue {
 }
 
 impl TranspileToC for ObjectConstructor {
-	fn to_c(&self, context: &Context) -> anyhow::Result<String> {
+	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		Ok("(Object) {}".to_owned())
 	}
 }

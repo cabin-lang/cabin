@@ -1,6 +1,15 @@
 use std::path::PathBuf;
 
-use crate::{api::context::Context, cli::commands::CabinCommand, comptime::CompileTime as _, lexer::tokenize, parser::parse, step, transpiler::transpile};
+use crate::{
+	api::context::Context,
+	cli::commands::CabinCommand,
+	compiler::{compile, run_native_executable},
+	comptime::CompileTime as _,
+	lexer::tokenize,
+	parser::parse,
+	step,
+	transpiler::transpile,
+};
 
 use super::start;
 
@@ -19,12 +28,12 @@ impl CabinCommand for RunCommand {
 		let mut tokens = step!(tokenize(&source_code), &context, "Tokenizing", "source code");
 		let ast = step!(parse(&mut tokens, &mut context), &context, "Parsing", "token stream");
 		let comptime_ast = step!(ast.evaluate_at_compile_time(&mut context), &context, "Evaluating", "abstract syntax tree");
-		let c_code = step!(transpile(&comptime_ast, &context), &context, "Transpiling", "evaluated AST to C");
+		let c_code = step!(transpile(&comptime_ast, &mut context), &context, "Transpiling", "evaluated AST to C");
 
-		std::fs::write("../output.c", c_code)?;
+		std::fs::write("../output.c", &c_code)?;
 
-		let binary_location = step!(anyhow::Ok(()), &context, "Compiling", "generated C code");
-		let binary_location = step!(anyhow::Ok(()), &context, "Running", "compiled executable");
+		let binary_location = step!(compile(&c_code), &context, "Compiling", "generated C code");
+		step!(run_native_executable(binary_location), &context, "Running", "compiled executable");
 
 		Ok(())
 	}

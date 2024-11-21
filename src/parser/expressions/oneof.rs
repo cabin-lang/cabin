@@ -109,6 +109,7 @@ impl LiteralConvertible for OneOf {
 					field_type: None,
 				},
 			],
+			name: None,
 			scope_id: self.scope_id,
 			internal_fields: HashMap::new(),
 			type_name: "OneOf".into(),
