@@ -7,13 +7,13 @@ use crate::{
 	cli::{Project, RunningContext},
 	comptime::memory::VirtualMemory,
 	lexer::Position,
-	parser::expressions::Expression,
+	parser::expressions::{name::Name, Expression},
 };
 
 pub struct Context {
 	// Publicly mutable
 	pub scope_data: ScopeData,
-	pub scope_label: Option<String>,
+	pub scope_label: Option<Name>,
 	pub virtual_memory: VirtualMemory,
 	pub config: CompilerConfiguration,
 	pub running_context: RunningContext,

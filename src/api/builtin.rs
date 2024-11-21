@@ -51,13 +51,13 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 		},
 		to_c: |parameter_names| {
 			let return_address = parameter_names.first().unwrap();
-			format!("char* buffer;\nsize_t size;\ngetline(&buffer, &size, stdin);\n*{return_address} = buffer;")
+			format!("char* buffer;\nsize_t size;\ngetline(&buffer, &size, stdin);\n*{return_address} = (u_Text) {{ .internal_value = buffer }};")
 		}
 	},
 	"Number.plus" => BuiltinFunction {
 		evaluate_at_compile_time: |context: &mut Context, _caller_scope_id: usize, arguments: Vec<Expression>| {
-			let first = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.expect_as::<f64>();
-			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.expect_as::<f64>();
+			let first = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.expect_as::<f64>()?;
+			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.expect_as::<f64>()?;
 			Ok(number(first + second, context))
 		},
 		to_c: |parameter_names| {
@@ -66,8 +66,8 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 	},
 	"Number.minus" => BuiltinFunction {
 		evaluate_at_compile_time: |context: &mut Context, _caller_scope_id: usize, arguments: Vec<Expression>| {
-			let first = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.expect_as::<f64>();
-			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.expect_as::<f64>();
+			let first = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.expect_as::<f64>()?;
+			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.expect_as::<f64>()?;
 			Ok(number(first - second, context))
 		},
 		to_c: |parameter_names| {
@@ -78,8 +78,8 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 		evaluate_at_compile_time: |context: &mut Context, _caller_scope_id: usize, arguments: Vec<Expression>| {
 			let this = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Anything.to_string"))?.try_as_literal(context)?;
 			Ok(string(&match this.type_name.unmangled_name().as_str() {
-				"Number" => this.expect_as::<f64>().to_string(),
-				"Text" => this.expect_as::<String>().to_owned(),
+				"Number" => this.expect_as::<f64>()?.to_string(),
+				"Text" => this.expect_as::<String>()?.to_owned(),
 				_ => anyhow::bail!("Unsupported expression: {this:?}")
 			}, context))
 		},

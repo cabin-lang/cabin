@@ -37,6 +37,19 @@ pub struct Field {
 	pub value: Option<Expression>,
 }
 
+trait Fields {
+	fn add_field(&mut self, field: Field);
+}
+
+impl Fields for Vec<Field> {
+	fn add_field(&mut self, field: Field) {
+		while let Some(index) = self.iter().enumerate().find_map(|(index, other)| (other.name == field.name).then_some(index)) {
+			self.remove(index);
+		}
+		self.push(field);
+	}
+}
+
 static STRING_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 impl ObjectConstructor {
@@ -138,7 +151,7 @@ impl Parse for ObjectConstructor {
 			}
 
 			// Add field
-			fields.push(Field {
+			fields.add_field(Field {
 				name,
 				value: Some(value),
 				field_type: None,
@@ -160,11 +173,11 @@ impl Parse for ObjectConstructor {
 impl ToCabin for ObjectConstructor {
 	fn to_cabin(&self) -> String {
 		if self.type_name == "number".into() {
-			return self.get_internal_field("internal_value").unwrap().expect_as::<f64>().to_string();
+			return self.get_internal_field("internal_value").unwrap().expect_as::<f64>().unwrap().to_string();
 		}
 
 		if self.type_name == "Text".into() {
-			return self.get_internal_field("internal_value").unwrap().expect_as::<String>().to_owned();
+			return self.get_internal_field("internal_value").unwrap().expect_as::<String>().unwrap().to_owned();
 		}
 
 		todo!()
@@ -211,7 +224,7 @@ impl CompileTime for ObjectConstructor {
 		// Anything fields
 		for field in anything.fields {
 			if let Some(value) = field.value {
-				fields.push(Field {
+				fields.add_field(Field {
 					name: field.name,
 					value: Some(value),
 					field_type: None,
@@ -222,7 +235,7 @@ impl CompileTime for ObjectConstructor {
 		// Default fields
 		for field in object_type.fields {
 			if let Some(value) = field.value {
-				fields.push(Field {
+				fields.add_field(Field {
 					name: field.name,
 					value: Some(value),
 					field_type: None,
@@ -240,7 +253,7 @@ impl CompileTime for ObjectConstructor {
 				context = context,
 			})?;
 
-			fields.push(Field {
+			fields.add_field(Field {
 				name: field.name,
 				value: Some(field_value),
 				field_type: None,
@@ -288,6 +301,24 @@ pub enum InternalFieldValue {
 
 impl TranspileToC for ObjectConstructor {
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
-		Ok("(Object) {}".to_owned())
+		// Type name
+		let name = if self.type_name == "Object".into() {
+			format!("type_{}", self.name.as_ref().unwrap().to_c(context)?)
+		} else {
+			self.type_name.clone().evaluate_at_compile_time(context)?.to_c(context)?
+		};
+
+		let mut builder = format!("({}) {{", name);
+
+		// Fields
+		for field in &self.fields {
+			builder += &format!("\n\t.{} = {},", field.name.to_c(context)?, field.value.as_ref().unwrap().to_c(context)?);
+		}
+
+		if self.fields.is_empty() {
+			builder += "\n\t.empty = '0'";
+		}
+		builder += "\n}";
+		Ok(builder)
 	}
 }

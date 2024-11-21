@@ -37,6 +37,7 @@ impl Parse for Declaration {
 		// Name
 		tokens.pop(TokenType::KeywordLet)?;
 		let name = Name::parse(tokens, context)?;
+		context.scope_label = Some(name.clone());
 
 		// Value
 		tokens.pop(TokenType::Equal)?;
@@ -99,7 +100,7 @@ impl CompileTime for Declaration {
 impl TranspileToC for Declaration {
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		Ok(format!(
-			"void* {} = &{};",
+			"void* {} = {};",
 			self.name.to_c(context)?,
 			self.value(context).clone().to_c(context).map_err(mapped_err! {
 				while = format!("transpiling the value of the initial declaration for the variable \"{}\" to C", self.name.unmangled_name()),

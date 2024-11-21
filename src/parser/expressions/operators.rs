@@ -187,12 +187,12 @@ impl CompileTime for FieldAccess {
 				// Either fields
 				ObjectType::Either => {
 					let field = literal.get_field("variants").unwrap();
-					let elements = field.expect_literal(context)?.expect_as::<Vec<Expression>>();
+					let elements = field.expect_literal(context)?.expect_as::<Vec<Expression>>()?;
 					elements
 						.iter()
 						.map(|element| {
 							let variant_object = element.expect_literal(context)?;
-							let name = variant_object.get_field_literal("name", context).unwrap().expect_as::<String>();
+							let name = variant_object.get_field_literal("name", context).unwrap().expect_as::<String>()?;
 							Ok(if name == &self.right.unmangled_name() {
 								Some(variant_object.get_field("value").unwrap())
 							} else {

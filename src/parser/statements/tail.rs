@@ -1,5 +1,5 @@
 use crate::{
-	api::context::Context,
+	api::{context::Context, scope::ScopeType},
 	comptime::CompileTime,
 	lexer::TokenType,
 	parser::{
@@ -10,10 +10,18 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub enum Label {
-	It,
-	Return,
-	Identifier(Name),
+pub struct Label {
+	name: Name,
+	kind: ScopeType,
+}
+
+impl Label {
+	pub fn new(name: Name, context: &Context) -> anyhow::Result<Self> {
+		Ok(Self {
+			kind: context.scope_data.scope_type_of(&name)?.to_owned(),
+			name,
+		})
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -26,17 +34,7 @@ impl Parse for TailStatement {
 	type Output = TailStatement;
 
 	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
-		let label = match tokens.peek_type()? {
-			TokenType::Identifier => match tokens.peek()? {
-				"it" => {
-					tokens.pop(TokenType::Identifier)?;
-					Label::It
-				},
-				_ => Label::Identifier(Name::parse(tokens, context)?),
-			},
-			TokenType::KeywordReturn => Label::Return,
-			_ => anyhow::bail!("Expected label but found {}", tokens.peek_type().unwrap_or_else(|_| unreachable!())),
-		};
+		let label = Label::new(Name::parse(tokens, context)?, context)?;
 
 		tokens.pop(TokenType::KeywordIs)?;
 		let value = Expression::parse(tokens, context)?;
@@ -56,6 +54,9 @@ impl CompileTime for TailStatement {
 
 impl TranspileToC for TailStatement {
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
-		Ok("goto label;".to_owned())
+		Ok(match self.label.kind {
+			ScopeType::Function => format!("*return_address = {};\nreturn;", self.value.to_c(context)?),
+			_ => format!("*tail_value = {};\ngoto label_{};", self.value.to_c(context)?, self.label.name.to_c(context)?),
+		})
 	}
 }

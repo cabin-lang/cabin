@@ -1,15 +1,15 @@
-use std::collections::HashSet;
-
 use crate::{
 	api::context::Context,
 	comptime::memory::Pointer,
 	mapped_err,
 	parser::{
 		expressions::{
+			either::Either,
 			function_declaration::FunctionDeclaration,
+			group::GroupDeclaration,
 			literal::{LiteralConvertible, LiteralObject},
 			name::NameOption,
-			Expression, Type as _,
+			Type as _,
 		},
 		Program,
 	},
@@ -61,13 +61,50 @@ pub fn transpile_virtual_memory(context: &mut Context) -> anyhow::Result<String>
 	let mut builder = String::new();
 	for (address, value) in context.virtual_memory.entries() {
 		builder += &match value.type_name.unmangled_name().as_str() {
-			"Group" => format!("struct {} {};\n\n", value.name.to_c_or_pointer(address), value.to_c(context)?),
+			"Group" => {
+				let group = GroupDeclaration::from_literal(&value, context)?;
+				format!(
+					"struct {} {};\n\n{}\n\n",
+					value.name.to_c_or_pointer(address),
+					group.to_c(context)?,
+					group.to_c_metadata(context, address)?
+				)
+			},
+			"Either" => {
+				let either = Either::from_literal(&value, context)?;
+				format!(
+					"enum {} {};\n\n{}\n\n",
+					value.name.to_c_or_pointer(address),
+					either.to_c(context)?,
+					either.to_c_metadata(context, address)?
+				)
+			},
 			"Function" => {
 				let function = FunctionDeclaration::from_literal(&value, context).map_err(mapped_err! {
 					while = "deserializing a function declaration literal into a function declaration",
 					context = context,
 				})?;
-				format!("void {}{}\n\n", function.name.to_c_or_pointer(address), function.to_c(context)?)
+				let value = function.to_c(context)?;
+				if value.is_empty() {
+					String::new()
+				} else {
+					format!("void {}{}\n\n", function.name.to_c_or_pointer(address), value)
+				}
+			},
+			"Object" => {
+				let mut builder = format!("struct type_{} {{", value.name.to_c_or_pointer(address));
+				for (field_name, field_value) in value.fields() {
+					builder += &format!(
+						"\n\t{} {};",
+						field_value.virtual_deref(context).clone().get_type(context)?.to_c(context)?,
+						field_name.to_c(context)?
+					);
+				}
+				if value.fields().next().is_none() {
+					builder += "\n\tchar empty;"
+				}
+				builder += "\n};\n\n";
+				builder
 			},
 			_ => String::new(),
 		}
@@ -91,10 +128,6 @@ pub fn transpile_main(context: &mut Context) -> anyhow::Result<String> {
 }
 
 pub fn transpile_literal(context: &mut Context, value: &LiteralObject, address: usize, done: &mut Vec<usize>, current_cycle: &mut Vec<usize>) -> anyhow::Result<String> {
-	if matches!(value.type_name.unmangled_name().as_str(), "Group" | "Function" | "OneOf" | "Either") {
-		return Ok(String::new());
-	}
-
 	// Avoid repetition
 	if done.contains(&address) {
 		return Ok(String::new());
@@ -122,12 +155,22 @@ pub fn transpile_literal(context: &mut Context, value: &LiteralObject, address: 
 	}
 
 	// Transpile self
-	let c = format!(
-		"{}* {} = {};\n\n",
-		value.get_type(context)?.to_c(context)?,
-		value.name.to_c_or_pointer(address),
-		value.to_c(context)?
-	);
+	let c = if value.type_name == "Group".into() {
+		let group = GroupDeclaration::from_literal(value, context)?;
+		format!(
+			"{}* metadata_instance_{} = {};\n\n",
+			value.get_type(context)?.to_c(context)?,
+			value.name.to_c_or_pointer(address),
+			group.to_c_metadata_instance(context, address)?
+		)
+	} else {
+		format!(
+			"{}* {} = {};\n\n",
+			value.get_type(context)?.to_c(context)?,
+			value.name.to_c_or_pointer(address),
+			value.to_c(context)?
+		)
+	};
 	for line in c.lines() {
 		builder += &format!("\n\t{line}");
 	}
@@ -141,7 +184,17 @@ pub fn transpile_forward_declarations(context: &Context) -> anyhow::Result<Strin
 	let mut builder = String::new();
 	for (address, value) in context.virtual_memory.entries() {
 		builder += &match value.type_name.unmangled_name().as_str() {
-			"Group" => format!("typedef struct {name} {name};\n", name = value.name.to_c_or_pointer(address)),
+			"Group" => format!(
+				"typedef struct {name} {name};\ntypedef struct metadata_{name} metadata_{name};\n",
+				name = value.name.to_c_or_pointer(address)
+			),
+			"Either" => format!(
+				"typedef enum {name} {name};\ntypedef enum metadata_{name} metadata_{name};\n",
+				name = value.name.to_c_or_pointer(address)
+			),
+			"Object" => {
+				format!("typedef struct type_{name} type_{name};\n", name = value.name.to_c_or_pointer(address))
+			},
 			_ => String::new(),
 		}
 	}

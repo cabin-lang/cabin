@@ -9,7 +9,7 @@ use crate::{
 	lexer::Position,
 	parser::expressions::{
 		group::GroupDeclaration,
-		name::Name,
+		name::{Name, NameOption},
 		object::{InternalFieldValue, ObjectConstructor, ObjectType},
 		Expression,
 	},
@@ -95,7 +95,7 @@ impl LiteralObject {
 	where
 		LiteralObject: TryAsRef<T>,
 	{
-		self.get_field_literal(name, context).unwrap().expect_as()
+		self.get_field_literal(name, context).unwrap().expect_as().unwrap()
 	}
 
 	pub fn get_internal_field<T>(&self, name: &str) -> anyhow::Result<&T>
@@ -134,6 +134,10 @@ impl LiteralObject {
 
 	pub fn dependencies(&self) -> Vec<&Pointer> {
 		self.fields.values().collect()
+	}
+
+	pub fn fields(&self) -> impl Iterator<Item = (&Name, &Pointer)> {
+		self.fields.iter()
 	}
 }
 
@@ -227,20 +231,31 @@ pub trait LiteralConvertible: Sized {
 impl TranspileToC for LiteralObject {
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		Ok(match self.type_name.unmangled_name().as_str() {
-			"Number" => self.expect_as::<f64>().to_string(),
+			"Number" => self.expect_as::<f64>()?.to_string(),
 			"Text" => {
 				let text_pointer_name = Name::from("Text").evaluate_at_compile_time(context)?.expect_clone_pointer(context);
 				format!(
 					"&({}) {{ .internal_value = \"{}\" }}",
 					text_pointer_name.to_c(context)?,
-					self.expect_as::<String>().to_owned()
+					self.expect_as::<String>()?.to_owned()
 				)
 			},
 			"Group" => GroupDeclaration::from_literal(self, context)?.to_c(context)?,
 			_ => {
-				let mut builder = format!("&({}) {{", self.type_name.clone().evaluate_at_compile_time(context)?.to_c(context)?);
+				let name = if self.type_name == "Object".into() {
+					format!("type_{}", self.name.to_c_or_pointer(self.address.unwrap()))
+				} else {
+					self.type_name.clone().evaluate_at_compile_time(context)?.to_c(context)?
+				};
+				let mut builder = format!("&({}) {{", name);
 				for (field_name, field_pointer) in &self.fields {
-					builder += &format!("\n\t.{} = {},", field_name.to_c(context)?, field_pointer.to_c(context)?);
+					let value = field_pointer.virtual_deref(context);
+					let value_c = if matches!(value.type_name.unmangled_name().as_str(), "Group" | "Either") {
+						format!("metadata_instance_{}", value.name.to_c_or_pointer(field_pointer.value()))
+					} else {
+						field_pointer.to_c(context)?
+					};
+					builder += &format!("\n\t.{} = {},", field_name.to_c(context)?, value_c);
 				}
 				if self.fields.is_empty() {
 					builder += "\n\t.empty = '0'";

@@ -4,22 +4,24 @@ use crate::{
 	api::{context::Context, macros::string, traits::TryAs as _},
 	comptime::CompileTime,
 	lexer::TokenType,
-	literal, literal_list, parse_list,
+	literal, literal_list, mapped_err, parse_list,
 	parser::{
 		expressions::{
 			literal::{LiteralConvertible, LiteralObject},
-			name::Name,
+			name::{Name, NameOption as _},
 			object::{Field, ObjectConstructor, ObjectType},
 			Expression,
 		},
 		ListType, Parse, TokenQueue, TokenQueueFunctionality,
 	},
+	transpiler::TranspileToC,
 };
 
 #[derive(Debug, Clone)]
 pub struct Either {
 	variants: Vec<Name>,
 	scope_id: usize,
+	pub name: Option<Name>,
 }
 
 impl Parse for Either {
@@ -35,6 +37,7 @@ impl Parse for Either {
 		Ok(Either {
 			variants,
 			scope_id: context.scope_data.unique_id(),
+			name: None,
 		})
 	}
 }
@@ -54,6 +57,7 @@ impl LiteralConvertible for Either {
 			.iter()
 			.map(|field| {
 				literal! {
+					name = self.name.with_field(field),
 					context = context,
 					Field {
 						name = string(&field.unmangled_name(), context),
@@ -91,11 +95,22 @@ impl LiteralConvertible for Either {
 
 		let variants = literal
 			.expect_field_literal("variants", context)
-			.expect_as::<Vec<Expression>>()
+			.try_as::<Vec<Expression>>()
+			.map_err(mapped_err! {
+				while = "interpreting the variants field of an either as a list",
+				context = context,
+			})?
 			.iter()
 			.map(|field_object| {
 				anyhow::Ok(Name::from(
-					field_object.expect_literal(context)?.expect_field_literal("value", context).expect_as::<String>(),
+					field_object
+						.expect_literal(context)?
+						.expect_field_literal("name", context)
+						.try_as::<String>()
+						.map_err(mapped_err! {
+							while = "interpreting the field \"name\" of an either variant object as a string",
+							context = context,
+						})?,
 				))
 			})
 			.collect::<anyhow::Result<Vec<_>>>()?;
@@ -103,6 +118,26 @@ impl LiteralConvertible for Either {
 		Ok(Either {
 			variants,
 			scope_id: literal.declared_scope_id(),
+			name: literal.name.clone(),
 		})
+	}
+}
+
+impl TranspileToC for Either {
+	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
+		let mut builder = "{\n".to_owned();
+		for variant in &self.variants {
+			builder += &format!("\n\t{},", variant.to_c(context)?);
+		}
+
+		builder += "\n}";
+
+		Ok(builder)
+	}
+}
+
+impl Either {
+	pub fn to_c_metadata(&self, context: &Context, address: usize) -> anyhow::Result<String> {
+		Ok(String::new())
 	}
 }

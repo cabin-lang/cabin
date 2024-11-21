@@ -63,7 +63,14 @@ impl TranspileToC for Program {
 		Ok(self
 			.statements
 			.iter()
-			.map(|statement| statement.to_c(context))
+			.filter_map(|statement| {
+				if let Statement::Declaration(declaration) = statement {
+					if declaration.value(context).is_pointer() {
+						return None;
+					}
+				}
+				Some(statement.to_c(context))
+			})
 			.collect::<anyhow::Result<Vec<_>>>()
 			.map_err(mapped_err! {
 				while = "transpiling the program's global statements to C",

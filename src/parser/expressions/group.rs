@@ -3,7 +3,12 @@ use std::collections::{HashMap, VecDeque};
 use colored::Colorize as _;
 
 use crate::{
-	api::{context::Context, macros::string, scope::ScopeType, traits::TryAs as _},
+	api::{
+		context::{self, Context},
+		macros::string,
+		scope::ScopeType,
+		traits::TryAs as _,
+	},
 	comptime::CompileTime,
 	lexer::{Token, TokenType},
 	literal, literal_list, mapped_err, parse_list,
@@ -206,14 +211,14 @@ impl LiteralConvertible for GroupDeclaration {
 		let fields = literal
 			.get_field_literal("fields", context)
 			.unwrap()
-			.expect_as::<Vec<Expression>>()
+			.expect_as::<Vec<Expression>>()?
 			.iter()
 			.map(|field_object| {
 				let name = field_object
 					.expect_literal(context)?
 					.get_field_literal("name", context)
 					.unwrap()
-					.expect_as::<String>()
+					.expect_as::<String>()?
 					.into();
 				let value = field_object.expect_literal(context)?.get_field("value");
 				Ok(Field { name, value, field_type: None })
@@ -225,5 +230,17 @@ impl LiteralConvertible for GroupDeclaration {
 			scope_id: literal.declared_scope_id(),
 			name: literal.name.clone(),
 		})
+	}
+}
+
+impl GroupDeclaration {
+	pub fn to_c_metadata(&self, context: &Context, address: usize) -> anyhow::Result<String> {
+		let builder = format!("struct metadata_{} {{ char empty; }};", self.name.to_c_or_pointer(address));
+		Ok(builder)
+	}
+
+	pub fn to_c_metadata_instance(&self, context: &Context, address: usize) -> anyhow::Result<String> {
+		let builder = format!("&(metadata_{}) {{ .empty = '0' }}", self.name.to_c_or_pointer(address));
+		Ok(builder)
 	}
 }

@@ -6,11 +6,11 @@ use crate::parser::expressions::{name::Name, Expression};
 
 /// A type of scope in the language. Currently, this is only used for debugging purposes, as scopes are able to be printed as a string representation,
 /// and doing so will show their type. However, in the future, this may be used for other purposes, so it's good to leave here regardless
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ScopeType {
 	/// The function declaration scope type. This is used for the body of a function declaration. Note that this is not in any way related to a scope that
 	/// a function is declared in, but represents the scope *inside* of a function's body.
-	FunctionExpression,
+	Function,
 
 	Either,
 
@@ -65,7 +65,7 @@ pub struct Scope {
 	/// other information. However, this may in the future be used for more.
 	scope_type: ScopeType,
 
-	label: Option<String>,
+	label: Option<Name>,
 }
 
 impl Scope {
@@ -167,6 +167,7 @@ impl Scope {
 		let mut string = vec!["{".to_owned()];
 		string.push(format!("\ttype: [{:?}]", self.scope_type));
 		string.push(format!("\tindex: [{}]", self.index));
+		string.push(format!("\tlabel: [{:?}]", self.label));
 		string.push(format!(
 			"\tvariables: [{}],",
 			self.variables.keys().map(|name| name.unmangled_name()).collect::<Vec<_>>().join(", ")
@@ -257,6 +258,10 @@ impl ScopeData {
 		self.scopes.get(id)
 	}
 
+	pub fn get_scope_mut_from_id(&mut self, id: usize) -> Option<&mut Scope> {
+		self.scopes.get_mut(id)
+	}
+
 	/// Returns the declaration information about a variable that exists in the current scope. The variable may be declared in this scope, or any one of its parents;
 	/// As long as it exists in the current scope, the information will be retrieved. If no variable exists in the current scope with the given name,
 	/// `None` is returned.
@@ -309,14 +314,14 @@ impl ScopeData {
 		self.current_scope = self.scopes.len() - 1;
 	}
 
-	pub fn enter_new_scope(&mut self, scope_type: ScopeType, label: &str) {
+	pub fn enter_new_scope(&mut self, scope_type: ScopeType, label: Name) {
 		self.scopes.push(Scope {
 			variables: HashMap::new(),
 			index: self.scopes.len(),
 			parent: Some(self.current_scope),
 			children: Vec::new(),
 			scope_type,
-			label: Some(label.to_owned()),
+			label: Some(label),
 		});
 
 		let new_id = self.scopes.len() - 1;
@@ -335,8 +340,8 @@ impl ScopeData {
 		Ok(())
 	}
 
-	pub fn exit_to_label(&mut self, label: &str) -> anyhow::Result<()> {
-		while self.current().label != Some(label.to_owned()) {
+	pub fn exit_to_label(&mut self, label: Name) -> anyhow::Result<()> {
+		while self.current().label != Some(label.clone()) {
 			self.exit_scope()?;
 		}
 		Ok(())
@@ -557,6 +562,19 @@ impl ScopeData {
 	#[must_use]
 	pub const fn global_id(&self) -> usize {
 		0
+	}
+
+	pub fn scope_type_of(&self, label: &Name) -> anyhow::Result<&ScopeType> {
+		let mut current = self.current();
+		while current.label != Some(label.to_owned()) {
+			if let Some(parent) = current.parent {
+				current = self.scopes.get(parent).unwrap();
+			} else {
+				anyhow::bail!("No scope found with the label \"{}\"", label.unmangled_name().bold().cyan())
+			}
+		}
+
+		Ok(&current.scope_type)
 	}
 }
 

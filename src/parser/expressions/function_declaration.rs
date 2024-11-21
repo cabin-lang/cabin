@@ -6,7 +6,7 @@ use std::{
 use colored::Colorize as _;
 
 use crate::{
-	api::{builtin::transpile_builtin_to_c, context::Context, macros::string, traits::TryAs as _},
+	api::{builtin::transpile_builtin_to_c, context::Context, macros::string, scope::ScopeType, traits::TryAs as _},
 	comptime::{memory::Pointer, CompileTime},
 	lexer::TokenType,
 	literal, literal_list, mapped_err, parse_list,
@@ -83,7 +83,7 @@ impl Parse for FunctionDeclaration {
 
 		// Body
 		let body = if tokens.next_is(TokenType::LeftBrace) {
-			let block = Block::parse(tokens, context)?;
+			let block = Block::parse_type(tokens, context, ScopeType::Function)?;
 			for (parameter_name, _parameter_type) in &compile_time_parameters {
 				context
 					.scope_data
@@ -189,13 +189,17 @@ impl CompileTime for FunctionDeclaration {
 
 impl TranspileToC for FunctionDeclaration {
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
+		if !self.compile_time_parameters.is_empty() {
+			return Ok(String::new());
+		}
+
 		let mut body = None;
 
 		// Get builtin and side effect tags
 		for tag in &self.tags.values {
 			if let Ok(object) = tag.try_as_literal(context) {
 				if object.type_name == Name::from("BuiltinTag") {
-					let builtin_name = object.get_field_literal("internal_name", context).unwrap().expect_as::<String>().to_owned();
+					let builtin_name = object.get_field_literal("internal_name", context).unwrap().expect_as::<String>()?.to_owned();
 					let mut parameters = self.parameters.iter().map(|(parameter_name, _)| parameter_name.to_c(context).unwrap()).collect::<Vec<_>>();
 					parameters.push("return_address".to_string());
 					body = Some(transpile_builtin_to_c(&builtin_name, &parameters)?);
@@ -203,13 +207,20 @@ impl TranspileToC for FunctionDeclaration {
 			}
 		}
 
+		let return_type_c = if let Some(return_type) = self.return_type.as_ref() {
+			format!("{}{}* return_address", if self.parameters.is_empty() { "" } else { ", " }, return_type.to_c(context)?)
+		} else {
+			String::new()
+		};
+
 		Ok(format!(
-			"({}) {{\n{}\n}}",
+			"({}{}) {{\n{}\n}}",
 			self.parameters
 				.iter()
-				.map(|(name, parameter_type)| Ok(format!("{}* {}, ", parameter_type.to_c(context)?, name.to_c(context)?)))
-				.collect::<anyhow::Result<String>>()?
-				+ "void* return_address",
+				.map(|(name, parameter_type)| Ok(format!("{}* {}", parameter_type.to_c(context)?, name.to_c(context)?)))
+				.collect::<anyhow::Result<Vec<_>>>()?
+				.join(", "),
+			return_type_c,
 			if let Some(body) = body {
 				body
 			} else {
@@ -315,7 +326,7 @@ impl LiteralConvertible for FunctionDeclaration {
 
 		// Tags
 		let tags_field = literal.get_field("tags").unwrap();
-		let tag_refs = tags_field.expect_literal(context)?.expect_as::<Vec<Expression>>();
+		let tag_refs = tags_field.expect_literal(context)?.expect_as::<Vec<Expression>>()?;
 		let tags = tag_refs
 			.iter()
 			.map(|element| {
@@ -336,7 +347,7 @@ impl LiteralConvertible for FunctionDeclaration {
 			.iter()
 			.map(|element| {
 				let parameter_object = element.expect_literal(context)?;
-				let name = parameter_object.get_field_literal("name", context).unwrap().expect_as::<String>();
+				let name = parameter_object.get_field_literal("name", context).unwrap().expect_as::<String>()?;
 				anyhow::Ok((Name::from(name), parameter_object.get_field("type").unwrap()))
 			})
 			.collect::<anyhow::Result<Vec<_>>>()?;
@@ -347,10 +358,10 @@ impl LiteralConvertible for FunctionDeclaration {
 			.iter()
 			.map(|element| {
 				let parameter_object = element.try_as_literal(context).unwrap();
-				let name = parameter_object.get_field_literal("name", context).unwrap().expect_as::<String>();
-				(Name::from(name), parameter_object.get_field("type").unwrap())
+				let name = parameter_object.get_field_literal("name", context).unwrap().expect_as::<String>()?;
+				Ok((Name::from(name), parameter_object.get_field("type").unwrap()))
 			})
-			.collect();
+			.collect::<anyhow::Result<Vec<_>>>()?;
 
 		// Return type
 		let return_type_optional = literal.get_field("return_type").unwrap().try_into().unwrap();

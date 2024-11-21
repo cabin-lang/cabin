@@ -205,7 +205,7 @@ impl Expression {
 			return false;
 		};
 
-		let true_address = context.scope_data.expect_global_variable("true").expect_as();
+		let true_address = context.scope_data.expect_global_variable("true").expect_as().unwrap();
 
 		literal_address == true_address
 	}
@@ -235,6 +235,7 @@ impl Expression {
 		match self {
 			Self::FunctionDeclaration(function) => Some(&mut function.name),
 			Self::Group(group) => Some(&mut group.name),
+			Self::Either(either) => Some(&mut either.name),
 			Self::ObjectConstructor(object) => Some(&mut object.name),
 			_ => None,
 		}

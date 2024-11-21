@@ -127,7 +127,7 @@ impl LiteralConvertible for OneOf {
 		let compile_time_parameters = literal
 			.expect_field_literal_as::<Vec<Expression>>("compile_time_parameters", context)
 			.iter()
-			.map(|name_string| anyhow::Ok(Name::from(name_string.expect_literal(context)?.expect_as::<String>())))
+			.map(|name_string| anyhow::Ok(Name::from(name_string.expect_literal(context)?.expect_as::<String>()?)))
 			.collect::<anyhow::Result<Vec<_>>>()?;
 
 		let choices = literal

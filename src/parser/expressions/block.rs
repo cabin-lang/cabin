@@ -12,14 +12,13 @@ pub struct Block {
 	pub inner_scope_id: usize,
 }
 
-impl Parse for Block {
-	type Output = Block;
-
-	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
+impl Block {
+	pub fn parse_type(tokens: &mut TokenQueue, context: &mut Context, scope_type: ScopeType) -> anyhow::Result<Block> {
 		if let Some(scope_label) = &context.scope_label {
-			context.scope_data.enter_new_scope(ScopeType::Block, scope_label);
+			context.scope_data.enter_new_scope(scope_type, scope_label.to_owned());
+			context.scope_label = None;
 		} else {
-			context.scope_data.enter_new_unlabeled_scope(ScopeType::Block);
+			context.scope_data.enter_new_unlabeled_scope(scope_type);
 		}
 
 		let scope_id = context.scope_data.unique_id();
@@ -34,6 +33,14 @@ impl Parse for Block {
 			statements,
 			inner_scope_id: scope_id,
 		})
+	}
+}
+
+impl Parse for Block {
+	type Output = Block;
+
+	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
+		Block::parse_type(tokens, context, ScopeType::Block)
 	}
 }
 

@@ -79,8 +79,8 @@ let BuiltinTag = group {
 };
 
 #[cabin_only]
-let builtin = action<name: Text> {
-	it is new BuiltinTag {
+let builtin = action<name: Text>: BuiltinTag {
+	builtin is new BuiltinTag {
 		internal_name = name
 	};
 };

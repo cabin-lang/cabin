@@ -161,17 +161,34 @@ impl CompileTime for FunctionCall {
 				let mut system_side_effects = false;
 
 				// Get the address of system_side_effects
-				let system_side_effects_address = context.scope_data.expect_global_variable("system_side_effects").expect_as::<Pointer>();
+				let system_side_effects_address = context
+					.scope_data
+					.expect_global_variable("system_side_effects")
+					.expect_as::<Pointer>()
+					.map_err(mapped_err! {
+						while = format!("interpreting the global variable \"{}\" as a pointer", "system_side_effects".bold().cyan()),
+						context = context,
+					})?;
 
 				// Get builtin and side effect tags
 				for tag in &function_declaration.tags.values {
 					if let Ok(object) = tag.try_as_literal(context) {
 						if object.type_name == Name::from("BuiltinTag") {
-							builtin_name = Some(object.get_field_literal("internal_name", context).unwrap().expect_as::<String>().to_owned());
+							builtin_name = Some(
+								object
+									.get_field_literal("internal_name", context)
+									.unwrap()
+									.expect_as::<String>()
+									.map_err(mapped_err! {
+										while = format!("interpreting the literal field \"{}\" of a {} as a string", "internal_name".bold().cyan(), "BuiltinTag".bold().cyan()),
+										context = context,
+									})?
+									.to_owned(),
+							);
 							continue;
 						}
 
-						if tag.expect_as::<Pointer>() == system_side_effects_address {
+						if tag.expect_as::<Pointer>()? == system_side_effects_address {
 							system_side_effects = true;
 						}
 					}
