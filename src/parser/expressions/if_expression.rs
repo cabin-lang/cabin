@@ -1,14 +1,11 @@
-use colored::Colorize;
-
 use crate::{
+	api::context::Context,
 	comptime::CompileTime,
-	context::Context,
 	lexer::TokenType,
+	mapped_err,
 	parser::{
 		expressions::{block::Block, Expression},
-		Parse,
-		TokenQueue,
-		TokenQueueFunctionality,
+		Parse, TokenQueue, TokenQueueFunctionality,
 	},
 };
 
@@ -41,10 +38,10 @@ impl CompileTime for IfExpression {
 
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
 		// Check condition
-		let condition = self
-			.condition
-			.evaluate_at_compile_time(context)
-			.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating the condition of an if-expression at compile-time"))?;
+		let condition = self.condition.evaluate_at_compile_time(context).map_err(mapped_err! {
+			while = "while evaluating the condition of an if-expression at compile-time",
+			context = context,
+		})?;
 		let condition_is_true = condition.is_true(context);
 
 		// Evaluate body
@@ -52,7 +49,7 @@ impl CompileTime for IfExpression {
 		let body = self
 			.body
 			.evaluate_at_compile_time(context)
-			.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating the body of an if-expression at compile-time".dimmed()))?;
+			.map_err(mapped_err! { while = "evaluating the body of an if-expression at compile-time", context = context, })?;
 		context.untoggle_side_effects();
 
 		// Evaluate else body
@@ -60,8 +57,9 @@ impl CompileTime for IfExpression {
 		let else_body = self
 			.else_body
 			.map(|else_body| {
-				anyhow::Ok(Box::new(else_body.evaluate_at_compile_time(context).map_err(|error| {
-					anyhow::anyhow!("{error}\n\t{}", "while evaluating the otherwise-body of an if-expression at compile-time".dimmed())
+				anyhow::Ok(Box::new(else_body.evaluate_at_compile_time(context).map_err(mapped_err! {
+					while = "evaluating the otherwise-body of an if-expression at compile-time",
+					context = context,
 				})?))
 			})
 			.transpose()?;

@@ -1,8 +1,8 @@
 use crate::{
+	api::{context::Context, scope::ScopeType},
 	comptime::CompileTime,
-	context::Context,
 	lexer::TokenType,
-	parser::{expressions::Expression, scope::ScopeType, statements::Statement, Parse, TokenQueue, TokenQueueFunctionality as _},
+	parser::{expressions::Expression, statements::Statement, Parse, TokenQueue, TokenQueueFunctionality as _},
 };
 
 #[derive(Debug, Clone)]
@@ -37,6 +37,10 @@ impl Parse for Block {
 }
 
 impl CompileTime for Block {
+	/// The output for evaluating blocks at compile-time is a generic `Expression`. This is because while some blocks
+	/// will not be able to be fully evaluated and will remain as blocks, some others *will* be able to be resolved
+	/// fully, and those will return either the expressed from their tail statement, or `Expression::Void` if no tail
+	/// statement was present.
 	type Output = Expression;
 
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {

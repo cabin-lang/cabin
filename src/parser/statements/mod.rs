@@ -1,6 +1,6 @@
 use crate::{
+	api::context::Context,
 	comptime::CompileTime,
-	context::Context,
 	lexer::TokenType,
 	parser::{
 		expressions::Expression,

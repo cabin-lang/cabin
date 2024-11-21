@@ -1,23 +1,17 @@
 use std::collections::HashMap;
 
 use crate::{
+	api::{context::Context, scope::ScopeType, traits::TryAs as _},
 	comptime::CompileTime,
-	context::Context,
 	lexer::TokenType,
-	literal_list,
-	parse_list,
+	literal_list, parse_list,
 	parser::{
 		expressions::{
 			name::Name,
 			object::{Field, LiteralConvertible, LiteralObject, ObjectConstructor, ObjectType},
 			Expression,
 		},
-		scope::ScopeType,
-		util::macros::TryAs as _,
-		ListType,
-		Parse,
-		TokenQueue,
-		TokenQueueFunctionality,
+		ListType, Parse, TokenQueue, TokenQueueFunctionality,
 	},
 	string_literal,
 };
@@ -132,17 +126,15 @@ impl LiteralConvertible for OneOf {
 		let compile_time_parameters = literal
 			.get_field_literal("compile_time_parameters", context)
 			.unwrap()
-			.try_as::<Vec<Expression>>()
-			.unwrap()
+			.expect_as::<Vec<Expression>>()
 			.iter()
-			.map(|name_string| Name::from(name_string.try_as_literal(context).unwrap().try_as::<String>().unwrap()))
+			.map(|name_string| Name::from(name_string.expect_literal(context).expect_as::<String>()))
 			.collect();
 
 		let choices = literal
 			.get_field_literal("variants", context)
 			.unwrap()
-			.try_as::<Vec<Expression>>()
-			.unwrap()
+			.expect_as::<Vec<Expression>>()
 			.iter()
 			.map(|choice| choice.try_clone_pointer().unwrap())
 			.collect();
@@ -150,7 +142,7 @@ impl LiteralConvertible for OneOf {
 		Ok(OneOf {
 			compile_time_parameters,
 			choices,
-			scope_id: literal.scope_id,
+			scope_id: literal.declared_scope_id(),
 		})
 	}
 }

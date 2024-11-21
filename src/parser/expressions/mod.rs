@@ -1,25 +1,28 @@
 use std::collections::VecDeque;
 
 use colored::Colorize as _;
-use try_as::traits::{self as try_as_traits, TryAsRef as _};
+use try_as::traits as try_as_traits;
 
-use super::{statements::tag::TagList, Parse};
 use crate::{
+	api::{context::Context, traits::TryAs as _},
 	comptime::{memory::Pointer, CompileTime},
-	context::Context,
 	lexer::Token,
-	parser::expressions::{
-		block::Block,
-		either::Either,
-		foreach::ForEachLoop,
-		function::FunctionDeclaration,
-		function_call::FunctionCall,
-		group::GroupDeclaration,
-		if_expression::IfExpression,
-		name::Name,
-		object::{LiteralObject, ObjectConstructor},
-		oneof::OneOf,
-		operators::{BinaryExpression, FieldAccess},
+	parser::{
+		expressions::{
+			block::Block,
+			either::Either,
+			foreach::ForEachLoop,
+			function::FunctionDeclaration,
+			function_call::FunctionCall,
+			group::GroupDeclaration,
+			if_expression::IfExpression,
+			name::Name,
+			object::{LiteralObject, ObjectConstructor},
+			oneof::OneOf,
+			operators::{BinaryExpression, FieldAccess},
+		},
+		statements::tag::TagList,
+		Parse,
 	},
 };
 
@@ -176,7 +179,6 @@ impl Expression {
 	///
 	/// # Performance
 	/// This clone is very cheap; Only the underlying pointer address (a `usize`) is cloned.
-	#[must_use]
 	pub fn try_clone_pointer(&self) -> anyhow::Result<Expression> {
 		if let Self::Pointer(address) = self {
 			return Ok(Expression::Pointer(*address));
@@ -185,12 +187,17 @@ impl Expression {
 		anyhow::bail!("A value that's not fully known at compile-time was used as a type.");
 	}
 
+	pub fn expect_clone_pointer(&self) -> Expression {
+		self.try_clone_pointer()
+			.expect("Attempted to clone a pointer, but the expression to clone wasn't a pointer.")
+	}
+
 	pub fn is_true(&self, context: &Context) -> bool {
-		let Some(literal_address): Option<&Pointer> = self.try_as_ref() else {
+		let Ok(literal_address) = self.try_as::<Pointer>() else {
 			return false;
 		};
 
-		let true_address = context.scope_data.get_global_variable(&"true".into()).unwrap().try_as_ref().unwrap();
+		let true_address = context.scope_data.expect_global_variable("true").expect_as();
 
 		literal_address == true_address
 	}

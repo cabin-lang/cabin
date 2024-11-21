@@ -1,23 +1,17 @@
 use std::collections::HashMap;
 
 use crate::{
+	api::{context::Context, traits::TryAs as _},
 	comptime::CompileTime,
-	context::Context,
 	lexer::TokenType,
-	literal,
-	literal_list,
-	parse_list,
+	literal, literal_list, parse_list,
 	parser::{
 		expressions::{
 			name::Name,
 			object::{Field, LiteralConvertible, LiteralObject, ObjectConstructor, ObjectType},
 			Expression,
 		},
-		util::macros::TryAs,
-		ListType,
-		Parse,
-		TokenQueue,
-		TokenQueueFunctionality,
+		ListType, Parse, TokenQueue, TokenQueueFunctionality,
 	},
 	string_literal,
 };
@@ -103,7 +97,7 @@ impl LiteralConvertible for Either {
 
 		Ok(Either {
 			variants,
-			scope_id: literal.scope_id,
+			scope_id: literal.declared_scope_id(),
 		})
 	}
 }

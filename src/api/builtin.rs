@@ -1,12 +1,10 @@
 use colored::Colorize as _;
 
 use crate::{
+	api::{context::Context, macros::number, traits::TryAs as _},
 	comptime::{memory::Pointer, CompileTime},
-	context::Context,
-	parser::{
-		expressions::{function_call::FunctionCall, name::Name, object::ObjectConstructor, operators::FieldAccess, Expression},
-		util::macros::{number, TryAs as _},
-	},
+	mapped_err,
+	parser::expressions::{function_call::FunctionCall, name::Name, object::ObjectConstructor, operators::FieldAccess, Expression},
 	string_literal,
 };
 
@@ -23,11 +21,11 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 				function: Box::new(Expression::FieldAccess(FieldAccess {
 					left: Box::new(Expression::Pointer(pointer)),
 					right: Name::from("to_string"),
-					scope_id: object.scope_id
+					scope_id: object.declared_scope_id()
 				})),
 				compile_time_arguments: None,
 				arguments: None,
-				scope_id: object.scope_id
+				scope_id: object.declared_scope_id()
 			}.evaluate_at_compile_time(context)?;
 			let string_value = returned_object.try_as_literal(context)?.try_as::<String>()?;
 			println!("{string_value}");
@@ -44,8 +42,8 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 	},
 	"Number.plus" => BuiltinFunction {
 		evaluate_at_compile_time: |context: &mut Context, _caller_scope_id: usize, arguments: &[Expression]| {
-			let first = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.try_as::<f64>().unwrap();
-			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.try_as::<f64>().unwrap();
+			let first = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.expect_as::<f64>();
+			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.expect_as::<f64>();
 			Ok(number(first + second, context))
 		}
 	},
@@ -53,7 +51,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 		evaluate_at_compile_time: |context: &mut Context, _caller_scope_id: usize, arguments: &[Expression]| {
 			let this = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Anything.to_string"))?.try_as_literal(context)?;
 			Ok(string_literal!(&match this.type_name.unmangled_name().as_str() {
-				"Number" => this.try_as::<f64>().unwrap().to_string(),
+				"Number" => this.expect_as::<f64>().to_string(),
 				_ => todo!()
 			}, context))
 		}
@@ -70,10 +68,8 @@ pub fn call_builtin_at_compile_time(name: &str, context: &mut Context, caller_sc
 			)
 		})?
 		.evaluate_at_compile_time)(context, caller_scope_id, arguments)
-	.map_err(|error| {
-		anyhow::anyhow!(
-			"{error}\n\t{}",
-			format!("while calling the built-in function \"{}\" at compile-time", name.bold().cyan()).dimmed()
-		)
+	.map_err(mapped_err! {
+		while = format!("calling the built-in function \"{}\" at compile-time", name.bold().cyan()).dimmed(),
+		context = context,
 	})
 }

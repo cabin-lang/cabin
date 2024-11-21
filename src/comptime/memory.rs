@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
-use crate::{context::Context, parser::expressions::object::LiteralObject};
+use crate::{api::context::Context, parser::expressions::object::LiteralObject};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pointer(usize);
 
 impl Pointer {
-	pub fn virtual_deref<'a>(self, context: &'a Context) -> &'a LiteralObject {
-		context.virtual_memory.get(self).unwrap()
+	pub fn virtual_deref<'a>(&self, context: &'a Context) -> &'a LiteralObject {
+		context.virtual_memory.get(self.to_owned()).unwrap()
 	}
 }
 

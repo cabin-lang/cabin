@@ -3,16 +3,15 @@ use std::collections::VecDeque;
 use colored::Colorize as _;
 
 use crate::{
+	api::context::Context,
 	comptime::CompileTime,
-	context::Context,
-	lexer::{Token, TokenType},
+	lexer::{Position, Token, TokenType},
+	mapped_err,
 	parser::statements::Statement,
 };
 
 pub mod expressions;
-pub mod scope;
 pub mod statements;
-pub mod util;
 
 pub fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Program> {
 	Program::parse(tokens, context)
@@ -29,7 +28,10 @@ impl Parse for Program {
 	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
 		let mut statements = Vec::new();
 		while !tokens.is_empty() {
-			statements.push(Statement::parse(tokens, context).map_err(|error| anyhow::anyhow!("{error}{}", "\n\twhile parsing the program's top-level statements".dimmed()))?);
+			statements.push(Statement::parse(tokens, context).map_err(mapped_err! {
+				while = "while parsing the program's top-level statements",
+				context = context,
+			})?);
 		}
 		Ok(Program { statements })
 	}
@@ -45,7 +47,10 @@ impl CompileTime for Program {
 				.into_iter()
 				.map(|statement| statement.evaluate_at_compile_time(context))
 				.collect::<anyhow::Result<Vec<_>>>()
-				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating the program's global statements at compile-time".dimmed()))?
+				.map_err(mapped_err! {
+					while = "evaluating the program's global statements at compile-time",
+					context = context,
+				})?
 				.into_iter()
 				.collect(),
 		})
@@ -99,6 +104,8 @@ pub trait TokenQueueFunctionality {
 	fn next_is_one_of(&self, token_types: &[TokenType]) -> bool {
 		token_types.iter().any(|token_type| self.next_is(token_type.clone()))
 	}
+
+	fn current_position(&self) -> Option<Position>;
 }
 
 impl TokenQueueFunctionality for std::collections::VecDeque<Token> {
@@ -144,6 +151,10 @@ impl TokenQueueFunctionality for std::collections::VecDeque<Token> {
 
 	fn next_is(&self, token_type: TokenType) -> bool {
 		self.peek_type().map_or(false, |token| token == &token_type)
+	}
+
+	fn current_position(&self) -> Option<Position> {
+		self.front().map(|front| front.position.clone())
 	}
 }
 
@@ -208,3 +219,7 @@ pub trait Parse {
 }
 
 pub type TokenQueue = VecDeque<Token>;
+
+pub trait ToCabin {
+	fn to_cabin(&self) -> String;
+}

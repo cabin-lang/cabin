@@ -1,6 +1,8 @@
+use colored::Colorize as _;
+
 use std::{collections::HashMap, fmt::Debug};
 
-use super::expressions::{name::Name, Expression};
+use crate::parser::expressions::{name::Name, Expression};
 
 /// A type of scope in the language. Currently, this is only used for debugging purposes, as scopes are able to be printed as a string representation,
 /// and doing so will show their type. However, in the future, this may be used for other purposes, so it's good to leave here regardless
@@ -96,9 +98,9 @@ impl Scope {
 	/// A reference to the declaration data of the variable that exists in this scope with the given name. If none exists, `None` is returned. If it does exist
 	/// and `Some` is returned, the returned reference will have the same lifetime as this `Scope` object, as well as the given scopes slice.
 	#[must_use]
-	pub fn get_variable<'scopes>(&'scopes self, name: &Name, scopes: &'scopes [Self]) -> Option<&Expression> {
+	pub fn get_variable<'scopes>(&'scopes self, name: impl Into<Name> + Clone, scopes: &'scopes [Self]) -> Option<&Expression> {
 		self.variables
-			.get(name)
+			.get(&name.clone().into())
 			.or_else(|| self.parent.and_then(|parent| scopes.get(parent).unwrap().get_variable(name, scopes)))
 	}
 
@@ -257,7 +259,7 @@ impl ScopeData {
 	/// # Returns
 	/// A reference to the variable declaration, or `None` if the variable does not exist in the current scope.
 	#[must_use]
-	pub fn get_variable(&self, name: &Name) -> Option<&Expression> {
+	pub fn get_variable(&self, name: impl Into<Name> + Clone) -> Option<&Expression> {
 		self.current().get_variable(name, &self.scopes)
 	}
 
@@ -271,7 +273,7 @@ impl ScopeData {
 	/// # Returns
 	/// A reference to the variable declaration, or `None` if the variable does not exist in the current scope.
 	#[must_use]
-	pub fn get_variable_from_id(&self, name: &Name, id: usize) -> Option<&Expression> {
+	pub fn get_variable_from_id(&self, name: impl Into<Name> + Clone, id: usize) -> Option<&Expression> {
 		self.get_scope_from_id(id).and_then(|scope| scope.get_variable(name, &self.scopes))
 	}
 
@@ -365,7 +367,8 @@ impl ScopeData {
 	///
 	/// # Returns
 	/// An error if a variable already exists with the given name in the scope with the given id.
-	pub fn declare_new_variable_from_id(&mut self, name: Name, value: Expression, id: usize) -> anyhow::Result<()> {
+	pub fn declare_new_variable_from_id(&mut self, name: impl Into<Name>, value: Expression, id: usize) -> anyhow::Result<()> {
+		let name = name.into();
 		let mut current = Some(self.current_scope);
 		while let Some(current_index) = current {
 			if let Some(variable) = self.scopes.get_mut(current_index).unwrap().get_variable_direct(&name) {
@@ -389,7 +392,7 @@ impl ScopeData {
 	///
 	/// # Returns
 	/// An error if a variable already exists with the given name in the current scope.
-	pub fn declare_new_variable(&mut self, name: Name, value: Expression) -> anyhow::Result<()> {
+	pub fn declare_new_variable(&mut self, name: impl Into<Name>, value: Expression) -> anyhow::Result<()> {
 		self.declare_new_variable_from_id(name, value, self.current_scope)
 	}
 
@@ -501,8 +504,17 @@ impl ScopeData {
 	/// # Returns
 	/// The declaration data for the variable, or `None` if no global variable with this name exists.
 	#[must_use]
-	pub fn get_global_variable(&self, name: &Name) -> Option<&Expression> {
+	pub fn get_global_variable(&self, name: impl Into<Name> + Clone) -> Option<&Expression> {
 		self.get_variable_from_id(name, 0)
+	}
+
+	pub fn expect_global_variable(&self, name: impl Into<Name> + Clone) -> &Expression {
+		self.get_global_variable(name.clone().into()).unwrap_or_else(|| {
+			panic!(
+				"Attempted to get a global variable with the name \"{}\", but no global variable with that name exists.",
+				name.into().unmangled_name().bold().cyan()
+			)
+		})
 	}
 
 	/// Returns the unique ID of the global scope

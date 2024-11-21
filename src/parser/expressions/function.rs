@@ -3,26 +3,19 @@ use std::collections::HashMap;
 use colored::Colorize as _;
 
 use crate::{
+	api::{context::Context, traits::TryAs as _},
 	comptime::CompileTime,
-	context::Context,
-	err,
 	lexer::TokenType,
-	literal,
-	literal_list,
-	parse_list,
+	literal, literal_list, mapped_err, parse_list,
 	parser::{
 		expressions::{
 			block::Block,
 			name::Name,
 			object::{Field, InternalFieldValue, LiteralConvertible, LiteralObject, ObjectConstructor, ObjectType},
-			Expression,
-			Parse,
+			Expression, Parse,
 		},
 		statements::tag::TagList,
-		util::macros::TryAs as _,
-		ListType,
-		TokenQueue,
-		TokenQueueFunctionality as _,
+		ListType, TokenQueue, TokenQueueFunctionality as _,
 	},
 	string_literal,
 };
@@ -151,7 +144,10 @@ impl CompileTime for FunctionDeclaration {
 			.body
 			.map(|body| anyhow::Ok(Box::new(body.evaluate_at_compile_time(context)?)))
 			.transpose()
-			.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating the body of a function declaration at compile-time"))?;
+			.map_err(mapped_err! {
+				while = "evaluating the body of a function declaration at compile-time",
+				context = context,
+			})?;
 
 		let this_object = self.this_object.map(|this| anyhow::Ok(Box::new(this.evaluate_at_compile_time(context)?))).transpose()?;
 
@@ -170,12 +166,9 @@ impl CompileTime for FunctionDeclaration {
 		Ok(Expression::Pointer(
 			function
 				.to_literal(context)
-				.map_err(|error| {
-					err! {
-						base = error,
-						process = "while converting a function declaration into an object at compile-time",
-						context = context,
-					}
+				.map_err(mapped_err! {
+					while = "converting a function declaration into an object at compile-time",
+					context = context,
 				})?
 				.store_in_memory(context),
 		))
@@ -325,7 +318,7 @@ impl LiteralConvertible for FunctionDeclaration {
 			parameters,
 			body,
 			return_type,
-			scope_id: literal.scope_id,
+			scope_id: literal.declared_scope_id(),
 			tags: tags.into(),
 			this_object,
 		})

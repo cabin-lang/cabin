@@ -1,16 +1,16 @@
 use std::collections::VecDeque;
 
-use colored::Colorize;
-use try_as::traits::TryAsRef;
+use colored::Colorize as _;
 
-use super::{function::FunctionDeclaration, name::Name, object::LiteralConvertible, operators::FieldAccess, Expression, Parse};
 use crate::{
-	builtin::call_builtin_at_compile_time,
+	api::{builtin::call_builtin_at_compile_time, context::Context, traits::TryAs as _},
 	comptime::{memory::Pointer, CompileTime},
-	context::Context,
 	lexer::{Token, TokenType},
-	parse_list,
-	parser::{util::macros::TryAs as _, ListType, TokenQueueFunctionality},
+	mapped_err, parse_list,
+	parser::{
+		expressions::{function::FunctionDeclaration, name::Name, object::LiteralConvertible, operators::FieldAccess, Expression, Parse},
+		ListType, TokenQueueFunctionality,
+	},
 };
 
 #[derive(Debug, Clone)]
@@ -101,8 +101,11 @@ impl CompileTime for FunctionCall {
 		let literal = function.try_as_literal(context);
 		if let Ok(function_declaration) = literal {
 			let Ok(function_declaration) = FunctionDeclaration::from_literal(function_declaration, context) else {
-                anyhow::bail!("Attempted to call a value that's not a function; Instead it's an instance of \"{}\"", function_declaration.type_name.unmangled_name().bold().cyan()); 
-            };
+				anyhow::bail!(
+					"Attempted to call a value that's not a function; Instead it's an instance of \"{}\"",
+					function_declaration.type_name.unmangled_name().bold().cyan()
+				);
+			};
 
 			// Set this object
 			if let Some(this_object) = function_declaration.this_object {
@@ -132,10 +135,11 @@ impl CompileTime for FunctionCall {
 				}
 
 				// Return value
-				let return_value = body
-					.clone()
-					.evaluate_at_compile_time(context)
-					.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while calling a function at compile-time".dimmed()))?;
+				let return_value = body.clone().evaluate_at_compile_time(context).map_err(mapped_err! {
+					while = "calling a function at compile-time",
+					context = context,
+				})?;
+
 				if return_value.try_as_literal(context).is_ok() {
 					return Ok(return_value);
 				}
@@ -146,19 +150,17 @@ impl CompileTime for FunctionCall {
 				let mut system_side_effects = false;
 
 				// Get the address of system_side_effects
-				let system_side_effects_address: &Pointer = context.scope_data.get_global_variable(&"system_side_effects".into()).unwrap().try_as_ref().unwrap();
+				let system_side_effects_address = context.scope_data.expect_global_variable("system_side_effects").expect_as::<Pointer>();
 
 				// Get builtin and side effect tags
 				for tag in &function_declaration.tags.values {
 					if let Ok(object) = tag.try_as_literal(context) {
 						if object.type_name == Name::from("BuiltinTag") {
-							builtin_name = Some(object.get_field_literal("internal_name", context).unwrap().try_as::<String>().unwrap().to_owned());
+							builtin_name = Some(object.get_field_literal("internal_name", context).unwrap().expect_as::<String>().to_owned());
 							continue;
 						}
 
-						let tag_pointer: &Pointer = tag.try_as_ref().unwrap();
-
-						if tag_pointer == system_side_effects_address {
+						if tag.expect_as::<Pointer>() == system_side_effects_address {
 							system_side_effects = true;
 						}
 					}

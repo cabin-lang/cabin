@@ -1,26 +1,20 @@
 use std::collections::{HashMap, VecDeque};
 
-use colored::Colorize;
+use colored::Colorize as _;
 
 use crate::{
+	api::{context::Context, scope::ScopeType, traits::TryAs as _},
 	comptime::CompileTime,
-	context::Context,
 	lexer::{Token, TokenType},
-	literal,
-	literal_list,
-	parse_list,
+	literal, literal_list, mapped_err, parse_list,
 	parser::{
 		expressions::{
 			name::Name,
 			object::{Field, LiteralConvertible, LiteralObject, ObjectConstructor, ObjectType},
-			Expression,
-			Parse,
+			Expression, Parse,
 		},
-		scope::ScopeType,
 		statements::tag::TagList,
-		util::macros::TryAs as _,
-		ListType,
-		TokenQueueFunctionality,
+		ListType, TokenQueueFunctionality,
 	},
 	string_literal,
 };
@@ -50,8 +44,10 @@ impl Parse for GroupDeclaration {
 			};
 
 			// Name
-			let name =
-				Name::parse(tokens, context).map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while attempting to parse an the type name of object constructor".dimmed()))?;
+			let name = Name::parse(tokens, context).map_err(mapped_err! {
+				while = "attempting to parse an the type name of object constructor",
+				context = context,
+			})?;
 
 			// Type
 			let field_type = if tokens.next_is(TokenType::Colon) {
@@ -97,15 +93,9 @@ impl CompileTime for GroupDeclaration {
 		for field in self.fields {
 			// Field value
 			let value = if let Some(value) = field.value {
-				let evaluated = value.evaluate_at_compile_time(context).map_err(|error| {
-					anyhow::anyhow!(
-						"{error}\n\t{}",
-						format!(
-							"while evaluating the default value of the field \"{}\" of a group declaration at compile-time",
-							field.name.unmangled_name().bold().cyan()
-						)
-						.dimmed()
-					)
+				let evaluated = value.evaluate_at_compile_time(context).map_err(mapped_err! {
+					while = format!("evaluating the default value of the field \"{}\" of a group declaration at compile-time", field.name.unmangled_name().bold().cyan()),
+					context = context,
 				})?;
 
 				if !evaluated.is_pointer() {
@@ -122,15 +112,12 @@ impl CompileTime for GroupDeclaration {
 
 			// Field type
 			let field_type = if let Some(field_type) = field.field_type {
-				Some(field_type.evaluate_at_compile_time(context).map_err(|error| {
-					anyhow::anyhow!(
-						"{error}\n\t{}",
-						format!(
-							"while evaluating the value of the field \"{}\" of a group declaration at compile-time",
-							field.name.unmangled_name().bold().cyan()
-						)
-						.dimmed()
-					)
+				Some(field_type.evaluate_at_compile_time(context).map_err(mapped_err! {
+					while = format!(
+						"evaluating the value of the field \"{}\" of a group declaration at compile-time",
+						field.name.unmangled_name().bold().cyan()
+					),
+					context = context,
 				})?)
 			} else {
 				None
@@ -158,15 +145,15 @@ impl LiteralConvertible for GroupDeclaration {
 			.fields
 			.into_iter()
 			.filter_map(|field| {
-				field.value.and_then(|value| {
-					Some(literal! {
+				field.value.map(|value| {
+					literal! {
 						context,
 						Field {
 							name = string_literal!(&field.name.unmangled_name(), context),
 							value = value
 						},
 						self.scope_id
-					})
+					}
 				})
 			})
 			.collect();
@@ -190,27 +177,23 @@ impl LiteralConvertible for GroupDeclaration {
 		let fields = literal
 			.get_field_literal("fields", context)
 			.unwrap()
-			.try_as::<Vec<Expression>>()
-			.unwrap()
+			.expect_as::<Vec<Expression>>()
 			.iter()
 			.map(|field_object| {
-				let name = Name::from(
-					field_object
-						.try_as_literal(context)
-						.unwrap()
-						.get_field_literal("name", context)
-						.unwrap()
-						.try_as::<String>()
-						.unwrap(),
-				);
-				let value = field_object.try_as_literal(context).unwrap().get_field("value");
+				let name = field_object
+					.expect_literal(context)
+					.get_field_literal("name", context)
+					.unwrap()
+					.expect_as::<String>()
+					.into();
+				let value = field_object.expect_literal(context).get_field("value");
 				Field { name, value, field_type: None }
 			})
 			.collect();
 
 		Ok(GroupDeclaration {
 			fields,
-			scope_id: literal.scope_id,
+			scope_id: literal.declared_scope_id(),
 		})
 	}
 }

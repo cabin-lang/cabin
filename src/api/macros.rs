@@ -1,8 +1,6 @@
-use try_as::traits::TryAsRef;
-
 use crate::{
+	api::context::Context,
 	comptime::CompileTime,
-	context::Context,
 	lexer::Position,
 	parser::expressions::{object::ObjectConstructor, Expression},
 };
@@ -11,19 +9,20 @@ use crate::{
 macro_rules! err {
 	(
         base = $base: expr,
-        process = $process: expr,
+        while = $process: expr,
         context = $context: expr,
         $($field_name: ident = $field_value: expr),* $(,)?
     ) => {{
         use colored::Colorize as _;
 
-		let error = $crate::parser::util::macros::CabinError {
+		#[allow(clippy::needless_update)]
+		let error = $crate::api::macros::CabinError {
             base: Some(anyhow::anyhow!($base)),
-            process: Some($process.into()),
+            process: Some("while ".to_owned() + &$process),
             $(
                 $field_name: Some($field_value),
             )*
-            ..Default::default()
+            .. Default::default()
         };
 
         if let Some(position) = error.position {
@@ -38,31 +37,59 @@ macro_rules! err {
 	}};
 }
 
-pub trait TryAs {
-	fn try_as<T>(&self) -> anyhow::Result<&T>
-	where
-		Self: TryAsRef<T>,
-	{
-		self.try_as_ref().ok_or_else(|| anyhow::anyhow!("Incorrect variant"))
-	}
-
-	fn expect_as<T>(&self) -> &T
-	where
-		Self: TryAsRef<T>,
-	{
-		self.try_as().unwrap()
-	}
+#[macro_export]
+macro_rules! mapped_err {
+	(
+		$($tokens: tt)*
+    ) => {
+		|error| {
+			$crate::err! {
+				base = error,
+				$($tokens)*
+			}
+		}
+	};
 }
 
-impl<T> TryAs for T {}
-
 #[macro_export]
-macro_rules! uformat {
+macro_rules! compiler_message {
     (
         $($tokens: tt)*
-    ) => {
-        unindent::unindent(&format!($($tokens)*))
-    }
+    ) => {{
+		// Max line length
+		let max_line_length = 100;
+
+		// Format the input tokens, unindent it, and remove all newlines
+		let formatted = format!($($tokens)*).replace('\n', " ").trim().to_owned();
+        let unindented = regex_macro::regex!("[ \t]+").replace_all(&formatted, " ");
+
+		// Create the result string
+		let mut result = String::new();
+		let mut current_line_length = 0;
+
+		// Add the result character-by-character
+		for character in unindented.chars() {
+
+			// Space when our line is at max length - start a new line
+			if character == ' ' && current_line_length >= max_line_length {
+				result.push('\n');
+				current_line_length = 0;
+				continue;
+			}
+
+			// Space at beginning of line - get the fudge out we don't need u
+			if current_line_length == 0 && character == ' ' {
+				continue;
+			}
+
+			// Non-space character
+			result.push(character);
+			current_line_length += 1;
+		}
+
+		// Return the result
+		result
+    }}
 }
 
 #[derive(Default)]
@@ -187,7 +214,7 @@ macro_rules! string_literal {
 }
 
 pub fn cabin_true(context: &Context) -> Expression {
-	context.scope_data.get_global_variable(&"true".into()).unwrap().try_clone_pointer().unwrap()
+	context.scope_data.expect_global_variable("true").expect_clone_pointer()
 }
 
 pub fn number(number: f64, context: &mut Context) -> Expression {

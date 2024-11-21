@@ -1,20 +1,35 @@
-use crate::{
-	comptime::memory::VirtualMemory,
-	lexer::Position,
-	parser::{
-		expressions::{name::Name, Expression},
-		scope::ScopeData,
-	},
-};
+use smart_default::SmartDefault;
+
+use crate::{api::scope::ScopeData, comptime::memory::VirtualMemory, lexer::Position, parser::expressions::Expression};
+
+#[derive(SmartDefault)]
+pub struct CompilerConfiguration {
+	#[default = 4]
+	pub code_tab_size: usize,
+	#[default = false]
+	pub quiet: bool,
+}
+
+impl CompilerConfiguration {
+	pub fn tab(&self) -> String {
+		" ".repeat(self.code_tab_size)
+	}
+}
 
 pub struct Context {
+	// Publicly mutable
 	pub scope_data: ScopeData,
 	pub scope_label: Option<String>,
 	pub virtual_memory: VirtualMemory,
+	pub config: CompilerConfiguration,
+
+	// Privately mutable
 	side_effects_stack: Vec<bool>,
 	error_location: Option<Position>,
-	filename: String,
 	error_details: Option<String>,
+
+	// Completely immutable
+	filename: String,
 }
 
 impl Context {
@@ -27,6 +42,7 @@ impl Context {
 			error_location: None,
 			filename: filename.to_owned(),
 			error_details: None,
+			config: CompilerConfiguration::default(),
 		}
 	}
 
@@ -43,7 +59,7 @@ impl Context {
 	}
 
 	pub fn nothing(&self) -> Expression {
-		self.scope_data.get_global_variable(&Name::from("nothing")).unwrap().try_clone_pointer().unwrap()
+		self.scope_data.expect_global_variable("nothing").expect_clone_pointer()
 	}
 
 	pub fn set_error_position(&mut self, position: &Position) {
@@ -60,5 +76,13 @@ impl Context {
 		if self.error_details.is_none() {
 			self.error_details = Some(error_details.to_owned());
 		}
+	}
+
+	pub fn error_details(&self) -> Option<&String> {
+		self.error_details.as_ref()
+	}
+
+	pub fn error_position(&self) -> Option<Position> {
+		self.error_location.clone()
 	}
 }

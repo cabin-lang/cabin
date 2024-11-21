@@ -2,26 +2,28 @@ use std::collections::VecDeque;
 
 use colored::Colorize;
 
-use super::{
-	super::Parse,
-	block::Block,
-	either::Either,
-	foreach::ForEachLoop,
-	function::FunctionDeclaration,
-	function_call::{FunctionCall, PostfixOperators},
-	group::GroupDeclaration,
-	if_expression::IfExpression,
-	list::List,
-	name::Name,
-	object::{LiteralConvertible, ObjectConstructor, ObjectType},
-	oneof::OneOf,
-	Expression,
-};
 use crate::{
+	api::{context::Context, traits::TryAs as _},
 	comptime::CompileTime,
-	context::Context,
 	lexer::{Token, TokenType},
-	parser::{util::macros::TryAs as _, TokenQueueFunctionality},
+	mapped_err,
+	parser::{
+		expressions::{
+			block::Block,
+			either::Either,
+			foreach::ForEachLoop,
+			function::FunctionDeclaration,
+			function_call::{FunctionCall, PostfixOperators},
+			group::GroupDeclaration,
+			if_expression::IfExpression,
+			list::List,
+			name::Name,
+			object::{LiteralConvertible, ObjectConstructor, ObjectType},
+			oneof::OneOf,
+			Expression,
+		},
+		Parse, TokenQueueFunctionality,
+	},
 };
 
 /// A binary operation. More specifically, this represents not one operation, but a group of operations that share the same precedence.
@@ -181,12 +183,12 @@ impl CompileTime for FieldAccess {
 				// Either fields
 				ObjectType::Either => {
 					let field = literal.get_field("variants").unwrap();
-					let elements = field.try_as_literal(context).unwrap().try_as::<Vec<Expression>>().unwrap();
+					let elements = field.expect_literal(context).expect_as::<Vec<Expression>>();
 					elements
 						.iter()
 						.find_map(|element| {
-							let variant_object = element.try_as_literal(context).unwrap();
-							let name = variant_object.get_field_literal("name", context).unwrap().try_as::<String>().unwrap();
+							let variant_object = element.expect_literal(context);
+							let name = variant_object.get_field_literal("name", context).unwrap().expect_as::<String>();
 							if name == &self.right.unmangled_name() {
 								Some(variant_object.get_field("value").unwrap())
 							} else {
@@ -232,9 +234,10 @@ impl Parse for PrimaryExpression {
 			TokenType::KeywordAction => Expression::FunctionDeclaration(FunctionDeclaration::parse(tokens, context)?),
 			TokenType::LeftBrace => Expression::Block(Block::parse(tokens, context)?),
 			TokenType::Identifier => Expression::Name(Name::parse(tokens, context)?),
-			TokenType::KeywordNew => Expression::ObjectConstructor(
-				ObjectConstructor::parse(tokens, context).map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while attempting to parse an expression".dimmed()))?,
-			),
+			TokenType::KeywordNew => Expression::ObjectConstructor(ObjectConstructor::parse(tokens, context).map_err(mapped_err! {
+				while = "attempting to parse an object constructor",
+				context = context,
+			})?),
 			TokenType::KeywordGroup => GroupDeclaration::parse(tokens, context)?,
 			TokenType::KeywordOneOf => Expression::OneOf(OneOf::parse(tokens, context)?),
 			TokenType::KeywordEither => Expression::Either(Either::parse(tokens, context)?),

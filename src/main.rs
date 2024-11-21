@@ -2,10 +2,9 @@ use clap::Parser as _;
 
 use crate::cli::commands::{CabinCommand as _, SubCommand};
 
-pub mod builtin;
+pub mod api;
 pub mod cli;
 pub mod comptime;
-pub mod context;
 pub mod lexer;
 pub mod parser;
 

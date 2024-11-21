@@ -4,21 +4,16 @@ use colored::Colorize as _;
 use try_as::traits::{self as try_as_traits, TryAsRef};
 
 use crate::{
-	bail_err,
+	api::{context::Context, traits::TryAs as _},
+	bail_err, compiler_message,
 	comptime::{memory::Pointer, CompileTime},
-	context::Context,
 	lexer::{Position, TokenType},
-	parse_list,
+	mapped_err, parse_list,
 	parser::{
 		expressions::{group::GroupDeclaration, name::Name, Expression},
 		statements::tag::TagList,
-		util::macros::TryAs as _,
-		ListType,
-		Parse,
-		TokenQueue,
-		TokenQueueFunctionality,
+		ListType, Parse, ToCabin, TokenQueue, TokenQueueFunctionality,
 	},
-	uformat,
 };
 
 #[derive(Debug, Clone)]
@@ -71,13 +66,6 @@ impl ObjectConstructor {
 		self.internal_fields.remove(name)
 	}
 
-	pub fn as_string(&self) -> anyhow::Result<String> {
-		let Some(InternalFieldValue::String(internal_value)) = self.internal_fields.get("internal_value") else {
-			anyhow::bail!("Attempted to coerce a non-string into a string");
-		};
-		Ok(internal_value.to_owned())
-	}
-
 	pub fn is_literal(&self) -> bool {
 		for field in &self.fields {
 			let value = field.value.as_ref().unwrap();
@@ -122,7 +110,10 @@ impl Parse for ObjectConstructor {
 			};
 
 			// Name
-			let name = Name::parse(tokens, context).map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while attempting to parse an object constructor".dimmed()))?;
+			let name = Name::parse(tokens, context).map_err(mapped_err! {
+				while = "while attempting to parse an object constructor",
+				context = context,
+			})?;
 
 			// Value
 			tokens.pop(TokenType::Equal)?;
@@ -154,6 +145,20 @@ impl Parse for ObjectConstructor {
 	}
 }
 
+impl ToCabin for ObjectConstructor {
+	fn to_cabin(&self) -> String {
+		if self.type_name == "number".into() {
+			return self.get_internal_field("internal_value").unwrap().expect_as::<f64>().to_string();
+		}
+
+		if self.type_name == "Text".into() {
+			return self.get_internal_field("internal_value").unwrap().expect_as::<String>().to_owned();
+		}
+
+		todo!()
+	}
+}
+
 impl CompileTime for ObjectConstructor {
 	type Output = Expression;
 
@@ -164,7 +169,7 @@ impl CompileTime for ObjectConstructor {
 		let object_type = GroupDeclaration::from_literal(
 			context
 				.scope_data
-				.get_variable_from_id(&self.type_name, self.scope_id)
+				.get_variable_from_id(self.type_name.clone(), self.scope_id)
 				.ok_or_else(|| {
 					anyhow::anyhow!(
 						"Attempted to create an object of type \"{}\", but no type with that name was found in the scope it was referenced.",
@@ -176,11 +181,7 @@ impl CompileTime for ObjectConstructor {
 		)?;
 
 		// Get `Anything`
-		let anything = GroupDeclaration::from_literal(
-			context.scope_data.get_global_variable(&"Anything".into()).unwrap().try_as_literal(context).unwrap(),
-			context,
-		)
-		.unwrap();
+		let anything = GroupDeclaration::from_literal(context.scope_data.expect_global_variable("Anything").expect_literal(context), context).unwrap();
 
 		// Anything fields
 		for field in anything.fields {
@@ -206,15 +207,12 @@ impl CompileTime for ObjectConstructor {
 
 		// Explicit fields
 		for field in self.fields {
-			let field_value = field.value.unwrap().evaluate_at_compile_time(context).map_err(|error| {
-				anyhow::anyhow!(
-					"{error}\n\t{}",
-					format!(
-						"while evaluating the value of the field \"{}\" of an object at compile-time",
-						field.name.unmangled_name().bold().cyan()
-					)
-					.dimmed()
-				)
+			let field_value = field.value.unwrap().evaluate_at_compile_time(context).map_err(mapped_err! {
+				while = format!(
+					"evaluating the value of the field \"{}\" of an object at compile-time",
+					field.name.unmangled_name().bold().cyan()
+				),
+				context = context,
 			})?;
 
 			fields.push(Field {
@@ -268,7 +266,7 @@ pub struct LiteralObject {
 	fields: HashMap<Name, Pointer>,
 	internal_fields: HashMap<String, InternalFieldValue>,
 	object_type: ObjectType,
-	pub scope_id: usize,
+	scope_id: usize,
 }
 
 impl LiteralObject {
@@ -283,16 +281,27 @@ impl LiteralObject {
 
 			let name = value.kind_name();
 			let Expression::ObjectConstructor(field_object) = value else {
-                bail_err! {
-                    base = "A value that's not fully known at compile-time was used as a type.".bold(),
-                    process = format!("while checking the field \"{}\" of a value at compile-time", field.name.unmangled_name().bold().cyan()),
-                    context = context,
-                    position = field.name.position().unwrap_or_else(Position::zero),
-                    details = uformat!("
-                        Although Cabin allows arbitrary expressions to be used as types, the expression needs to be able to be fully evaluated at compile-time.
-                        The expression that this error refers to must be a literal object, but instead it's a {name}.
-                    ")
-                };
+				bail_err! {
+					base = "A value that's not fully known at compile-time was used as a type.",
+					while = format!("checking the field \"{}\" of a value at compile-time", field.name.unmangled_name().bold().cyan()),
+					context = context,
+					position = field.name.position().unwrap_or_else(Position::zero),
+					details = compiler_message!(
+						"
+                        Although Cabin allows arbitrary expressions to be used as types, the expression needs to be able to 
+						be fully evaluated at compile-time. The expression that this error refers to must be a literal object, 
+						but instead it's a {name}. {}
+						", 
+						if &name.to_lowercase() == "name" {
+							"
+							This means that you put a variable name where a type is required, but the value of that variable
+							is some kind of expression that can't be fully evaluated at compile-time.
+							"
+						} else {
+							""
+						}
+					)
+				};
 			};
 
 			let value_address = LiteralObject::try_from_object_constructor(field_object, context)?.store_in_memory(context);
@@ -324,7 +333,10 @@ impl LiteralObject {
 	where
 		InternalFieldValue: TryAsRef<T>,
 	{
-		self.internal_fields.get(name).ok_or_else(|| anyhow::anyhow!(""))?.try_as::<T>()
+		self.internal_fields
+			.get(name)
+			.ok_or_else(|| anyhow::anyhow!("Attempted to get an internal field that doesn't exist"))?
+			.try_as::<T>()
 	}
 
 	pub fn pop_internal_field(&mut self, name: &str) -> Option<InternalFieldValue> {
@@ -338,6 +350,10 @@ impl LiteralObject {
 	/// Stores this value in virtual memory and returns the address of the location stored.
 	pub fn store_in_memory(self, context: &mut Context) -> Pointer {
 		context.virtual_memory.store(self)
+	}
+
+	pub fn declared_scope_id(&self) -> usize {
+		self.scope_id
 	}
 }
 

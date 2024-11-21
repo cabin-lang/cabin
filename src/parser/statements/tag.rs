@@ -1,11 +1,9 @@
 use std::ops::Deref;
 
-use colored::Colorize as _;
-
 use crate::{
+	api::context::Context,
 	comptime::CompileTime,
-	context::Context,
-	parse_list,
+	mapped_err, parse_list,
 	parser::{expressions::Expression, ListType, Parse, TokenQueue},
 };
 
@@ -32,9 +30,10 @@ impl CompileTime for TagList {
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
 		let mut values = Vec::new();
 		for value in self.values {
-			let evaluated = value
-				.evaluate_at_compile_time(context)
-				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a tag at compile-time".dimmed()))?;
+			let evaluated = value.evaluate_at_compile_time(context).map_err(mapped_err! {
+				while = "evaluating a tag at compile-time",
+				context = context,
+			})?;
 			values.push(evaluated);
 		}
 		Ok(TagList { values })

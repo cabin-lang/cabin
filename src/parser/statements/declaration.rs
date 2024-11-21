@@ -1,15 +1,12 @@
-use colored::Colorize as _;
-
 use super::tag::TagList;
 use crate::{
+	api::context::Context,
 	comptime::CompileTime,
-	context::Context,
 	lexer::TokenType,
+	mapped_err,
 	parser::{
 		expressions::{name::Name, Expression},
-		Parse,
-		TokenQueue,
-		TokenQueueFunctionality as _,
+		Parse, TokenQueue, TokenQueueFunctionality as _,
 	},
 };
 
@@ -21,7 +18,7 @@ pub struct Declaration {
 
 impl Declaration {
 	pub fn value<'a>(&'a self, context: &'a Context) -> &'a Expression {
-		&context.scope_data.get_variable_from_id(&self.name, self.scope_id).unwrap()
+		context.scope_data.get_variable_from_id(self.name.clone(), self.scope_id).unwrap()
 	}
 }
 
@@ -52,16 +49,9 @@ impl Parse for Declaration {
 		}
 
 		// Add the name declaration to the scope
-		context.scope_data.declare_new_variable(name.clone(), value).map_err(|error| {
-			anyhow::anyhow!(
-				"{error}\n\t{}\n\t{}",
-				format!("while attempting to add the variable \"{}\" to its scope", name.unmangled_name().bold().cyan()).dimmed(),
-				format!(
-					"while parsing the initial declaration for the variable \"{}\" at compile-time",
-					name.unmangled_name().bold().cyan()
-				)
-				.dimmed()
-			)
+		context.scope_data.declare_new_variable(name.clone(), value).map_err(mapped_err! {
+			while = format!("while attempting to add the variable \"{}\" to its scope", name.unmangled_name().bold().cyan()),
+			context = context,
 		})?;
 
 		// Return the declaration
@@ -76,32 +66,21 @@ impl CompileTime for Declaration {
 	type Output = Declaration;
 
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
-		let value = context.scope_data.get_variable_from_id(&self.name, self.scope_id).unwrap().clone();
-		let evaluated = value.evaluate_at_compile_time(context).map_err(|error| {
-			anyhow::anyhow!(
-				"{error}\n\t{}",
-				format!(
-					"while evaluating value of the initial declaration for the variable \"{}\" at compile-time",
-					self.name.unmangled_name().bold().cyan()
-				)
-				.dimmed()
-			)
+		let value = context.scope_data.get_variable_from_id(self.name.clone(), self.scope_id).unwrap().clone();
+		let evaluated = value.evaluate_at_compile_time(context).map_err(mapped_err! {
+			while = format!(
+				"while evaluating value of the initial declaration for the variable \"{}\" at compile-time",
+				self.name.unmangled_name().bold().cyan()
+			),
+			context = context,
 		})?;
 
-		context.scope_data.reassign_variable_from_id(&self.name, evaluated, self.scope_id).map_err(|error| {
-			anyhow::anyhow!(
-				"{error}\n\t{}\n\t{}",
-				format!(
-					"while attempting to reassign the variable \"{}\" to its evaluated value",
-					self.name.unmangled_name().bold().cyan()
-				)
-				.dimmed(),
-				format!(
-					"while evaluating the initial declaration for the variable \"{}\" at compile-time",
-					self.name.unmangled_name().bold().cyan()
-				)
-				.dimmed()
-			)
+		context.scope_data.reassign_variable_from_id(&self.name, evaluated, self.scope_id).map_err(mapped_err! {
+			while = format!(
+				"while attempting to reassign the variable \"{}\" to its evaluated value",
+				self.name.unmangled_name().bold().cyan()
+			),
+			context = context,
 		})?;
 
 		Ok(Declaration {
