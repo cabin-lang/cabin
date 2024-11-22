@@ -4,7 +4,7 @@ use colored::Colorize as _;
 
 use crate::{
 	api::{context::Context, traits::TryAs as _},
-	comptime::{memory::Pointer, CompileTime},
+	comptime::{memory::VirtualPointer, CompileTime},
 	lexer::{Token, TokenType},
 	mapped_err,
 	parser::{
@@ -164,7 +164,7 @@ impl CompileTime for FieldAccess {
 		let left_evaluated = self.left.evaluate_at_compile_time(context)?;
 
 		// Resolvable at compile-time
-		if let Ok(pointer) = left_evaluated.try_as::<Pointer>() {
+		if let Ok(pointer) = left_evaluated.try_as::<VirtualPointer>() {
 			let literal = pointer.virtual_deref(context);
 			Ok(match literal.object_type() {
 				// Object fields

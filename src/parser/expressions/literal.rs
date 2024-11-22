@@ -5,30 +5,68 @@ use try_as::traits::TryAsRef;
 use crate::{
 	api::{context::Context, macros::TerminalOutput, traits::TryAs as _},
 	bail_err,
-	comptime::memory::Pointer,
+	comptime::memory::VirtualPointer,
 	lexer::Position,
 	parser::expressions::{
+		group::GroupDeclaration,
 		name::Name,
 		object::{InternalFieldValue, ObjectConstructor, ObjectType},
-		Expression, Type,
+		Expression, Typed,
 	},
 	transpiler::TranspileToC,
 };
 
-use super::group::GroupDeclaration;
-
+/// A "literal object". Literal objects can be thought of as simple associative arrays, similar to a JSON object or similar.
+/// Specifically, a literal object is a collection of fields where each field's value is another literal object.
+///
+/// You may notice that there's no `LiteralObject` variant of `Expression`. This is because literal objects live in "virtual memory",
+/// and instead we refer to them with "virtual pointers" via the `Pointer` struct. You can read more about this in the documentation
+/// for `VirtualMemory` and `context.virtual_memory`.
+///
+/// `LiteralObjects` are equivalent to types in Cabin. Cabin allows arbitrary expressions to be used as types, as long as "the entire
+/// expression can be evaluated at compile-time" which just means that it can be evaluated down to a `LiteralObject`. If you want to
+/// check or ensure that an expression is a type, check if it's a pointer to a `LiteralObject`.
+///
+/// Many constructs in Cabin are stored as `LiteralObject` that you might not expect. For example, all group declarations, either declarations,
+/// function declarations, and one-of declarations are stored as literal objects. That's because at their core, all information about them is
+/// known at compile-time. Any such object should be stored as a `LiteralObject`. Read the documentation on the `LiteralConvertible` trait for
+/// more information about how these types of syntaxes are stored as and retrieved from `LiteralObjects`.
 #[derive(Debug, Clone)]
 pub struct LiteralObject {
-	pub type_name: Name,
-	fields: HashMap<Name, Pointer>,
+	/// The type name of this `LiteralObject`. This is the name that the object would be constructed with in an object constructor, such as `Text`,
+	/// `Number`, `Object`, etc.
+	type_name: Name,
+
+	/// The fields on this `LiteralObject`, as a map between field names and pointers to `LiteralObjects` as field values. This should be immutable
+	/// after the object's creation; The whole point of being a literal is that it's known entirely at compile-time and won't change.
+	fields: HashMap<Name, VirtualPointer>,
+
+	/// The "internal" fields of this `LiteralObject`. These are special values that special types or objects need to store. These aren't accessible
+	/// from within Cabin. For example, the `Text` group stores a `String` internally here, representing it's actual string value; `Number` behaves
+	/// similarly.
 	internal_fields: HashMap<String, InternalFieldValue>,
+
 	object_type: ObjectType,
+
 	scope_id: usize,
+
 	pub name: Name,
-	pub address: Option<usize>,
+
+	/// The address of this `LiteralObject` in memory. In theory, all `LiteralObjects` are stored in `VirtualMemory`, and thus have a unique
+	/// address that points to them. This is an `Option`, however, because in theory a literal object could be constructed without being stored
+	/// in memory for some reason, such as if a temporary value is needed. This is \*generally\* safe to `unwrap()`; It's only in rare exception
+	/// cases that a `LiteralObject` will exist that doesn't live in `VirtualMemory`.
+	///
+	/// This is set to `Some` whenever the object is given to virtual memory, and `VirtualMemory` takes responsibility for updating it if it needs
+	/// to be moved in memory or taken out of memory. See the `move_and_overwrite()` function on `VirtualMemory` for an example of this, which is
+	/// called by `Declaration::evaluate_at_compile_time()`.
+	pub address: Option<VirtualPointer>,
 }
 
 impl LiteralObject {
+	/// Attempts to convert an `ObjectConstructor` expression into a literal value. This is possible if and only if all
+	/// fields of the object constructor are themselves either literals or other `ObjectConstructors` that are capable of
+	/// being converted into a literal value.
 	pub fn try_from_object_constructor(object: ObjectConstructor, context: &mut Context) -> anyhow::Result<Self> {
 		let mut fields = HashMap::new();
 		for field in object.fields {
@@ -76,12 +114,24 @@ impl LiteralObject {
 		})
 	}
 
+	pub fn type_name(&self) -> &Name {
+		&self.type_name
+	}
+
+	pub fn object_type(&self) -> &ObjectType {
+		&self.object_type
+	}
+
+	pub fn name(&self) -> &Name {
+		&self.name
+	}
+
 	pub fn get_field(&self, name: impl Into<Name>) -> Option<Expression> {
 		self.fields.get(&name.into()).map(|address| Expression::Pointer(*address))
 	}
 
 	pub fn get_field_literal<'a>(&'a self, name: impl Into<Name>, context: &'a Context) -> Option<&'a LiteralObject> {
-		self.fields.get(&name.into()).and_then(|address| context.virtual_memory.get(address))
+		self.fields.get(&name.into()).map(|address| context.virtual_memory.get(address))
 	}
 
 	pub fn expect_field_literal<'a>(&'a self, name: impl Into<Name>, context: &'a Context) -> &'a LiteralObject {
@@ -105,15 +155,9 @@ impl LiteralObject {
 			.try_as::<T>()
 	}
 
-	pub fn pop_internal_field(&mut self, name: &str) -> Option<InternalFieldValue> {
-		self.internal_fields.remove(name)
-	}
-
-	pub fn object_type(&self) -> &ObjectType {
-		&self.object_type
-	}
-
-	/// Stores this value in virtual memory and returns a pointer to the location stored.
+	/// Stores this value in virtual memory and returns a pointer to the location stored. Naturally, this consumes
+	/// `self`, because virtual memory should own it's literal objects. To retrieve a reference of this object, use
+	/// one of the methods on `VirtualMemory` with the returned pointer.
 	///
 	/// # Parameters
 	/// - `context` - Global data about the current state of the compiler. In this case, it's used to access the compiler's
@@ -121,7 +165,7 @@ impl LiteralObject {
 	///
 	/// # Returns
 	/// A pointer to the location of this literal object, which is now owned by the compiler's virtual memory.
-	pub fn store_in_memory(self, context: &mut Context) -> Pointer {
+	pub fn store_in_memory(self, context: &mut Context) -> VirtualPointer {
 		context.virtual_memory.store(self)
 	}
 
@@ -129,11 +173,11 @@ impl LiteralObject {
 		self.scope_id
 	}
 
-	pub fn dependencies(&self) -> Vec<&Pointer> {
-		self.fields.values().collect()
+	pub fn dependencies(&self) -> Vec<VirtualPointer> {
+		self.fields.values().map(|pointer| pointer.to_owned()).collect()
 	}
 
-	pub fn fields(&self) -> impl Iterator<Item = (&Name, &Pointer)> {
+	pub fn fields(&self) -> impl Iterator<Item = (&Name, &VirtualPointer)> {
 		self.fields.iter()
 	}
 
@@ -144,6 +188,15 @@ impl LiteralObject {
 				format!("group_{}_{}", self.name.mangled_name(), self.address.unwrap())
 			},
 		})
+	}
+
+	pub fn is_type_assignable_to_type(&self, target_type: VirtualPointer, context: &mut Context) -> anyhow::Result<bool> {
+		// Anything is assignable to Anything!
+		if &target_type == context.scope_data.expect_global_variable("Anything").expect_as::<VirtualPointer>()? {
+			return Ok(true);
+		}
+
+		Ok(self.address.unwrap() == target_type)
 	}
 }
 
@@ -164,13 +217,13 @@ impl TryAsRef<Vec<Expression>> for LiteralObject {
 	}
 }
 
-impl Type for LiteralObject {
-	fn get_type(&self, context: &mut Context) -> anyhow::Result<Pointer> {
+impl Typed for LiteralObject {
+	fn get_type(&self, context: &mut Context) -> anyhow::Result<VirtualPointer> {
 		let result = context
 			.scope_data
 			.get_variable_from_id(self.type_name.clone(), self.declared_scope_id())
 			.unwrap()
-			.expect_as::<Pointer>()?
+			.expect_as::<VirtualPointer>()?
 			.to_owned();
 
 		Ok(result)

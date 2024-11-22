@@ -143,7 +143,7 @@ macro_rules! step {
 						println!();
 					}
 
-					println!("{}",
+					println!("{}\n",
 						expression_formatter::format!(
 							r#"
 							This information is showing because you have the {"developer-mode".yellow().bold()} option set to 

@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use crate::{
 	api::{builtin::call_builtin_at_compile_time, context::Context, traits::TryAs as _},
 	bail_err,
-	comptime::{memory::Pointer, CompileTime},
+	comptime::{memory::VirtualPointer, CompileTime},
 	lexer::{Token, TokenType},
 	mapped_err, parse_list,
 	parser::{
@@ -13,7 +13,7 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
-use super::{run::ParentExpression, Type};
+use super::{run::ParentExpression, Typed};
 
 #[derive(Debug, Clone)]
 pub struct FunctionCall {
@@ -142,9 +142,21 @@ impl CompileTime for FunctionCall {
 			// Non-builtin
 			if let Some(body) = &function_declaration.body {
 				if let Expression::Block(block) = body.as_ref() {
-					// Add compile-time arguments
+					// Validate and add compile-time arguments
 					if let Some(compile_time_arguments) = &compile_time_arguments {
-						for (argument, (parameter_name, _parameter_type)) in compile_time_arguments.iter().zip(function_declaration.compile_time_parameters.iter()) {
+						for (argument, (parameter_name, parameter_type)) in compile_time_arguments.iter().zip(function_declaration.compile_time_parameters.iter()) {
+							let parameter_type_pointer = parameter_type.expect_as::<VirtualPointer>()?.to_owned();
+							if !argument.is_assignable_to_type(parameter_type_pointer, context)? {
+								bail_err! {
+									base = format!(
+										"Attempted to pass a argument of type \"{}\" to a compile-time parameter of type \"{}\"",
+										argument.get_type(context)?.virtual_deref(context).name().unmangled_name().bold().cyan(),
+										parameter_type_pointer.virtual_deref(context).name().unmangled_name().bold().cyan(),
+									),
+									while = "validating the arguments in a function call",
+									context = context,
+								};
+							}
 							if !argument.is_pointer() {
 								anyhow::bail!("Attempted to pass a value that's not fully known at compile-time to a compile-time parameter.");
 							}
@@ -152,9 +164,21 @@ impl CompileTime for FunctionCall {
 						}
 					}
 
-					// Add arguments
+					// Validate and add arguments
 					if let Some(arguments) = &arguments {
-						for (argument, (parameter_name, _parameter_type)) in arguments.iter().zip(function_declaration.parameters.iter()) {
+						for (argument, (parameter_name, parameter_type)) in arguments.iter().zip(function_declaration.parameters.iter()) {
+							let parameter_type_pointer = parameter_type.expect_as::<VirtualPointer>()?.to_owned();
+							if !argument.is_assignable_to_type(parameter_type_pointer, context)? {
+								bail_err! {
+									base = format!(
+										"Attempted to pass a argument of type \"{}\" to a parameter of type \"{}\"",
+										argument.get_type(context)?.virtual_deref(context).name().unmangled_name().bold().cyan(),
+										parameter_type_pointer.virtual_deref(context).name().unmangled_name().bold().cyan(),
+									),
+									while = "validating the arguments in a function call",
+									context = context,
+								};
+							}
 							context.scope_data.reassign_variable_from_id(parameter_name, argument.clone(), block.inner_scope_id)?;
 						}
 					}
@@ -179,7 +203,7 @@ impl CompileTime for FunctionCall {
 				let system_side_effects_address = context
 					.scope_data
 					.expect_global_variable("system_side_effects")
-					.expect_as::<Pointer>()
+					.expect_as::<VirtualPointer>()
 					.map_err(mapped_err! {
 						while = format!("interpreting the global variable \"{}\" as a pointer", "system_side_effects".bold().cyan()),
 						context = context,
@@ -188,7 +212,7 @@ impl CompileTime for FunctionCall {
 				// Get builtin and side effect tags
 				for tag in &function_declaration.tags.values {
 					if let Ok(object) = tag.try_as_literal(context) {
-						if object.type_name == Name::from("BuiltinTag") {
+						if object.type_name() == &Name::from("BuiltinTag") {
 							builtin_name = Some(
 								object
 									.get_field_literal("internal_name", context)
@@ -203,7 +227,7 @@ impl CompileTime for FunctionCall {
 							continue;
 						}
 
-						if tag.expect_as::<Pointer>()? == system_side_effects_address {
+						if tag.expect_as::<VirtualPointer>()? == system_side_effects_address {
 							system_side_effects = true;
 						}
 					}
@@ -234,7 +258,11 @@ impl CompileTime for FunctionCall {
 impl TranspileToC for FunctionCall {
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		let function = FunctionDeclaration::from_literal(
-			self.function.clone().evaluate_at_compile_time(context)?.expect_as::<Pointer>()?.virtual_deref(context),
+			self.function
+				.clone()
+				.evaluate_at_compile_time(context)?
+				.expect_as::<VirtualPointer>()?
+				.virtual_deref(context),
 			context,
 		)?;
 
@@ -351,13 +379,13 @@ impl ParentExpression for FunctionCall {
 	}
 }
 
-impl Type for FunctionCall {
-	fn get_type(&self, context: &mut Context) -> anyhow::Result<Pointer> {
+impl Typed for FunctionCall {
+	fn get_type(&self, context: &mut Context) -> anyhow::Result<VirtualPointer> {
 		let function = FunctionDeclaration::from_literal(self.function.expect_literal(context)?, context)?;
 		if let Some(return_type) = function.return_type {
-			return_type.as_ref().expect_as::<Pointer>().cloned()
+			return_type.as_ref().expect_as::<VirtualPointer>().cloned()
 		} else {
-			context.scope_data.expect_global_variable("Nothing").expect_as::<Pointer>().cloned()
+			context.scope_data.expect_global_variable("Nothing").expect_as::<VirtualPointer>().cloned()
 		}
 	}
 }

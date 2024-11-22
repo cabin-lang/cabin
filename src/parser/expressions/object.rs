@@ -4,7 +4,7 @@ use try_as::traits as try_as_traits;
 
 use crate::{
 	api::{context::Context, traits::TryAs as _},
-	comptime::{memory::Pointer, CompileTime},
+	comptime::{memory::VirtualPointer, CompileTime},
 	lexer::TokenType,
 	mapped_err, parse_list,
 	parser::{
@@ -50,7 +50,7 @@ impl ObjectConstructor {
 		self.fields.iter().find_map(|field| if &field.name == name { field.value.as_ref() } else { None })
 	}
 
-	pub fn from_string(string: &str, context: &mut Context) -> Pointer {
+	pub fn from_string(string: &str, context: &mut Context) -> VirtualPointer {
 		LiteralObject::try_from_object_constructor(
 			ObjectConstructor {
 				type_name: Name::from("Text"),

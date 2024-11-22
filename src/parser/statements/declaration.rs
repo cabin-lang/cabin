@@ -1,6 +1,6 @@
 use crate::{
 	api::{context::Context, traits::TryAs},
-	comptime::{memory::Pointer, CompileTime},
+	comptime::{memory::VirtualPointer, CompileTime},
 	lexer::TokenType,
 	mapped_err,
 	parser::{
@@ -130,7 +130,7 @@ impl CompileTime for Declaration {
 		// Rewrite the location of the temporary group in memory to the group that was just evaluated. This means that
 		// any pointers that were made to the temporary group now correctly point to the actual group that was evaluated.
 		if let Some(temporary_group_pointer) = pointer_to_temporary_group {
-			let group_address = evaluated.expect_as::<Pointer>()?.to_owned();
+			let group_address = evaluated.expect_as::<VirtualPointer>()?.to_owned();
 			context.virtual_memory.move_overwrite(group_address, temporary_group_pointer);
 			evaluated = Expression::Pointer(temporary_group_pointer);
 		}

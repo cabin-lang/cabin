@@ -5,7 +5,7 @@ use try_as::traits as try_as_traits;
 use crate::{
 	api::{context::Context, traits::TryAs as _},
 	bail_err,
-	comptime::{memory::Pointer, CompileTime},
+	comptime::{memory::VirtualPointer, CompileTime},
 	mapped_err,
 	parser::{
 		expressions::{
@@ -66,7 +66,7 @@ pub enum Expression {
 	/// into objects and stored in virtual memory.
 	OneOf(OneOf),
 
-	Pointer(Pointer),
+	Pointer(VirtualPointer),
 	Run(RunExpression),
 
 	Void(()),
@@ -210,7 +210,7 @@ impl Expression {
 	}
 
 	pub fn is_true(&self, context: &Context) -> bool {
-		let Ok(literal_address) = self.try_as::<Pointer>() else {
+		let Ok(literal_address) = self.try_as::<VirtualPointer>() else {
 			return false;
 		};
 
@@ -230,6 +230,7 @@ impl Expression {
 	/// This function should only be called during parse-time.
 	///
 	/// # Returns
+	///
 	/// A mutable reference to the tags on this expression, or `None` if this expression doesn't
 	/// support tags.
 	pub fn tags_mut(&mut self) -> Option<&mut TagList> {
@@ -248,6 +249,22 @@ impl Expression {
 			Self::ObjectConstructor(object) => Some(&mut object.name),
 			_ => None,
 		}
+	}
+
+	/// Returns whether this expression can be assigned to the type pointed to by `target_type`, which is generally
+	/// a call to `Typed::get_type()`.
+	///
+	/// # Parameters
+	///
+	/// - `target_type` - A pointer to the group declaration that represents the type we are trying to assign to.
+	/// - `context` - Global data about the compiler state.
+	///
+	/// # Returns
+	///
+	/// whether this expression can be assigned to the given type.
+	pub fn is_assignable_to_type(&self, target_type: VirtualPointer, context: &mut Context) -> anyhow::Result<bool> {
+		let value_type = self.get_type(context)?.virtual_deref(context).clone();
+		value_type.is_type_assignable_to_type(target_type, context)
 	}
 }
 
@@ -269,8 +286,8 @@ impl TranspileToC for Expression {
 	}
 }
 
-impl Type for Expression {
-	fn get_type(&self, context: &mut Context) -> anyhow::Result<Pointer> {
+impl Typed for Expression {
+	fn get_type(&self, context: &mut Context) -> anyhow::Result<VirtualPointer> {
 		Ok(match self {
 			Expression::Pointer(pointer) => pointer.virtual_deref(context).clone().get_type(context)?,
 			Expression::FunctionCall(function_call) => function_call.get_type(context)?,
@@ -283,8 +300,8 @@ impl Type for Expression {
 	}
 }
 
-pub trait Type {
-	fn get_type(&self, context: &mut Context) -> anyhow::Result<Pointer>;
+pub trait Typed {
+	fn get_type(&self, context: &mut Context) -> anyhow::Result<VirtualPointer>;
 }
 
 impl ParentExpression for Expression {

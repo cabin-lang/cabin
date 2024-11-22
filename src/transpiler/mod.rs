@@ -1,5 +1,6 @@
 use crate::{
 	api::context::Context,
+	comptime::memory::VirtualPointer,
 	mapped_err,
 	parser::{
 		expressions::{
@@ -7,7 +8,7 @@ use crate::{
 			function_declaration::FunctionDeclaration,
 			group::GroupDeclaration,
 			literal::{LiteralConvertible, LiteralObject},
-			Expression, Type,
+			Expression, Typed,
 		},
 		Program,
 	},
@@ -85,7 +86,7 @@ pub fn transpile_program(program: &Program, context: &mut Context) -> anyhow::Re
 pub fn transpile_types(context: &mut Context) -> anyhow::Result<String> {
 	let mut builder = String::new();
 	for (address, value) in context.virtual_memory.entries() {
-		builder += &match value.type_name.unmangled_name().as_str() {
+		builder += &match value.type_name().unmangled_name().as_str() {
 			"Group" => {
 				let group = GroupDeclaration::from_literal(&value, context)?;
 				format!("struct {} {};\n\n", value.to_c_type(context)?, group.to_c(context)?,)
@@ -144,7 +145,7 @@ pub fn transpile_types(context: &mut Context) -> anyhow::Result<String> {
 pub fn transpile_functions(context: &mut Context) -> anyhow::Result<String> {
 	let mut builder = String::new();
 	for (address, value) in context.virtual_memory.entries() {
-		builder += &match value.type_name.unmangled_name().as_str() {
+		builder += &match value.type_name().unmangled_name().as_str() {
 			"Function" => {
 				let function = FunctionDeclaration::from_literal(&value, context).map_err(mapped_err! {
 					while = "deserializing a function declaration literal into a function declaration",
@@ -169,23 +170,29 @@ pub fn transpile_main(context: &mut Context) -> anyhow::Result<String> {
 
 	// Virtual memory
 	for (address, value) in context.virtual_memory.entries() {
-		if matches!(value.type_name.unmangled_name().as_str(), "OneOf" | "Either") {
+		if matches!(value.type_name().unmangled_name().as_str(), "OneOf" | "Either") {
 			continue;
 		}
 
-		let mut current_tree: Vec<usize> = Vec::new();
+		let mut current_tree = Vec::new();
 		builder += &transpile_literal(context, &value, address, &mut visited, &mut current_tree)?;
 	}
 	Ok(builder)
 }
 
-pub fn transpile_literal(context: &mut Context, value: &LiteralObject, address: usize, done: &mut Vec<usize>, current_cycle: &mut Vec<usize>) -> anyhow::Result<String> {
+pub fn transpile_literal(
+	context: &mut Context,
+	value: &LiteralObject,
+	address: VirtualPointer,
+	done: &mut Vec<VirtualPointer>,
+	current_cycle: &mut Vec<VirtualPointer>,
+) -> anyhow::Result<String> {
 	// Avoid repetition
 	if done.contains(&address) {
 		return Ok(String::new());
 	}
 
-	if value.type_name == "Function".into() {
+	if value.type_name() == &"Function".into() {
 		let function = FunctionDeclaration::from_literal(value, context)?;
 		if !function.compile_time_parameters.is_empty() {
 			return Ok(String::new());
@@ -197,7 +204,7 @@ pub fn transpile_literal(context: &mut Context, value: &LiteralObject, address: 
 		current_cycle.push(address);
 		anyhow::bail!(
 			"Recursive dependency cycle detected: {}",
-			current_cycle.iter().map(usize::to_string).collect::<Vec<_>>().join(" -> "),
+			current_cycle.iter().map(|pointer| format!("{pointer}")).collect::<Vec<_>>().join(" -> "),
 		);
 	}
 	current_cycle.push(address);
@@ -206,7 +213,7 @@ pub fn transpile_literal(context: &mut Context, value: &LiteralObject, address: 
 
 	// Transpile dependencies
 	for dependency in value.dependencies() {
-		builder += &transpile_literal(context, &dependency.virtual_deref(context).clone(), dependency.value(), done, current_cycle)?;
+		builder += &transpile_literal(context, &dependency.virtual_deref(context).clone(), dependency, done, current_cycle)?;
 	}
 
 	// Transpile self
@@ -227,7 +234,7 @@ pub fn transpile_literal(context: &mut Context, value: &LiteralObject, address: 
 pub fn transpile_forward_declarations(context: &mut Context) -> anyhow::Result<String> {
 	let mut builder = "// Forward declarations -----------------------------------------------------------------------\n\n".to_owned();
 	for (address, value) in context.virtual_memory.entries() {
-		builder += &match value.type_name.unmangled_name().as_str() {
+		builder += &match value.type_name().unmangled_name().as_str() {
 			"Group" => format!("typedef struct {name} {name};\n", name = value.to_c_type(context)?),
 			"Either" => format!("typedef enum either_{name}_{address} {name}_{address};\n", name = value.name.to_c(context)?),
 			"Object" => {

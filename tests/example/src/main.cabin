@@ -1,1 +1,5 @@
-terminal.print(run (3 + 4));
+let accepts_text = action(text: Text) {
+
+};
+
+accepts_text(4);

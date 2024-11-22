@@ -6,7 +6,7 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
-use super::Type;
+use super::Typed;
 
 /// A `Run` expression in the language. Run-expressions forcibly run an expression at runtime instead of compile-time. Since
 /// Cabin runs all code at compile-time by default, this is the only way to forcibly run an expression at runtime.
@@ -64,8 +64,8 @@ impl TranspileToC for RunExpression {
 	}
 }
 
-impl Type for RunExpression {
-	fn get_type(&self, context: &mut Context) -> anyhow::Result<crate::comptime::memory::Pointer> {
+impl Typed for RunExpression {
+	fn get_type(&self, context: &mut Context) -> anyhow::Result<crate::comptime::memory::VirtualPointer> {
 		self.expression.get_type(context)
 	}
 }

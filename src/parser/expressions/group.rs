@@ -21,7 +21,7 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
-use super::Type;
+use super::Typed;
 
 #[derive(Debug, Clone)]
 pub struct GroupDeclaration {

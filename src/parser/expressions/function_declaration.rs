@@ -193,7 +193,7 @@ impl TranspileToC for FunctionDeclaration {
 		// Get builtin and side effect tags
 		for tag in &self.tags.values {
 			if let Ok(object) = tag.try_as_literal(context) {
-				if object.type_name == Name::from("BuiltinTag") {
+				if object.type_name() == &Name::from("BuiltinTag") {
 					let builtin_name = object.get_field_literal("internal_name", context).unwrap().expect_as::<String>()?.to_owned();
 					let mut parameters = self.parameters.iter().map(|(parameter_name, _)| parameter_name.to_c(context).unwrap()).collect::<Vec<_>>();
 					parameters.push("return_address".to_string());

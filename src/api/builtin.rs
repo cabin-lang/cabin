@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 
 use colored::Colorize as _;
-use unindent::unindent;
 
 use crate::{
 	api::{
@@ -9,9 +8,9 @@ use crate::{
 		macros::{number, string},
 		traits::TryAs as _,
 	},
-	comptime::memory::Pointer,
+	comptime::memory::VirtualPointer,
 	mapped_err,
-	parser::expressions::{object::ObjectConstructor, Expression, Type},
+	parser::expressions::{object::ObjectConstructor, Expression, Typed},
 };
 
 pub struct BuiltinFunction {
@@ -47,8 +46,8 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			Ok(Expression::Void(()))
 		},
 		to_c: |context, parameter_names| {
-			let text_address = context.scope_data.expect_global_variable("Text").expect_as::<Pointer>().unwrap().value();
-			let anything_address = context.scope_data.expect_global_variable("Anything").expect_as::<Pointer>().unwrap().value();
+			let text_address = context.scope_data.expect_global_variable("Text").expect_as::<VirtualPointer>().unwrap();
+			let anything_address = context.scope_data.expect_global_variable("Anything").expect_as::<VirtualPointer>().unwrap();
 			let object = parameter_names.first().unwrap();
 			unindent::unindent(&format!(
 				"
@@ -68,7 +67,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 		},
 		to_c: |context, parameter_names| {
 			let return_address = parameter_names.first().unwrap();
-			let text_address = context.scope_data.expect_global_variable("Text").expect_as::<Pointer>().unwrap().value();
+			let text_address = context.scope_data.expect_global_variable("Text").expect_as::<VirtualPointer>().unwrap();
 			format!("char* buffer = malloc(sizeof(char) * 256);\nfgets(buffer, 256, stdin);\n*{return_address} = (group_u_Text_{text_address}) {{ .internal_value = buffer }};")
 		}
 	},
@@ -79,7 +78,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			Ok(number(first + second, context))
 		},
 		to_c: |context,parameter_names| {
-			let number_address = context.scope_data.expect_global_variable("Number").expect_as::<Pointer>().unwrap().value();
+			let number_address = context.scope_data.expect_global_variable("Number").expect_as::<VirtualPointer>().unwrap();
 			let first = parameter_names.first().unwrap();
 			let second = parameter_names.get(1).unwrap();
 			let number_type = format!("group_u_Number_{number_address}");
@@ -102,7 +101,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 				while = format!("Interpreting the first argument to {} as a literal", "Anything.to_string".bold().cyan()),
 				context = context,
 			})?;
-			Ok(string(&match this.type_name.unmangled_name().as_str() {
+			Ok(string(&match this.type_name().unmangled_name().as_str() {
 				"Number" => this.expect_as::<f64>()?.to_string(),
 				"Text" => this.expect_as::<String>()?.to_owned(),
 				_ => anyhow::bail!("Unsupported expression: {this:?}")
@@ -111,9 +110,9 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 		to_c: |context, parameter_names| {
 			let object = parameter_names.first().unwrap();
 			let return_address = parameter_names.get(1).unwrap();
-			let group_address = context.scope_data.expect_global_variable("Group").expect_as::<Pointer>().unwrap().value();
-			let text_address = context.scope_data.expect_global_variable("Text").expect_as::<Pointer>().unwrap().value();
-			let anything_address = context.scope_data.expect_global_variable("Anything").expect_as::<Pointer>().unwrap().value();
+			let group_address = context.scope_data.expect_global_variable("Group").expect_as::<VirtualPointer>().unwrap();
+			let text_address = context.scope_data.expect_global_variable("Text").expect_as::<VirtualPointer>().unwrap();
+			let anything_address = context.scope_data.expect_global_variable("Anything").expect_as::<VirtualPointer>().unwrap();
 			unindent::unindent(&format!(
 				r#"
 				// Get the type metadata of the value
