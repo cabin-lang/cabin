@@ -472,7 +472,7 @@ impl ScopeData {
 
 		// No variable found
 		anyhow::bail!(
-			"Attempted to remove the variable \"{name}\" from a scope, but no variable with the name \"{name}\" exists in this scope",
+			"You refer to a variable called \"{name}\", but no variable with the name \"{name}\" exists where you reference it",
 			name = name.unmangled_name().bold().cyan()
 		);
 	}

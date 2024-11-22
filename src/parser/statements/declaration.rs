@@ -1,7 +1,7 @@
 use crate::{
 	api::{context::Context, traits::TryAs},
 	comptime::{memory::VirtualPointer, CompileTime},
-	lexer::TokenType,
+	lexer::{Span, TokenType},
 	mapped_err,
 	parser::{
 		expressions::{group::GroupDeclaration, literal::LiteralConvertible, name::Name, Expression},
@@ -99,6 +99,7 @@ impl CompileTime for Declaration {
 				fields: Vec::new(),
 				name: "temporary_group".into(),
 				scope_id: group.scope_id,
+				span: Span::zero(),
 			}
 			.to_literal(context)?
 			.clone()

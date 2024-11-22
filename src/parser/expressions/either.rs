@@ -88,6 +88,7 @@ impl LiteralConvertible for Either {
 			internal_fields: HashMap::new(),
 			type_name: "Either".into(),
 			object_type: ObjectType::Either,
+			span: self.span,
 		};
 
 		LiteralObject::try_from_object_constructor(constructor, context)
@@ -124,7 +125,7 @@ impl LiteralConvertible for Either {
 			variants,
 			scope_id: literal.declared_scope_id(),
 			name: literal.name.clone(),
-			span: Span::zero(), // TODO: rah
+			span: literal.span.clone(),
 		})
 	}
 }
@@ -143,7 +144,7 @@ impl TranspileToC for Either {
 }
 
 impl Spanned for Either {
-	fn span(&self) -> Span {
+	fn span(&self, _context: &Context) -> Span {
 		self.span.to_owned()
 	}
 }

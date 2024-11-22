@@ -503,12 +503,16 @@ impl Span {
 	pub fn cover(first: &Span, second: &Span) -> Span {
 		Span {
 			start: first.start,
-			length: second.start - first.start,
+			length: second.start + second.length - first.start,
 		}
 	}
 
 	pub fn to(&self, other: &Span) -> Span {
 		Span::cover(self, other)
+	}
+
+	pub fn contains(&self, position: usize) -> bool {
+		(self.start..self.start + self.length).contains(&position)
 	}
 }
 
@@ -559,13 +563,12 @@ pub fn tokenize_program(code: &str, context: &mut Context, is_prelude: bool) -> 
 	}
 
 	if !is_prelude {
-		context.colored_program = Some({
-			let mut program = String::new();
-			for (index, token) in tokens.iter().enumerate() {
-				program += &format!("{}", token.value.style(token.style(tokens.get(index + 1), context)))
+		for (index, token) in tokens.iter().enumerate() {
+			let style = token.style(tokens.get(index + 1), context).clone();
+			for character in token.value.chars() {
+				context.colored_program.push(character.to_string().style(&style));
 			}
-			program
-		});
+		}
 	}
 
 	tokens.retain(|token| token.token_type != TokenType::Whitespace && token.token_type != TokenType::LineComment);

@@ -5,7 +5,7 @@ use colored::Colorize as _;
 use crate::{
 	api::{builtin::transpile_builtin_to_c, context::Context, macros::string, scope::ScopeType, traits::TryAs as _},
 	comptime::CompileTime,
-	lexer::TokenType,
+	lexer::{Span, TokenType},
 	literal, literal_list, mapped_err, parse_list,
 	parser::{
 		expressions::{
@@ -21,6 +21,8 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
+use super::Spanned;
+
 #[derive(Debug, Clone)]
 pub struct FunctionDeclaration {
 	pub return_type: Option<Box<Expression>>,
@@ -31,6 +33,7 @@ pub struct FunctionDeclaration {
 	pub tags: TagList,
 	pub this_object: Option<Box<Expression>>,
 	pub name: Name,
+	pub span: Span,
 }
 
 impl Parse for FunctionDeclaration {
@@ -38,17 +41,19 @@ impl Parse for FunctionDeclaration {
 
 	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
 		// "function" keyword
-		tokens.pop(TokenType::KeywordAction)?;
+		let start = tokens.pop(TokenType::KeywordAction)?.span;
+		let mut end = start.clone();
 
 		// Compile-time parameters
 		let compile_time_parameters = if tokens.next_is(TokenType::LeftAngleBracket) {
 			let mut compile_time_parameters = Vec::new();
-			parse_list!(tokens, ListType::AngleBracketed, {
+			end = parse_list!(tokens, ListType::AngleBracketed, {
 				let name = Name::parse(tokens, context)?;
 				tokens.pop(TokenType::Colon)?;
 				let parameter_type = Expression::parse(tokens, context)?;
 				compile_time_parameters.push((name, parameter_type));
-			});
+			})
+			.span;
 			compile_time_parameters
 		} else {
 			Vec::new()
@@ -57,12 +62,13 @@ impl Parse for FunctionDeclaration {
 		// Parameters
 		let parameters = if tokens.next_is(TokenType::LeftParenthesis) {
 			let mut parameters = Vec::new();
-			parse_list!(tokens, ListType::Parenthesized, {
+			end = parse_list!(tokens, ListType::Parenthesized, {
 				let name = Name::parse(tokens, context)?;
 				tokens.pop(TokenType::Colon)?;
 				let parameter_type = Expression::parse(tokens, context)?;
 				parameters.push((name, parameter_type));
-			});
+			})
+			.span;
 			parameters
 		} else {
 			Vec::new()
@@ -71,7 +77,9 @@ impl Parse for FunctionDeclaration {
 		// Return Type
 		let return_type = if tokens.next_is(TokenType::Colon) {
 			tokens.pop(TokenType::Colon)?;
-			Some(Box::new(Expression::parse(tokens, context)?))
+			let expression = Expression::parse(tokens, context)?;
+			end = expression.span(context);
+			Some(Box::new(expression))
 		} else {
 			None
 		};
@@ -84,6 +92,7 @@ impl Parse for FunctionDeclaration {
 					.scope_data
 					.declare_new_variable_from_id(parameter_name.clone(), Expression::Void(()), block.inner_scope_id)?;
 			}
+			end = block.span(context);
 			Some(Box::new(Expression::Block(block)))
 		} else {
 			None
@@ -99,6 +108,7 @@ impl Parse for FunctionDeclaration {
 			scope_id: context.scope_data.unique_id(),
 			this_object: None,
 			name: Name::non_mangled("anonymous_function"),
+			span: start.to(&end),
 		})
 	}
 }
@@ -167,6 +177,7 @@ impl CompileTime for FunctionDeclaration {
 			tags: self.tags.evaluate_at_compile_time(context)?,
 			this_object,
 			name: self.name,
+			span: self.span,
 		};
 
 		// Return as a pointer
@@ -311,6 +322,7 @@ impl LiteralConvertible for FunctionDeclaration {
 			internal_fields: HashMap::from([("body".to_owned(), InternalFieldValue::OptionalExpression(self.body.map(|body| *body)))]),
 			type_name: "Function".into(),
 			object_type: ObjectType::Function,
+			span: self.span,
 		};
 
 		// Convert to literal
@@ -392,6 +404,13 @@ impl LiteralConvertible for FunctionDeclaration {
 			tags: tags.into(),
 			this_object,
 			name: literal.name.clone(),
+			span: literal.span(context),
 		})
+	}
+}
+
+impl Spanned for FunctionDeclaration {
+	fn span(&self, _context: &Context) -> Span {
+		self.span.clone()
 	}
 }

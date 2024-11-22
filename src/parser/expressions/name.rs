@@ -14,7 +14,7 @@ use super::Spanned;
 #[derive(Debug, Clone, Eq)]
 pub struct Name {
 	name: String,
-	span: Option<Span>,
+	span: Span,
 	should_mangle: bool,
 }
 
@@ -34,7 +34,7 @@ impl Name {
 	pub fn non_mangled<T: AsRef<str>>(name: T) -> Name {
 		Name {
 			name: name.as_ref().to_owned(),
-			span: None,
+			span: Span::zero(),
 			should_mangle: false,
 		}
 	}
@@ -49,10 +49,6 @@ impl Name {
 		} else {
 			self.unmangled_name()
 		}
-	}
-
-	pub fn position(&self) -> Option<Span> {
-		self.span.clone()
 	}
 }
 
@@ -70,7 +66,7 @@ impl Parse for Name {
 
 		Ok(Name {
 			name: token.value,
-			span: Some(token.span),
+			span: token.span,
 			should_mangle: true,
 		})
 	}
@@ -83,7 +79,28 @@ impl CompileTime for Name {
 		let (value, scope_id) = context.scope_data.pop_variable(&self).map_err(mapped_err! {
 			while = format!("attempting to get the original value of the name \"{}\" to evaluate it at compile-time", self.unmangled_name().bold().cyan()),
 			context = context,
+			position = self.span(context),
+			details = unindent::unindent(&format!(
+				"
+				Here you reference a variable called \"{name}\", but no variable called \"{name}\" exists at this
+				part of the program. If this is a typo and you don't expect a variable with this name to exist, you
+				may be trying to refer to one of these variables, which are the ones with the closest names that are
+				present here:
+
+				{closest}
+				", 
+				name = self.unmangled_name().bold().red(),
+				closest = context
+					.scope_data
+					.get_closest_variables(&self, 3)
+					.iter()
+					.map(|(name, _)| format!("    - {}", name.unmangled_name().bold().green()))
+					.collect::<Vec<_>>()
+					.join("\n")
+					.trim_start()
+			))
 		})?;
+
 		let evaluated = value.evaluate_at_compile_time(context).map_err(mapped_err! {
 			while = format!("evaluating the value of the name \"{}\" at compile-time", self.unmangled_name().bold().cyan()),
 			context = context,
@@ -104,7 +121,7 @@ impl<T: AsRef<str>> From<T> for Name {
 	fn from(value: T) -> Self {
 		Name {
 			name: value.as_ref().to_owned(),
-			span: None,
+			span: Span::zero(),
 			should_mangle: true,
 		}
 	}
@@ -123,7 +140,7 @@ impl ToCabin for Name {
 }
 
 impl Spanned for Name {
-	fn span(&self) -> Span {
-		self.span.as_ref().unwrap().to_owned()
+	fn span(&self, _context: &Context) -> Span {
+		self.span.clone()
 	}
 }

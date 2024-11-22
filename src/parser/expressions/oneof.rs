@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
 	api::{context::Context, macros::string, scope::ScopeType, traits::TryAs as _},
 	comptime::CompileTime,
-	lexer::TokenType,
+	lexer::{Span, TokenType},
 	literal_list, parse_list,
 	parser::{
 		expressions::{
@@ -16,18 +16,21 @@ use crate::{
 	},
 };
 
+use super::Spanned;
+
 #[derive(Debug, Clone)]
 pub struct OneOf {
 	compile_time_parameters: Vec<Name>,
 	choices: Vec<Expression>,
 	scope_id: usize,
+	span: Span,
 }
 
 impl Parse for OneOf {
 	type Output = OneOf;
 
 	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
-		tokens.pop(TokenType::KeywordOneOf)?;
+		let start = tokens.pop(TokenType::KeywordOneOf)?.span;
 		context.scope_data.enter_new_unlabeled_scope(ScopeType::OneOf);
 
 		// Compile-time parameters
@@ -45,9 +48,10 @@ impl Parse for OneOf {
 
 		// Choices
 		let mut choices = Vec::new();
-		parse_list!(tokens, ListType::Braced, {
+		let end = parse_list!(tokens, ListType::Braced, {
 			choices.push(Expression::parse(tokens, context)?);
-		});
+		})
+		.span;
 
 		context.scope_data.exit_scope()?;
 
@@ -56,6 +60,7 @@ impl Parse for OneOf {
 			choices,
 			compile_time_parameters,
 			scope_id: context.scope_data.unique_id(),
+			span: start.to(&end),
 		})
 	}
 }
@@ -82,6 +87,7 @@ impl CompileTime for OneOf {
 				choices,
 				scope_id: self.scope_id,
 				compile_time_parameters: self.compile_time_parameters,
+				span: self.span,
 			}
 			.to_literal(context)
 			.unwrap()
@@ -114,6 +120,7 @@ impl LiteralConvertible for OneOf {
 			internal_fields: HashMap::new(),
 			type_name: "OneOf".into(),
 			object_type: ObjectType::OneOf,
+			span: self.span,
 		};
 
 		LiteralObject::try_from_object_constructor(constructor, context)
@@ -140,6 +147,13 @@ impl LiteralConvertible for OneOf {
 			compile_time_parameters,
 			choices,
 			scope_id: literal.declared_scope_id(),
+			span: literal.span(context),
 		})
+	}
+}
+
+impl Spanned for OneOf {
+	fn span(&self, _context: &Context) -> Span {
+		self.span.clone()
 	}
 }

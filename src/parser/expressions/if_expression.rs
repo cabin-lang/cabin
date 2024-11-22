@@ -1,7 +1,7 @@
 use crate::{
 	api::context::Context,
 	comptime::CompileTime,
-	lexer::TokenType,
+	lexer::{Span, TokenType},
 	mapped_err,
 	parser::{
 		expressions::{block::Block, Expression},
@@ -10,27 +10,38 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
+use super::Spanned;
+
 #[derive(Debug, Clone)]
 pub struct IfExpression {
 	pub condition: Box<Expression>,
 	pub body: Box<Expression>,
 	pub else_body: Option<Box<Expression>>,
+	span: Span,
 }
 
 impl Parse for IfExpression {
 	type Output = IfExpression;
 
 	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
-		tokens.pop(TokenType::KeywordIf)?;
+		let start = tokens.pop(TokenType::KeywordIf)?.span;
 		let condition = Box::new(Expression::parse(tokens, context)?);
 		let body = Box::new(Expression::Block(Block::parse(tokens, context)?));
+		let mut end = body.span(context);
 		let else_body = if tokens.next_is(TokenType::KeywordOtherwise) {
 			tokens.pop(TokenType::KeywordOtherwise).unwrap_or_else(|_| unreachable!());
-			Some(Box::new(Expression::Block(Block::parse(tokens, context)?)))
+			let else_body = Expression::Block(Block::parse(tokens, context)?);
+			end = else_body.span(context);
+			Some(Box::new(else_body))
 		} else {
 			None
 		};
-		Ok(IfExpression { condition, body, else_body })
+		Ok(IfExpression {
+			condition,
+			body,
+			else_body,
+			span: start.to(&end),
+		})
 	}
 }
 
@@ -82,6 +93,7 @@ impl CompileTime for IfExpression {
 			condition: Box::new(condition),
 			body: Box::new(body),
 			else_body,
+			span: self.span,
 		}))
 	}
 }
@@ -105,5 +117,11 @@ impl TranspileToC for IfExpression {
 		builder += "\n) ";
 
 		Ok(builder)
+	}
+}
+
+impl Spanned for IfExpression {
+	fn span(&self, _context: &Context) -> Span {
+		self.span.clone()
 	}
 }

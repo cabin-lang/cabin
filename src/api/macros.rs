@@ -163,6 +163,7 @@ macro_rules! list {
 				scope_id: $scope_id,
 				object_type: $crate::parser::expressions::object::ObjectType::Normal,
 				name: "anonymous_list".into(),
+				span: $crate::lexer::Span::zero(),
 			};
 
 			Expression::Pointer(
@@ -180,6 +181,7 @@ macro_rules! list {
 				scope_id: $scope_id,
 				object_type: $crate::parser::expressions::object::ObjectType::Normal,
 				name: "anonymous_runtime_list".into(),
+				span: $crate::lexer::Span::zero(),
 			};
 			Expression::ObjectConstructor(constructor)
 		}
@@ -198,6 +200,7 @@ macro_rules! literal_list {
 			scope_id: $scope_id,
 			object_type: ObjectType::Normal,
 			name: "anonymous_list".into(),
+			span: $crate::lexer::Span::zero(),
 		};
 
 		let literal = LiteralObject::try_from_object_constructor(constructor, $context).unwrap();
@@ -225,6 +228,7 @@ macro_rules! new_object {
 			scope_id: $scope_id,
 			object_type: $crate::parser::expressions::object::ObjectType::Normal,
 			name: "anonymous_object".into(),
+			span: $crate::lexer::Span::zero(),
 		}
 	};
 }

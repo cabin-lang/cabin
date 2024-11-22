@@ -44,7 +44,7 @@ impl Parse for RunExpression {
 	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
 		let mut span = tokens.pop(TokenType::KeywordRuntime)?.span;
 		let expression = Box::new(Expression::parse(tokens, context)?);
-		span = span.to(&expression.span());
+		span = span.to(&expression.span(context));
 		Ok(RunExpression { span, expression })
 	}
 }
@@ -77,7 +77,7 @@ pub trait ParentExpression: Sized {
 }
 
 impl Spanned for RunExpression {
-	fn span(&self) -> Span {
+	fn span(&self, _context: &Context) -> Span {
 		self.span.to_owned()
 	}
 }

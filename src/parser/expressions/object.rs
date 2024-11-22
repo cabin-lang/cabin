@@ -5,15 +5,22 @@ use try_as::traits as try_as_traits;
 use crate::{
 	api::{context::Context, traits::TryAs as _},
 	comptime::{memory::VirtualPointer, CompileTime},
-	lexer::TokenType,
+	lexer::{Span, TokenType},
 	mapped_err, parse_list,
 	parser::{
-		expressions::{group::GroupDeclaration, literal::LiteralConvertible as _, literal::LiteralObject, name::Name, Expression},
+		expressions::{
+			group::GroupDeclaration,
+			literal::{LiteralConvertible as _, LiteralObject},
+			name::Name,
+			Expression,
+		},
 		statements::tag::TagList,
 		ListType, Parse, ToCabin, TokenQueue, TokenQueueFunctionality,
 	},
 	transpiler::TranspileToC,
 };
+
+use super::Spanned;
 
 #[derive(Debug, Clone)]
 pub struct ObjectConstructor {
@@ -23,6 +30,7 @@ pub struct ObjectConstructor {
 	pub scope_id: usize,
 	pub object_type: ObjectType,
 	pub name: Name,
+	pub span: Span,
 }
 
 #[derive(Debug, Clone)]
@@ -59,6 +67,7 @@ impl ObjectConstructor {
 				scope_id: 0,
 				object_type: ObjectType::Normal,
 				name: Name::non_mangled("anonymous_string_literal"),
+				span: Span::zero(),
 			},
 			context,
 		)
@@ -74,6 +83,7 @@ impl ObjectConstructor {
 			scope_id: 0,
 			object_type: ObjectType::Normal,
 			name: "anonymous_number".into(),
+			span: Span::zero(),
 		}
 	}
 
@@ -109,14 +119,14 @@ impl Parse for ObjectConstructor {
 	type Output = ObjectConstructor;
 
 	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
-		tokens.pop(TokenType::KeywordNew)?;
+		let start = tokens.pop(TokenType::KeywordNew)?.span;
 
 		// Name
 		let name = Name::parse(tokens, context)?;
 
 		// Fields
 		let mut fields = Vec::new();
-		parse_list!(tokens, ListType::Braced, {
+		let end = parse_list!(tokens, ListType::Braced, {
 			// Parse tags
 			let tags = if tokens.next_is(TokenType::TagOpening) {
 				Some(TagList::parse(tokens, context)?)
@@ -147,7 +157,8 @@ impl Parse for ObjectConstructor {
 				value: Some(value),
 				field_type: None,
 			});
-		});
+		})
+		.span;
 
 		// Return
 		Ok(ObjectConstructor {
@@ -157,6 +168,7 @@ impl Parse for ObjectConstructor {
 			internal_fields: HashMap::new(),
 			object_type: ObjectType::Normal,
 			name: Name::non_mangled("anonymous_object"),
+			span: start.to(&end),
 		})
 	}
 }
@@ -259,6 +271,7 @@ impl CompileTime for ObjectConstructor {
 			internal_fields: self.internal_fields,
 			object_type: self.object_type,
 			name: self.name,
+			span: self.span,
 		};
 
 		if constructor.is_literal() {
@@ -308,5 +321,11 @@ impl TranspileToC for ObjectConstructor {
 
 		builder += "\n}";
 		Ok(builder)
+	}
+}
+
+impl Spanned for ObjectConstructor {
+	fn span(&self, _context: &Context) -> Span {
+		self.span.clone()
 	}
 }

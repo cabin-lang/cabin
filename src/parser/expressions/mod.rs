@@ -302,21 +302,21 @@ impl Typed for Expression {
 }
 
 impl Spanned for Expression {
-	fn span(&self) -> Span {
+	fn span(&self, context: &Context) -> Span {
 		match self {
-			Expression::Name(name) => name.span(),
-			Expression::Run(run_expression) => run_expression.span(),
-			Expression::Block(block) => block.span(),
-			Expression::Either(either) => either.span(),
-			Expression::FieldAccess(field_access) => todo!(),
-			Expression::FunctionCall(function_call) => todo!(),
-			Expression::Group(group_declaration) => todo!(),
-			Expression::FunctionDeclaration(function_declaration) => todo!(),
-			Expression::If(if_expression) => todo!(),
-			Expression::ObjectConstructor(object_constructor) => todo!(),
-			Expression::ForEachLoop(for_each_loop) => todo!(),
-			Expression::OneOf(one_of) => todo!(),
-			Expression::Pointer(virtual_pointer) => todo!(),
+			Expression::Name(name) => name.span(context),
+			Expression::Run(run_expression) => run_expression.span(context),
+			Expression::Block(block) => block.span(context),
+			Expression::Either(either) => either.span(context),
+			Expression::ObjectConstructor(object_constructor) => object_constructor.span(context),
+			Expression::Pointer(virtual_pointer) => virtual_pointer.span(context),
+			Expression::Group(group_declaration) => group_declaration.span(context),
+			Expression::FunctionDeclaration(function_declaration) => function_declaration.span(context),
+			Expression::FunctionCall(function_call) => function_call.span(context),
+			Expression::If(if_expression) => if_expression.span(context),
+			Expression::FieldAccess(field_access) => field_access.span(context),
+			Expression::OneOf(one_of) => one_of.span(context),
+			Expression::ForEachLoop(for_each_loop) => for_each_loop.span(context),
 			Expression::Void(_) => panic!(),
 		}
 	}
@@ -327,7 +327,7 @@ pub trait Typed {
 }
 
 pub trait Spanned {
-	fn span(&self) -> Span;
+	fn span(&self, context: &Context) -> Span;
 }
 
 impl ParentExpression for Expression {

@@ -16,6 +16,8 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
+use super::Spanned;
+
 /// A "literal object". Literal objects can be thought of as simple associative arrays, similar to a JSON object or similar.
 /// Specifically, a literal object is a collection of fields where each field's value is another literal object.
 ///
@@ -61,6 +63,8 @@ pub struct LiteralObject {
 	/// to be moved in memory or taken out of memory. See the `move_and_overwrite()` function on `VirtualMemory` for an example of this, which is
 	/// called by `Declaration::evaluate_at_compile_time()`.
 	pub address: Option<VirtualPointer>,
+
+	pub span: Span,
 }
 
 impl LiteralObject {
@@ -82,7 +86,7 @@ impl LiteralObject {
 					base = "A value that's not fully known at compile-time was used as a type.",
 					while = format!("checking the field \"{}\" of a value at compile-time", field.name.unmangled_name().bold().cyan()),
 					context = context,
-					position = field.name.position().unwrap_or_else(Span::zero),
+					position = field.name.span(context),
 					details = expression_formatter::format!(
 						r#"
                         Although Cabin allows arbitrary expressions to be used as types, the expression needs to be able to 
@@ -111,6 +115,7 @@ impl LiteralObject {
 			scope_id: object.scope_id,
 			name: object.name,
 			address: None,
+			span: object.span,
 		})
 	}
 
@@ -340,5 +345,11 @@ impl TranspileToC for LiteralObject {
 				builder
 			},
 		})
+	}
+}
+
+impl Spanned for LiteralObject {
+	fn span(&self, _context: &Context) -> Span {
+		self.span.clone()
 	}
 }

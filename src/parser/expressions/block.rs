@@ -100,7 +100,7 @@ impl TranspileToC for Block {
 }
 
 impl Spanned for Block {
-	fn span(&self) -> Span {
+	fn span(&self, _context: &Context) -> Span {
 		self.span.to_owned()
 	}
 }

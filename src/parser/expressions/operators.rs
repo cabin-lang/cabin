@@ -5,7 +5,7 @@ use colored::Colorize as _;
 use crate::{
 	api::{context::Context, traits::TryAs as _},
 	comptime::{memory::VirtualPointer, CompileTime},
-	lexer::{Token, TokenType},
+	lexer::{Span, Token, TokenType},
 	mapped_err,
 	parser::{
 		expressions::{
@@ -28,6 +28,8 @@ use crate::{
 	},
 	transpiler::TranspileToC,
 };
+
+use super::Spanned;
 
 /// A binary operation. More specifically, this represents not one operation, but a group of operations that share the same precedence.
 /// For example, the `+` and `-` operators share the same precedence, so they are grouped together in the `ADDITIVE` constant.
@@ -95,8 +97,11 @@ pub struct BinaryExpression;
 
 fn parse_binary_expression(operation: &BinaryOperation<'_>, tokens: &mut VecDeque<Token>, context: &mut Context) -> anyhow::Result<Expression> {
 	let mut expression = operation.parse_precedent(tokens, context)?;
+	let start = expression.span(context);
 	while tokens.next_is_one_of(operation.token_types) {
-		let operator = tokens.pop_type(tokens.peek_type()?.clone()).unwrap_or_else(|_error| unreachable!());
+		let operator_token = tokens.pop(tokens.peek_type()?.clone())?;
+		let middle = operator_token.span;
+		let operator = operator_token.token_type;
 		let function_name = match operator {
 			TokenType::Asterisk => "times",
 			TokenType::DoubleEquals => "equals",
@@ -108,15 +113,18 @@ fn parse_binary_expression(operation: &BinaryOperation<'_>, tokens: &mut VecDequ
 			_ => unreachable!(),
 		};
 		let right = operation.parse_precedent(tokens, context)?;
+		let end = right.span(context);
 		expression = Expression::FunctionCall(FunctionCall {
 			function: Box::new(Expression::FieldAccess(FieldAccess {
 				left: Box::new(expression),
 				right: Name::from(function_name),
 				scope_id: context.scope_data.unique_id(),
+				span: start.to(&middle),
 			})),
 			arguments: Some(vec![right]),
 			compile_time_arguments: Some(Vec::new()),
 			scope_id: context.scope_data.unique_id(),
+			span: start.to(&end),
 		});
 	}
 
@@ -136,6 +144,7 @@ pub struct FieldAccess {
 	pub left: Box<Expression>,
 	pub right: Name,
 	pub scope_id: usize,
+	span: Span,
 }
 
 impl Parse for FieldAccess {
@@ -143,13 +152,16 @@ impl Parse for FieldAccess {
 
 	fn parse(tokens: &mut VecDeque<Token>, context: &mut Context) -> anyhow::Result<Self::Output> {
 		let mut expression = PrimaryExpression::parse(tokens, context)?; // There should be no map_err here
+		let start = expression.span(context);
 		while tokens.next_is(TokenType::Dot) {
 			tokens.pop(TokenType::Dot)?;
 			let right = Name::parse(tokens, context)?;
+			let end = right.span(context);
 			expression = Expression::FieldAccess(Self {
 				left: Box::new(expression),
 				right,
 				scope_id: context.scope_data.unique_id(),
+				span: start.to(&end),
 			});
 		}
 
@@ -219,6 +231,7 @@ impl CompileTime for FieldAccess {
 				left: Box::new(left_evaluated),
 				right: self.right,
 				scope_id: self.scope_id,
+				span: self.span,
 			}))
 		}
 	}
@@ -274,5 +287,11 @@ impl Parse for PrimaryExpression {
 			},
 			_ => anyhow::bail!("Expected primary expression but found {}", tokens.peek_type()?),
 		})
+	}
+}
+
+impl Spanned for FieldAccess {
+	fn span(&self, _context: &Context) -> Span {
+		self.span.clone()
 	}
 }

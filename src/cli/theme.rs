@@ -128,15 +128,15 @@ pub const ONE_MIDNIGHT: Theme = Theme {
 
 pub const CATPPUCCIN_MOCHA: Theme = Theme {
 	keyword: Style::foreground().color(hex!("#cba6f7")),
-	variable_name: Style::foreground().color(hex!("#f38ba8")),
+	variable_name: Style::foreground().color(hex!("#eba0ac")),
 	type_name: Style::foreground().color(hex!("#f9e2af")),
 	background: Style::background().color(hex!("#1e1e2e")),
 	normal: Style::foreground().color(hex!("#cdd6f4")),
 	string: Style::foreground().color(hex!("#a6e3a1")),
 	number: Style::foreground().color(hex!("#fab387")),
 	function: Style::foreground().color(hex!("#89b4fa")),
-	line_numbers: Style::foreground().color(hex!("#45475a")),
-	comment: Style::foreground().color(hex!("#45475a")),
+	line_numbers: Style::foreground().color(hex!("#7f849c")),
+	comment: Style::foreground().color(hex!("#7f849c")),
 };
 
 /// The "empty" or "none" theme. This is used to print snippets in plain uncolored text.

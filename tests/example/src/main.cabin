@@ -1,5 +1,14 @@
-let special_print = action(text: Text) {
+let x = 10;
+
+// does cool print stuff
+let special_print = action(text: Texl) {
 	terminal.print(text);
 };
 
+// Print 4 please
 special_print(4);
+
+// does cool print stuff
+let other = action(text: Text) {
+	terminal.print(text);
+};

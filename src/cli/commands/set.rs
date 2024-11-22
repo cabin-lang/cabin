@@ -68,6 +68,10 @@ static OPTIONS: phf::Map<&'static str, CompilerOption> = phf::phf_map! {
 	"quiet" => CompilerOption::boolean("quiet").default(Some("false")),
 	"developer-mode" => CompilerOption::boolean("developer-mode").default(Some("false")),
 	"emit-c" => CompilerOption::string("emit-c").default(None),
+
+	"theme" => CompilerOption::string("theme")
+		.default(Some("catppuccin-mocha"))
+		.choose(&["catppuccin-mocha", "one-midnight"])
 };
 
 #[derive(clap::Parser)]

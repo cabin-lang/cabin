@@ -23,7 +23,7 @@ impl RunningContext {
 	pub fn entry_point(&self) -> PathBuf {
 		match self {
 			Self::SingleFile(file) => file.to_owned(),
-			Self::Project(project) => project.main_file(),
+			Self::Project(project) => pathdiff::diff_paths(project.main_file(), std::env::current_dir().unwrap()).unwrap(),
 		}
 	}
 

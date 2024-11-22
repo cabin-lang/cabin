@@ -10,6 +10,7 @@ colored = "2.1.0"
 convert_case = "0.6.0"
 enum_dispatch = "0.3.13"
 expression-formatter = "0.1.0"
+pathdiff = "0.2.2"
 phf = { version = "0.11.2", features = ["macros"] }
 regex-macro = "0.2.0"
 smart-default = "0.7.1"

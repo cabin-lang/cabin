@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
 	api::context::Context,
-	parser::expressions::{literal::LiteralObject, Typed},
+	lexer::Span,
+	parser::expressions::{literal::LiteralObject, Spanned, Typed},
 	transpiler::TranspileToC,
 };
 
@@ -67,6 +68,12 @@ impl TranspileToC for VirtualPointer {
 impl Typed for VirtualPointer {
 	fn get_type(&self, context: &mut Context) -> anyhow::Result<VirtualPointer> {
 		self.virtual_deref(context).clone().get_type(context)
+	}
+}
+
+impl Spanned for VirtualPointer {
+	fn span(&self, context: &Context) -> Span {
+		self.virtual_deref(context).span(context)
 	}
 }
 

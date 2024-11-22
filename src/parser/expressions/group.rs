@@ -6,7 +6,7 @@ use crate::{
 	api::{context::Context, macros::string, scope::ScopeType, traits::TryAs as _},
 	comptime::CompileTime,
 	err,
-	lexer::{Token, TokenType},
+	lexer::{Span, Token, TokenType},
 	literal, literal_list, mapped_err, parse_list,
 	parser::{
 		expressions::{
@@ -21,26 +21,27 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
-use super::Typed;
+use super::{Spanned, Typed};
 
 #[derive(Debug, Clone)]
 pub struct GroupDeclaration {
 	pub fields: Vec<Field>,
 	pub scope_id: usize,
 	pub name: Name,
+	pub span: Span,
 }
 
 impl Parse for GroupDeclaration {
 	type Output = Expression;
 
 	fn parse(tokens: &mut VecDeque<Token>, context: &mut Context) -> anyhow::Result<Self::Output> {
-		tokens.pop(TokenType::KeywordGroup)?;
+		let start = tokens.pop(TokenType::KeywordGroup)?.span;
 		context.scope_data.enter_new_unlabeled_scope(ScopeType::Group);
 		let inner_scope_id = context.scope_data.unique_id();
 
 		// Fields
 		let mut fields = Vec::new();
-		parse_list!(tokens, ListType::Braced, {
+		let end = parse_list!(tokens, ListType::Braced, {
 			// Parse tags
 			let tags = if tokens.next_is(TokenType::TagOpening) {
 				Some(TagList::parse(tokens, context)?)
@@ -81,13 +82,15 @@ impl Parse for GroupDeclaration {
 
 			// Add field
 			fields.push(Field { name, value, field_type });
-		});
+		})
+		.span;
 		context.scope_data.exit_scope()?;
 
 		Ok(Expression::Group(GroupDeclaration {
 			fields,
 			scope_id: inner_scope_id,
 			name: "anonymous_group".into(),
+			span: start.to(&end),
 		}))
 	}
 }
@@ -147,6 +150,7 @@ impl CompileTime for GroupDeclaration {
 				fields,
 				scope_id: self.scope_id,
 				name: self.name,
+				span: self.span,
 			}
 			.to_literal(context)?
 			.store_in_memory(context),
@@ -235,6 +239,7 @@ impl LiteralConvertible for GroupDeclaration {
 			internal_fields: HashMap::new(),
 			type_name: "Group".into(),
 			object_type: ObjectType::Group,
+			span: self.span,
 		};
 
 		LiteralObject::try_from_object_constructor(constructor, context)
@@ -268,6 +273,13 @@ impl LiteralConvertible for GroupDeclaration {
 			fields,
 			scope_id: literal.declared_scope_id(),
 			name: literal.name.clone(),
+			span: literal.span(context),
 		})
+	}
+}
+
+impl Spanned for GroupDeclaration {
+	fn span(&self, _context: &Context) -> crate::lexer::Span {
+		self.span.clone()
 	}
 }

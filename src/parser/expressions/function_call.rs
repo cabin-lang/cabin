@@ -4,16 +4,16 @@ use crate::{
 	api::{builtin::call_builtin_at_compile_time, context::Context, traits::TryAs as _},
 	bail_err,
 	comptime::{memory::VirtualPointer, CompileTime},
-	lexer::{Token, TokenType},
+	lexer::{Span, Token, TokenType},
 	mapped_err, parse_list,
 	parser::{
-		expressions::{function_declaration::FunctionDeclaration, literal::LiteralConvertible, name::Name, operators::FieldAccess, Expression, Parse, Spanned as _},
+		expressions::{function_declaration::FunctionDeclaration, literal::LiteralConvertible, name::Name, operators::FieldAccess, Expression, Parse},
 		ListType, TokenQueueFunctionality,
 	},
 	transpiler::TranspileToC,
 };
 
-use super::{run::ParentExpression, Typed};
+use super::{run::ParentExpression, Spanned, Typed};
 
 #[derive(Debug, Clone)]
 pub struct FunctionCall {
@@ -21,6 +21,7 @@ pub struct FunctionCall {
 	pub compile_time_arguments: Option<Vec<Expression>>,
 	pub arguments: Option<Vec<Expression>>,
 	pub scope_id: usize,
+	pub span: Span,
 }
 
 pub struct PostfixOperators;
@@ -31,15 +32,18 @@ impl Parse for PostfixOperators {
 	fn parse(tokens: &mut VecDeque<Token>, context: &mut Context) -> anyhow::Result<Self::Output> {
 		// Primary expression
 		let mut expression = FieldAccess::parse(tokens, context)?;
+		let start = expression.span(context);
+		let mut end = start.clone();
 
 		// Postfix function call operators
 		while tokens.next_is_one_of(&[TokenType::LeftParenthesis, TokenType::LeftAngleBracket]) {
 			// Compile-time arguments
 			let compile_time_arguments = if tokens.next_is(TokenType::LeftAngleBracket) {
 				let mut compile_time_arguments = Vec::new();
-				parse_list!(tokens, ListType::AngleBracketed, {
+				end = parse_list!(tokens, ListType::AngleBracketed, {
 					compile_time_arguments.push(Expression::parse(tokens, context)?);
-				});
+				})
+				.span;
 				Some(compile_time_arguments)
 			} else {
 				None
@@ -48,9 +52,10 @@ impl Parse for PostfixOperators {
 			// Arguments
 			let arguments = if tokens.next_is(TokenType::LeftParenthesis) {
 				let mut arguments = Vec::new();
-				parse_list!(tokens, ListType::Parenthesized, {
+				end = parse_list!(tokens, ListType::Parenthesized, {
 					arguments.push(Expression::parse(tokens, context)?);
-				});
+				})
+				.span;
 				Some(arguments)
 			} else {
 				None
@@ -62,6 +67,7 @@ impl Parse for PostfixOperators {
 				compile_time_arguments,
 				arguments,
 				scope_id: context.scope_data.unique_id(),
+				span: start.to(&end),
 			});
 		}
 
@@ -111,6 +117,7 @@ impl CompileTime for FunctionCall {
 					compile_time_arguments,
 					arguments,
 					scope_id: self.scope_id,
+					span: self.span,
 				}));
 			}
 		}
@@ -177,7 +184,7 @@ impl CompileTime for FunctionCall {
 									),
 									while = "validating the arguments in a function call",
 									context = context,
-									position = argument.span()
+									position = argument.span(context)
 								};
 							}
 							context.scope_data.reassign_variable_from_id(parameter_name, argument.clone(), block.inner_scope_id)?;
@@ -252,6 +259,7 @@ impl CompileTime for FunctionCall {
 			compile_time_arguments,
 			arguments,
 			scope_id: self.scope_id,
+			span: self.span,
 		}))
 	}
 }
@@ -376,6 +384,7 @@ impl ParentExpression for FunctionCall {
 			compile_time_arguments,
 			arguments,
 			scope_id: self.scope_id,
+			span: self.span,
 		})
 	}
 }
@@ -388,5 +397,11 @@ impl Typed for FunctionCall {
 		} else {
 			context.scope_data.expect_global_variable("Nothing").expect_as::<VirtualPointer>().cloned()
 		}
+	}
+}
+
+impl Spanned for FunctionCall {
+	fn span(&self, _context: &Context) -> Span {
+		self.span.clone()
 	}
 }
