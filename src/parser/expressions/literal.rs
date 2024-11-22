@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use try_as::traits::TryAsRef;
 
 use crate::{
-	api::{context::Context, traits::TryAs as _},
-	bail_err, compiler_message,
+	api::{context::Context, macros::TerminalOutput, traits::TryAs as _},
+	bail_err,
 	comptime::{memory::Pointer, CompileTime},
 	lexer::Position,
 	parser::expressions::{
@@ -43,21 +43,19 @@ impl LiteralObject {
 					while = format!("checking the field \"{}\" of a value at compile-time", field.name.unmangled_name().bold().cyan()),
 					context = context,
 					position = field.name.position().unwrap_or_else(Position::zero),
-					details = compiler_message!(
-						"
+					details = expression_formatter::format!(
+						r#"
                         Although Cabin allows arbitrary expressions to be used as types, the expression needs to be able to 
 						be fully evaluated at compile-time. The expression that this error refers to must be a literal object, 
-						but instead it's a {name}. {}
-						", 
-						if &name.to_lowercase() == "name" {
+						but instead it's a {name}. {if &name.to_lowercase() == "name" {
 							"
 							This means that you put a variable name where a type is required, but the value of that variable
 							is some kind of expression that can't be fully evaluated at compile-time.
 							"
 						} else {
 							""
-						}
-					)
+						}}"#
+					).as_terminal_output()
 				};
 			};
 
@@ -253,7 +251,14 @@ pub trait LiteralConvertible: Sized {
 impl TranspileToC for LiteralObject {
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		Ok(match self.type_name.unmangled_name().as_str() {
-			"Number" => self.expect_as::<f64>()?.to_string(),
+			"Number" => {
+				let text_pointer_name = Name::from("Number").evaluate_at_compile_time(context)?.expect_clone_pointer(context);
+				format!(
+					"&(group_{}) {{ .internal_value = {} }}",
+					text_pointer_name.to_c(context)?,
+					self.expect_as::<f64>()?.to_owned()
+				)
+			},
 			"Text" => {
 				let text_pointer_name = Name::from("Text").evaluate_at_compile_time(context)?.expect_clone_pointer(context);
 				format!(

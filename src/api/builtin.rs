@@ -69,8 +69,12 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.expect_as::<f64>()?;
 			Ok(number(first + second, context))
 		},
-		to_c: |_context, _parameter_names| {
-			String::new()
+		to_c: |context,parameter_names| {
+			let number_address = context.scope_data.expect_global_variable("Number").expect_as::<Pointer>().unwrap().value();
+			let first = parameter_names.first().unwrap();
+			let second = parameter_names.get(1).unwrap();
+			let number_type = format!("group_u_Number_{number_address}");
+			format!("*return_address = ({number_type}) {{ .internal_value = (({number_type}*) {first})->internal_value + (({number_type}*) {second})->internal_value }};")
 		}
 	},
 	"Number.minus" => BuiltinFunction {
@@ -85,7 +89,10 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 	},
 	"Anything.to_string" => BuiltinFunction {
 		evaluate_at_compile_time: |context: &mut Context, _caller_scope_id: usize, arguments: Vec<Expression>| {
-			let this = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Anything.to_string"))?.try_as_literal(context)?;
+			let this = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Anything.to_string"))?.try_as_literal(context).map_err(mapped_err! {
+				while = format!("Interpreting the first argument to {} as a literal", "Anything.to_string".bold().cyan()),
+				context = context,
+			})?;
 			Ok(string(&match this.type_name.unmangled_name().as_str() {
 				"Number" => this.expect_as::<f64>()?.to_string(),
 				"Text" => this.expect_as::<String>()?.to_owned(),

@@ -154,16 +154,22 @@ impl CompileTime for GroupDeclaration {
 impl TranspileToC for GroupDeclaration {
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		let mut builder = "{".to_owned();
+
 		for field in &self.fields {
 			builder += &format!("\n\tvoid* {};", field.name.to_c(context)?);
 		}
-		if self.name == "Text".into() {
-			builder += "\n\tchar* internal_value;";
-		} else if self.name == "Function".into() {
-			builder += "\n\tvoid* call;";
-		} else if self.fields.is_empty() {
+
+		match self.name.unmangled_name().as_str() {
+			"Text" => builder += "\n\tchar* internal_value;",
+			"Number" => builder += "\n\tfloat internal_value;",
+			"Function" => builder += "\n\tvoid* call;",
+			_ => {},
+		}
+
+		if self.fields.is_empty() {
 			builder += "\n\tchar empty;";
 		}
+
 		builder += "\n}";
 		Ok(builder)
 	}

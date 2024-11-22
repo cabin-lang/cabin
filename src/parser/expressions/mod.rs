@@ -1,5 +1,5 @@
 use colored::Colorize as _;
-use run::RunExpression;
+use run::{ParentExpression, RunExpression};
 use try_as::traits as try_as_traits;
 
 use crate::{
@@ -280,4 +280,16 @@ impl Type for Expression {
 
 pub trait Type {
 	fn get_type(&self, context: &mut Context) -> anyhow::Result<Pointer>;
+}
+
+impl ParentExpression for Expression {
+	fn evaluate_subexpressions_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self> {
+		Ok(match self {
+			Self::FunctionCall(function_call) => Expression::FunctionCall(function_call.evaluate_subexpressions_at_compile_time(context)?),
+			_ => bail_err! {
+				base = format!("Attempted to use a run-expression on a {}, but forcing this type of expression to run at runtime is pointless.", self.kind_name()),
+				context = context,
+			},
+		})
+	}
 }

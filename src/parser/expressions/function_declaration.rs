@@ -124,7 +124,10 @@ impl CompileTime for FunctionDeclaration {
 		let parameters = {
 			let mut compile_time_parameters = Vec::new();
 			for (parameter_name, parameter_type) in self.parameters {
-				let parameter_type = parameter_type.evaluate_at_compile_time(context)?;
+				let parameter_type = parameter_type.evaluate_at_compile_time(context).map_err(mapped_err! {
+					while = format!("evaluating the type of the parameter \"{}\" of a function at compile-time", parameter_name.unmangled_name().bold().cyan()),
+					context = context,
+				})?;
 				if !parameter_type.is_pointer() {
 					anyhow::bail!(
 						"A value that's not fully known at compile-time was used as a function parameter type\n\t{}",

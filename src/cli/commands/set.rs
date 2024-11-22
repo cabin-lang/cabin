@@ -3,7 +3,6 @@ use colored::Colorize;
 use crate::{
 	api::context::Context,
 	cli::{commands::CabinCommand, RunningContext},
-	compiler_message,
 };
 
 enum CompilerOptionType {
@@ -15,7 +14,7 @@ pub struct CompilerOption {
 	name: &'static str,
 	choices: &'static [&'static str],
 	variant: CompilerOptionType,
-	default: &'static str,
+	default: Option<&'static str>,
 }
 
 impl CompilerOption {
@@ -24,7 +23,7 @@ impl CompilerOption {
 			name,
 			choices: &[],
 			variant: CompilerOptionType::String,
-			default: "",
+			default: Some(""),
 		}
 	}
 
@@ -33,7 +32,7 @@ impl CompilerOption {
 			name,
 			choices: &["true", "false"],
 			variant: CompilerOptionType::Boolean,
-			default: "",
+			default: Some(""),
 		}
 	}
 
@@ -42,7 +41,7 @@ impl CompilerOption {
 		self
 	}
 
-	pub const fn default(mut self, default: &'static str) -> Self {
+	pub const fn default(mut self, default: Option<&'static str>) -> Self {
 		self.default = default;
 		self
 	}
@@ -66,8 +65,9 @@ impl CompilerOption {
 }
 
 static OPTIONS: phf::Map<&'static str, CompilerOption> = phf::phf_map! {
-	"quiet" => CompilerOption::boolean("quiet").default("false"),
-	"developer-mode" => CompilerOption::boolean("developer-mode").default("false")
+	"quiet" => CompilerOption::boolean("quiet").default(Some("false")),
+	"developer-mode" => CompilerOption::boolean("developer-mode").default(Some("false")),
+	"emit-c" => CompilerOption::string("emit-c").default(None),
 };
 
 #[derive(clap::Parser)]
@@ -81,12 +81,10 @@ impl CabinCommand for SetCommand {
 		let mut context = Context::new(&std::env::current_dir().unwrap())?;
 
 		let RunningContext::Project(project) = &mut context.running_context else {
-			anyhow::bail!(compiler_message!(
-				"
-				{} The {} command can only be used from within a Cabin project. No cabin.toml was found in the current directory.
-				",
-				"Error:".bold().red(),
-				"set".bold().cyan()
+			anyhow::bail!(expression_formatter::format!(
+				r#"
+				{"Error:".bold().red()} The {"set".bold().cyan()} command can only be used from within a Cabin project. No cabin.toml was found in the current directory.
+				"#
 			));
 		};
 
@@ -106,7 +104,11 @@ impl CabinCommand for SetCommand {
 		if self.value == "default" {
 			options.remove(option.name);
 			project.write_config();
-			println!("\nReset option {} to it's default value ({})\n", self.option.bold().yellow(), option.default.bold().cyan());
+			println!(
+				"\nReset option {} to it's default value ({})\n",
+				self.option.bold().yellow(),
+				option.default.unwrap_or("None").bold().cyan()
+			);
 			return Ok(());
 		}
 

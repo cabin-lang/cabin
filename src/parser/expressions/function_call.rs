@@ -13,6 +13,8 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
+use super::run::ParentExpression;
+
 #[derive(Debug, Clone)]
 pub struct FunctionCall {
 	pub function: Box<Expression>,
@@ -99,6 +101,19 @@ impl CompileTime for FunctionCall {
 		} else {
 			None
 		};
+
+		// If not all arguments are known at compile-time, we can't call the function at compile time. In this case, we just
+		// return a function call expression, and it'll get transpiled to C and called at runtime.
+		if let Some(argument_list) = &arguments {
+			if !argument_list.iter().all(|argument| argument.is_pointer()) {
+				return Ok(Expression::FunctionCall(FunctionCall {
+					function: Box::new(function),
+					compile_time_arguments,
+					arguments,
+					scope_id: self.scope_id,
+				}));
+			}
+		}
 
 		// Evaluate function
 		let literal = function.try_as_literal(context);
@@ -218,14 +233,40 @@ impl CompileTime for FunctionCall {
 
 impl TranspileToC for FunctionCall {
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
-		Ok(format!(
-			"(((void (*)({}))({}->call))({}))",
-			{
-				let function = FunctionDeclaration::from_literal(
-					self.function.clone().evaluate_at_compile_time(context)?.expect_as::<Pointer>()?.virtual_deref(context),
-					context,
-				)?;
+		let function = FunctionDeclaration::from_literal(
+			self.function.clone().evaluate_at_compile_time(context)?.expect_as::<Pointer>()?.virtual_deref(context),
+			context,
+		)?;
 
+		let return_type = if let Some(return_type) = function.return_type.as_ref() {
+			format!("group_{}* return_address;", return_type.to_c(context)?)
+		} else {
+			String::new()
+		};
+
+		let ending_return_address = if let Some(return_type) = function.return_type.as_ref() {
+			"return_address;".to_owned()
+		} else {
+			String::new()
+		};
+
+		let maybe_return_address = if let Some(return_type) = function.return_type.as_ref() {
+			let maybe_comma = if function.parameters.is_empty() { "" } else { ", " };
+			format!("{maybe_comma}return_address")
+		} else {
+			String::new()
+		};
+
+		Ok(unindent::unindent(&format!(
+			"
+			({{
+				{return_type}	
+				{argument_declaration}
+				(((void (*)({parameter_types}))({function_to_call}->call))({this_object}{arguments}{maybe_return_address}));
+				{ending_return_address}
+			}})	
+			",
+			parameter_types = {
 				function
 					.parameters
 					.iter()
@@ -233,14 +274,68 @@ impl TranspileToC for FunctionCall {
 					.collect::<anyhow::Result<Vec<_>>>()?
 					.join(", ")
 			},
-			self.function.to_c(context)?,
-			self.arguments
+			function_to_call = self.function.to_c(context)?,
+			this_object = if let Some(object) = function.this_object {
+				if function.parameters.first().is_some_and(|param| param.0 == "this".into()) {
+					format!("{}, ", object.to_c(context)?)
+				} else {
+					String::new()
+				}
+			} else {
+				String::new()
+			},
+			argument_declaration = self
+				.arguments
 				.as_ref()
 				.unwrap_or(&Vec::new())
 				.iter()
-				.map(|argument| argument.to_c(context))
+				.map(|argument| Ok(format!("void* arg0 = {};", argument.to_c(context)?)))
 				.collect::<anyhow::Result<Vec<_>>>()?
-				.join(", ")
-		))
+				.join(", "),
+			arguments = (0..self.arguments.as_ref().unwrap_or(&Vec::new()).len())
+				.map(|index| format!("arg{index}"))
+				.collect::<Vec<_>>()
+				.join(", "),
+		)))
+	}
+}
+
+impl ParentExpression for FunctionCall {
+	fn evaluate_subexpressions_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self> {
+		let function = self.function.evaluate_at_compile_time(context).map_err(mapped_err! {
+			while = "evaluating the function to call on a function-call expression at compile-time",
+			context = context,
+		})?;
+
+		// Compile-time arguments
+		let compile_time_arguments = if let Some(original_compile_time_arguments) = self.compile_time_arguments {
+			let mut compile_time_arguments = Vec::new();
+			for argument in original_compile_time_arguments {
+				let evaluated = argument.evaluate_at_compile_time(context)?;
+				compile_time_arguments.push(evaluated);
+			}
+			Some(compile_time_arguments)
+		} else {
+			None
+		};
+
+		// Arguments
+		let arguments = if let Some(original_arguments) = self.arguments {
+			let mut arguments = Vec::new();
+			for argument in original_arguments {
+				let evaluated = argument.evaluate_at_compile_time(context)?;
+				arguments.push(evaluated);
+			}
+			Some(arguments)
+		} else {
+			None
+		};
+
+		Ok(FunctionCall {
+			function: Box::new(function),
+			compile_time_arguments,
+			arguments,
+			scope_id: self.scope_id,
+		})
 	}
 }

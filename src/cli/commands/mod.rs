@@ -29,7 +29,7 @@ macro_rules! step {
 	) => {{
 		use colored::Colorize as _;
 		use std::io::Write as _;
-		use $crate::compiler_message;
+		use $crate::api::macros::TerminalOutput as _;
 
 		fn move_cursor_up_and_over(up: usize, right: usize) {
 			print!("\x1b[{}A", up);
@@ -143,17 +143,15 @@ macro_rules! step {
 						println!();
 					}
 
-					println!(
-						"{}\n",
-						compiler_message!(
-							"
-							This information is showing because you have the {} option set to {}. If you don't want to see this, either
-							disable developer information manually in your cabin.toml, or automatically by running {}.
-							",
-							"developer-mode".yellow().bold(),
-							"true".bold().cyan(),
-							"cabin set developer-mode false".bold().green()
+					println!("{}",
+						expression_formatter::format!(
+							r#"
+							This information is showing because you have the {"developer-mode".yellow().bold()} option set to 
+							{"true".bold().cyan()}. If you don't want to see this, either disable developer information manually 
+							in your cabin.toml, or automatically by running {"cabin set developer-mode false".bold().green()}.
+							"#
 						)
+						.as_terminal_output()
 						.dimmed()
 						.italic()
 					);
@@ -169,7 +167,7 @@ macro_rules! step {
 pub fn start(action: &str, context: &Context) {
 	if !context.config.quiet {
 		println!(
-			"\n{} {}...            {}",
+			"\n{} {}...                    {}",
 			action.bold().green(),
 			format!("{}", context.running_context.file_or_project_name().display()).bold(),
 			"(Run with --quiet or -q to silence this output)".dimmed().italic()

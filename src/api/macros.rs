@@ -98,17 +98,20 @@ macro_rules! function {
 	}};
 }
 
-#[macro_export]
-macro_rules! compiler_message {
-    (
-        $($tokens: tt)*
-    ) => {{
+pub trait TerminalOutput {
+	fn as_terminal_output(&self) -> String;
+}
+
+impl<T: AsRef<str>> TerminalOutput for T {
+	fn as_terminal_output(&self) -> String {
+		let string = self.as_ref();
+
 		// Max line length
 		let max_line_length = 100;
 
 		// Format the input tokens, unindent it, and remove all newlines
-		let formatted = format!($($tokens)*).replace('\n', " ").trim().to_owned();
-        let unindented = regex_macro::regex!("[ \t]+").replace_all(&formatted, " ");
+		let formatted = string.replace('\n', " ").trim().to_owned();
+		let unindented = regex_macro::regex!("[ \t]+").replace_all(&formatted, " ");
 
 		// Create the result string
 		let mut result = String::new();
@@ -116,7 +119,6 @@ macro_rules! compiler_message {
 
 		// Add the result character-by-character
 		for character in unindented.chars() {
-
 			// Space when our line is at max length - start a new line
 			if character == ' ' && current_line_length >= max_line_length {
 				result.push('\n');
@@ -136,7 +138,7 @@ macro_rules! compiler_message {
 
 		// Return the result
 		result
-    }}
+	}
 }
 
 #[derive(Default)]

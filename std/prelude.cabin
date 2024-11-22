@@ -91,10 +91,10 @@ let builtin = action<name: Text>: BuiltinTag {
 
 let Number = group {
 	#[builtin<"Number.plus">]
-	plus = action(this: Anything, other: Anything): Anything,
+	plus = action(this: Number, other: Number): Number,
 
 	#[builtin<"Number.minus">]
-	minus = action(this: Anything, other: Anything): Anything
+	minus = action(this: Number, other: Number): Number
 };
 
 let Error = group {
