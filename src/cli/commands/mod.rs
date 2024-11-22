@@ -29,6 +29,7 @@ macro_rules! step {
 	) => {{
 		use colored::Colorize as _;
 		use std::io::Write as _;
+		use $crate::compiler_message;
 
 		fn move_cursor_up_and_over(up: usize, right: usize) {
 			print!("\x1b[{}A", up);
@@ -72,8 +73,16 @@ macro_rules! step {
 
 			// Error during this step of compilation
 			Err(error) => {
-				if !$context.config.quiet {
-					eprintln!("{}", "Error:".bold().red());
+				if $action == "Evaluating" && $context.lines_printed != 0 {
+					move_cursor_up_and_over($context.lines_printed, ($context.config.tab() + "evaluating abstract syntax tree... ").len());
+				}
+
+				if $action != "Running" {
+					println!("{}", "Error:".bold().red());
+				}
+
+				if $action == "Evaluating" && $context.lines_printed != 0 {
+					move_cursor_down_and_left($context.lines_printed, 0);
 				}
 
 				// Print error message
@@ -133,6 +142,21 @@ macro_rules! step {
 					if !$context.get_compiler_error_position().is_empty() {
 						println!();
 					}
+
+					println!(
+						"{}\n",
+						compiler_message!(
+							"
+							This information is showing because you have the {} option set to {}. If you don't want to see this, either
+							disable developer information manually in your cabin.toml, or automatically by running {}.
+							",
+							"developer-mode".yellow().bold(),
+							"true".bold().cyan(),
+							"cabin set developer-mode false".bold().green()
+						)
+						.dimmed()
+						.italic()
+					);
 				}
 
 				// Exit

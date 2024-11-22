@@ -1,2 +1,3 @@
 run terminal.print("Hello world!");
 terminal.print("Hello from compile-time!");
+terminal.print(hi);

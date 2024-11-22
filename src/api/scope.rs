@@ -472,8 +472,8 @@ impl ScopeData {
 
 		// No variable found
 		anyhow::bail!(
-			"Attempted to reassign the variable \"{name}\", but no variable with the name \"{name}\" exists in this scope",
-			name = name.unmangled_name()
+			"Attempted to remove the variable \"{name}\" from a scope, but no variable with the name \"{name}\" exists in this scope",
+			name = name.unmangled_name().bold().cyan()
 		);
 	}
 
