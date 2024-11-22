@@ -1,9 +1,11 @@
-use super::{block::Block, name::Name, Expression};
 use crate::{
 	api::{context::Context, traits::TryAs as _},
 	comptime::CompileTime,
 	lexer::TokenType,
-	parser::{Parse, TokenQueue, TokenQueueFunctionality as _},
+	parser::{
+		expressions::{block::Block, name::Name, Expression},
+		Parse, TokenQueue, TokenQueueFunctionality as _,
+	},
 	transpiler::TranspileToC,
 };
 

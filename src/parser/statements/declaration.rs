@@ -1,4 +1,3 @@
-use super::tag::TagList;
 use crate::{
 	api::context::Context,
 	comptime::CompileTime,
@@ -6,6 +5,7 @@ use crate::{
 	mapped_err,
 	parser::{
 		expressions::{name::Name, Expression},
+		statements::tag::TagList,
 		Parse, TokenQueue, TokenQueueFunctionality as _,
 	},
 	transpiler::TranspileToC,

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use try_as::traits::{self as try_as_traits};
+use try_as::traits as try_as_traits;
 
 use crate::{
 	api::{context::Context, traits::TryAs as _},
@@ -8,14 +8,12 @@ use crate::{
 	lexer::TokenType,
 	mapped_err, parse_list,
 	parser::{
-		expressions::{group::GroupDeclaration, literal::LiteralObject, name::Name, Expression},
+		expressions::{group::GroupDeclaration, literal::LiteralConvertible as _, literal::LiteralObject, name::Name, Expression},
 		statements::tag::TagList,
 		ListType, Parse, ToCabin, TokenQueue, TokenQueueFunctionality,
 	},
 	transpiler::TranspileToC,
 };
-
-use super::literal::LiteralConvertible as _;
 
 #[derive(Debug, Clone)]
 pub struct ObjectConstructor {

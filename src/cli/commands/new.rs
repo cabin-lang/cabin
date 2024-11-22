@@ -2,7 +2,7 @@ use std::path::Path;
 
 use colored::Colorize;
 
-use super::CabinCommand;
+use crate::cli::commands::CabinCommand;
 
 #[derive(clap::Parser)]
 pub struct NewCommand {

@@ -1,4 +1,4 @@
-use super::CabinCommand;
+use crate::cli::commands::CabinCommand;
 
 #[derive(clap::Parser)]
 pub struct CompilerConfiguration {

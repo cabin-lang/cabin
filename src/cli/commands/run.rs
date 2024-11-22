@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use crate::{
 	api::context::Context,
-	cli::commands::CabinCommand,
+	cli::commands::{start, CabinCommand},
 	compiler::{compile, run_native_executable},
 	comptime::CompileTime as _,
 	lexer::tokenize,
@@ -10,8 +10,6 @@ use crate::{
 	step,
 	transpiler::transpile,
 };
-
-use super::start;
 
 #[derive(clap::Parser)]
 pub struct RunCommand {

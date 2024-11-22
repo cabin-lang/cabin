@@ -2,11 +2,9 @@ use crate::{
 	api::context::Context,
 	comptime::CompileTime,
 	lexer::TokenType,
-	parser::{Parse, TokenQueue, TokenQueueFunctionality as _},
+	parser::{expressions::Expression, Parse, TokenQueue, TokenQueueFunctionality as _},
 	transpiler::TranspileToC,
 };
-
-use super::Expression;
 
 #[derive(Debug, Clone)]
 pub struct RunExpression {

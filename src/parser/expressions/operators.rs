@@ -20,14 +20,14 @@ use crate::{
 			name::Name,
 			object::{ObjectConstructor, ObjectType},
 			oneof::OneOf,
+			run::RunExpression,
+			sugar::list::List,
 			Expression,
 		},
 		Parse, TokenQueueFunctionality,
 	},
 	transpiler::TranspileToC,
 };
-
-use super::{run::RunExpression, sugar::list::List};
 
 /// A binary operation. More specifically, this represents not one operation, but a group of operations that share the same precedence.
 /// For example, the `+` and `-` operators share the same precedence, so they are grouped together in the `ADDITIVE` constant.

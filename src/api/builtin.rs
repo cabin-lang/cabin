@@ -3,13 +3,15 @@ use std::collections::VecDeque;
 use colored::Colorize as _;
 
 use crate::{
-	api::{context::Context, macros::number, traits::TryAs as _},
+	api::{
+		context::Context,
+		macros::{number, string},
+		traits::TryAs as _,
+	},
 	comptime::memory::Pointer,
 	mapped_err,
 	parser::expressions::{object::ObjectConstructor, Expression},
 };
-
-use super::macros::string;
 
 pub struct BuiltinFunction {
 	evaluate_at_compile_time: fn(&mut Context, usize, Vec<Expression>) -> anyhow::Result<Expression>,
