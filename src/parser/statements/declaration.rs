@@ -1,10 +1,10 @@
 use crate::{
-	api::context::Context,
-	comptime::CompileTime,
+	api::{context::Context, traits::TryAs},
+	comptime::{memory::Pointer, CompileTime},
 	lexer::TokenType,
 	mapped_err,
 	parser::{
-		expressions::{name::Name, Expression},
+		expressions::{group::GroupDeclaration, literal::LiteralConvertible, name::Name, Expression},
 		statements::tag::TagList,
 		Parse, TokenQueue, TokenQueueFunctionality as _,
 	},
@@ -74,7 +74,52 @@ impl CompileTime for Declaration {
 
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
 		let value = context.scope_data.get_variable_from_id(self.name.clone(), self.scope_id).unwrap().clone();
-		let evaluated = value.evaluate_at_compile_time(context).map_err(mapped_err! {
+
+		// Groups need special handling. There was an issue where if you refer to a group inside itself, such as when
+		// using it as a function return type or parameter type, the compiler would crash. This is because things like
+		// function declarations are evaluating their parameter types and return types in their respective
+		// evaluate_at_compile_time() methods, and when it tries to evaluate the name of the group it's inside, it can't
+		// find it as a literal, because the group value doesn't actually get stored in memory as a literal until after
+		// it's compile-time evaluated, and evaluating those functions is part of evaluating the group.
+		//
+		// The fix to this is below. First, we assign a temporary literal group value to the group's name. This means
+		// that when something inside a group refers to that group, they'll get a pointer to the temporary group literal.
+		// This way all of their checks that the group exists and is a literal will pass. Then, later down in this function,
+		// after the group is done being evaluated, we overwrite the temporary group in memory with the actual evaluated
+		// group.
+		//
+		// This variable represents the pointer to the stored temporary group. If this declaration doesn't refer to a group,
+		// it's None.
+		let pointer_to_temporary_group = if let Expression::Group(group) = &value {
+			// Create a temporary group literal and store it in memory, saving it's address as a pointer.
+			let pointer = GroupDeclaration {
+				fields: Vec::new(),
+				name: "temporary_group".into(),
+				scope_id: group.scope_id,
+			}
+			.to_literal(context)?
+			.clone()
+			.store_in_memory(context);
+
+			// Reassign the variable name to the temporary group.
+			context
+				.scope_data
+				.reassign_variable_from_id(&self.name, Expression::Pointer(pointer), self.scope_id)
+				.map_err(mapped_err! {
+					while = format!(
+						"attempting to reassign the variable \"{}\" to its evaluated value",
+						self.name.unmangled_name().bold().cyan()
+					),
+					context = context,
+				})?;
+
+			Some(pointer)
+		} else {
+			None
+		};
+
+		// Evaluate the value of the declaration at compile-time as much as possible
+		let mut evaluated = value.evaluate_at_compile_time(context).map_err(mapped_err! {
 			while = format!(
 				"evaluating value of the initial declaration for the variable \"{}\" at compile-time",
 				self.name.unmangled_name().bold().cyan()
@@ -82,6 +127,15 @@ impl CompileTime for Declaration {
 			context = context,
 		})?;
 
+		// Rewrite the location of the temporary group in memory to the group that was just evaluated. This means that
+		// any pointers that were made to the temporary group now correctly point to the actual group that was evaluated.
+		if let Some(temporary_group_pointer) = pointer_to_temporary_group {
+			let group_address = evaluated.expect_as::<Pointer>()?.to_owned();
+			context.virtual_memory.move_overwrite(group_address, temporary_group_pointer);
+			evaluated = Expression::Pointer(temporary_group_pointer);
+		}
+
+		// Reassign the variable in it's scope to the new evaluated value
 		context.scope_data.reassign_variable_from_id(&self.name, evaluated, self.scope_id).map_err(mapped_err! {
 			while = format!(
 				"attempting to reassign the variable \"{}\" to its evaluated value",
@@ -90,6 +144,7 @@ impl CompileTime for Declaration {
 			context = context,
 		})?;
 
+		// Return the declaration
 		Ok(Declaration {
 			name: self.name,
 			scope_id: self.scope_id,

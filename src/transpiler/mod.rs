@@ -7,6 +7,7 @@ use crate::{
 			function_declaration::FunctionDeclaration,
 			group::GroupDeclaration,
 			literal::{LiteralConvertible, LiteralObject},
+			Type,
 		},
 		Program,
 	},
@@ -65,7 +66,7 @@ pub fn transpile_types(context: &mut Context) -> anyhow::Result<String> {
 		builder += &match value.type_name.unmangled_name().as_str() {
 			"Group" => {
 				let group = GroupDeclaration::from_literal(&value, context)?;
-				format!("struct group_{}_{address} {};\n\n", value.name.to_c(context)?, group.to_c(context)?,)
+				format!("struct {} {};\n\n", value.to_c_type(context)?, group.to_c(context)?,)
 			},
 			"Either" => {
 				let either = Either::from_literal(&value, context)?;
@@ -76,7 +77,17 @@ pub fn transpile_types(context: &mut Context) -> anyhow::Result<String> {
 
 				// Add object fields
 				for (field_name, field_value) in value.fields() {
-					builder += &format!("\n\t{}* {};", field_value.virtual_deref(context).clone().to_c_type(context)?, field_name.to_c(context)?);
+					builder += &format!(
+						"\n\t{}* {};",
+						field_value
+							.virtual_deref(context)
+							.clone()
+							.get_type(context)?
+							.virtual_deref(context)
+							.clone()
+							.to_c_type(context)?,
+						field_name.to_c(context)?
+					);
 				}
 
 				// Add empty field thingy
@@ -163,7 +174,7 @@ pub fn transpile_literal(context: &mut Context, value: &LiteralObject, address: 
 
 	// Transpile self
 	let c = {
-		let type_name = value.to_c_type(context)?;
+		let type_name = value.get_type(context)?.virtual_deref(context).clone().to_c_type(context)?;
 		format!("{}* {}_{address} = {};\n\n", type_name, value.name.to_c(context)?, value.to_c(context)?)
 	};
 
@@ -180,8 +191,8 @@ pub fn transpile_forward_declarations(context: &mut Context) -> anyhow::Result<S
 	let mut builder = String::new();
 	for (address, value) in context.virtual_memory.entries() {
 		builder += &match value.type_name.unmangled_name().as_str() {
-			"Group" => format!("typedef struct group_{name}_{address} group_{name}_{address};\n", name = value.name.to_c(context)?),
-			"Either" => format!("typedef enum either_{name}_{address} {name}_{address};", name = value.name.to_c(context)?),
+			"Group" => format!("typedef struct {name} {name};\n", name = value.to_c_type(context)?),
+			"Either" => format!("typedef enum either_{name}_{address} {name}_{address};\n", name = value.name.to_c(context)?),
 			"Object" => {
 				format!("typedef struct type_{name}_{address} type_{name}_{address};\n", name = value.name.to_c(context)?)
 			},

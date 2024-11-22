@@ -239,7 +239,7 @@ impl TranspileToC for FunctionCall {
 		)?;
 
 		let return_type = if let Some(return_type) = function.return_type.as_ref() {
-			format!("group_{}* return_address;", return_type.to_c(context)?)
+			format!("{}* return_address;", return_type.expect_literal(context)?.clone().to_c_type(context)?)
 		} else {
 			String::new()
 		};
@@ -267,12 +267,19 @@ impl TranspileToC for FunctionCall {
 			}})	
 			",
 			parameter_types = {
-				function
+				let mut parameters = function
 					.parameters
 					.iter()
 					.map(|parameter| Ok(format!("{}*", parameter.1.expect_literal(context)?.clone().to_c_type(context)?)))
 					.collect::<anyhow::Result<Vec<_>>>()?
-					.join(", ")
+					.join(", ");
+				if let Some(return_type) = function.return_type.as_ref() {
+					if !parameters.is_empty() {
+						parameters += ", ";
+					}
+					parameters += &format!("{}*", return_type.expect_literal(context)?.clone().to_c_type(context)?);
+				}
+				parameters
 			},
 			function_to_call = self.function.to_c(context)?,
 			this_object = if let Some(object) = function.this_object {

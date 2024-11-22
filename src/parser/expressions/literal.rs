@@ -139,19 +139,7 @@ impl LiteralObject {
 		Ok(match self.type_name.unmangled_name().as_str() {
 			"Object" => format!("type_{}_{}", self.name.to_c(context)?, self.address.unwrap()),
 			_ => {
-				let type_value = self.get_type(context)?.virtual_deref(context);
-				match type_value.type_name.unmangled_name().as_str() {
-					"Group" => format!(
-						"group_{}_{}",
-						self.type_name.to_c(context)?,
-						self.type_name.clone().evaluate_at_compile_time(context)?.expect_as::<Pointer>()?.value()
-					),
-					_ => format!(
-						"{}_{}",
-						self.type_name.to_c(context)?,
-						self.type_name.clone().evaluate_at_compile_time(context)?.expect_as::<Pointer>()?.value()
-					),
-				}
+				format!("group_{}_{}", self.name.mangled_name(), self.address.unwrap())
 			},
 		})
 	}
@@ -252,18 +240,16 @@ impl TranspileToC for LiteralObject {
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		Ok(match self.type_name.unmangled_name().as_str() {
 			"Number" => {
-				let text_pointer_name = Name::from("Number").evaluate_at_compile_time(context)?.expect_clone_pointer(context);
 				format!(
-					"&(group_{}) {{ .internal_value = {} }}",
-					text_pointer_name.to_c(context)?,
+					"&({}) {{ .internal_value = {} }}",
+					self.get_type(context)?.virtual_deref(context).clone().to_c_type(context)?,
 					self.expect_as::<f64>()?.to_owned()
 				)
 			},
 			"Text" => {
-				let text_pointer_name = Name::from("Text").evaluate_at_compile_time(context)?.expect_clone_pointer(context);
 				format!(
-					"&(group_{}) {{ .internal_value = \"{}\" }}",
-					text_pointer_name.to_c(context)?,
+					"&({}) {{ .internal_value = \"{}\" }}",
+					self.get_type(context)?.virtual_deref(context).clone().to_c_type(context)?,
 					self.expect_as::<String>()?.to_owned()
 				)
 			},
@@ -271,21 +257,7 @@ impl TranspileToC for LiteralObject {
 				// Type name
 				let type_name = match self.type_name.unmangled_name().as_str() {
 					"Object" => format!("type_{}_{}", self.name.to_c(context)?, self.address.unwrap()),
-					_ => {
-						let type_self = self.get_type(context)?.virtual_deref(context);
-						match type_self.type_name.unmangled_name().as_str() {
-							"Group" => format!(
-								"group_{}_{}",
-								self.type_name.to_c(context)?,
-								self.type_name.clone().evaluate_at_compile_time(context)?.expect_as::<Pointer>()?.value()
-							),
-							_ => format!(
-								"{}_{}",
-								self.type_name.to_c(context)?,
-								self.type_name.clone().evaluate_at_compile_time(context)?.expect_as::<Pointer>()?.value()
-							),
-						}
-					},
+					_ => self.get_type(context)?.virtual_deref(context).clone().to_c_type(context)?,
 				};
 
 				// Create string builder

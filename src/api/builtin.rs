@@ -8,14 +8,15 @@ use crate::{
 		macros::{number, string},
 		traits::TryAs as _,
 	},
-	comptime::memory::Pointer,
+	comptime::{memory::Pointer, CompileTime},
 	mapped_err,
-	parser::expressions::{object::ObjectConstructor, Expression},
+	parser::expressions::{function_call::FunctionCall, object::ObjectConstructor, operators::FieldAccess, Expression},
+	transpiler::TranspileToC,
 };
 
 pub struct BuiltinFunction {
 	evaluate_at_compile_time: fn(&mut Context, usize, Vec<Expression>) -> anyhow::Result<Expression>,
-	to_c: fn(&Context, &[String]) -> String,
+	to_c: fn(&mut Context, &[String]) -> String,
 }
 
 static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
@@ -47,7 +48,15 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 		},
 		to_c: |context, parameter_names| {
 			let text_address = context.scope_data.expect_global_variable("Text").expect_as::<Pointer>().unwrap().value();
-			format!("printf(\"%s\\n\", ((group_u_Text_{text_address}*) {})->internal_value);", parameter_names.first().unwrap())
+			let anything_address = context.scope_data.expect_global_variable("Anything").expect_as::<Pointer>().unwrap().value();
+			let object = parameter_names.first().unwrap();
+			unindent::unindent(&format!(
+				"
+				group_u_Text_{text_address}* return_address;
+				(((void (*)(group_u_Anything_{anything_address}*, group_u_Text_{text_address}*))({object}->to_string->call))(object, return_address));
+				printf(\"%s\\n\", result->internal_value);
+				"
+			))
 		}
 	},
 	"terminal.input" => BuiltinFunction {
@@ -74,7 +83,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			let first = parameter_names.first().unwrap();
 			let second = parameter_names.get(1).unwrap();
 			let number_type = format!("group_u_Number_{number_address}");
-			format!("*return_address = ({number_type}) {{ .internal_value = (({number_type}*) {first})->internal_value + (({number_type}*) {second})->internal_value }};")
+			format!("*return_address = ({number_type}) {{ .internal_value = {first}->internal_value + {second}->internal_value }};")
 		}
 	},
 	"Number.minus" => BuiltinFunction {
@@ -121,7 +130,7 @@ pub fn call_builtin_at_compile_time(name: &str, context: &mut Context, caller_sc
 	})
 }
 
-pub fn transpile_builtin_to_c(name: &str, context: &Context, parameters: &[String]) -> anyhow::Result<String> {
+pub fn transpile_builtin_to_c(name: &str, context: &mut Context, parameters: &[String]) -> anyhow::Result<String> {
 	Ok((BUILTINS
 		.get(name)
 		.ok_or_else(|| {

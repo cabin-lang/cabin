@@ -5,6 +5,7 @@ use colored::Colorize as _;
 use crate::{
 	api::{context::Context, macros::string, scope::ScopeType, traits::TryAs as _},
 	comptime::CompileTime,
+	err,
 	lexer::{Token, TokenType},
 	literal, literal_list, mapped_err, parse_list,
 	parser::{
@@ -213,7 +214,13 @@ impl LiteralConvertible for GroupDeclaration {
 	fn from_literal(literal: &LiteralObject, context: &Context) -> anyhow::Result<Self> {
 		let fields = literal
 			.get_field_literal("fields", context)
-			.unwrap()
+			.ok_or_else(|| {
+				err! {
+					base = format!("Attempted to get the field \"{}\" on a group literal, but no field with that name exists on the literal.", "fields".bold().cyan()),
+					while = "deserializing a literal object into a group declaration",
+					context = context,
+				}
+			})?
 			.expect_as::<Vec<Expression>>()?
 			.iter()
 			.map(|field_object| {

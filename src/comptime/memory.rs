@@ -67,6 +67,14 @@ impl VirtualMemory {
 		next_unused_virtual_address
 	}
 
+	/// Moves the value at the first given location to the address at the second given location, overwriting and deleting any previous
+	/// value that was stored there.
+	pub fn move_overwrite(&mut self, location_of_value_to_move: Pointer, destination_to_overwrite: Pointer) {
+		let mut value = self.memory.remove(&location_of_value_to_move.value()).unwrap();
+		value.address = Some(destination_to_overwrite.value());
+		self.memory.insert(destination_to_overwrite.value(), value);
+	}
+
 	pub fn entries(&self) -> Vec<(usize, LiteralObject)> {
 		self.memory
 			.iter()
