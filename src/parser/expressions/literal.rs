@@ -8,15 +8,12 @@ use crate::{
 	comptime::{memory::Pointer, CompileTime},
 	lexer::Position,
 	parser::expressions::{
-		group::GroupDeclaration,
 		name::Name,
 		object::{InternalFieldValue, ObjectConstructor, ObjectType},
-		Expression,
+		Expression, Type,
 	},
 	transpiler::TranspileToC,
 };
-
-use super::Type;
 
 #[derive(Debug, Clone)]
 pub struct LiteralObject {
@@ -139,6 +136,27 @@ impl LiteralObject {
 	pub fn fields(&self) -> impl Iterator<Item = (&Name, &Pointer)> {
 		self.fields.iter()
 	}
+
+	pub fn to_c_type(&self, context: &mut Context) -> anyhow::Result<String> {
+		Ok(match self.type_name.unmangled_name().as_str() {
+			"Object" => format!("type_{}_{}", self.name.to_c(context)?, self.address.unwrap()),
+			_ => {
+				let type_value = self.get_type(context)?.virtual_deref(context);
+				match type_value.type_name.unmangled_name().as_str() {
+					"Group" => format!(
+						"group_{}_{}",
+						self.type_name.to_c(context)?,
+						self.type_name.clone().evaluate_at_compile_time(context)?.expect_as::<Pointer>()?.value()
+					),
+					_ => format!(
+						"{}_{}",
+						self.type_name.to_c(context)?,
+						self.type_name.clone().evaluate_at_compile_time(context)?.expect_as::<Pointer>()?.value()
+					),
+				}
+			},
+		})
+	}
 }
 
 impl TryAsRef<String> for LiteralObject {
@@ -160,10 +178,14 @@ impl TryAsRef<Vec<Expression>> for LiteralObject {
 
 impl Type for LiteralObject {
 	fn get_type(&self, context: &mut Context) -> anyhow::Result<Pointer> {
-		let Expression::Pointer(pointer) = self.type_name.clone().evaluate_at_compile_time(context)? else {
-			anyhow::bail!("Literal object type isn't a pointer");
-		};
-		Ok(pointer)
+		let result = context
+			.scope_data
+			.get_variable_from_id(self.type_name.clone(), self.declared_scope_id())
+			.unwrap()
+			.expect_as::<Pointer>()?
+			.to_owned();
+
+		Ok(result)
 	}
 }
 
@@ -235,7 +257,7 @@ impl TranspileToC for LiteralObject {
 			"Text" => {
 				let text_pointer_name = Name::from("Text").evaluate_at_compile_time(context)?.expect_clone_pointer(context);
 				format!(
-					"&({}) {{ .internal_value = \"{}\" }}",
+					"&(group_{}) {{ .internal_value = \"{}\" }}",
 					text_pointer_name.to_c(context)?,
 					self.expect_as::<String>()?.to_owned()
 				)
@@ -244,7 +266,21 @@ impl TranspileToC for LiteralObject {
 				// Type name
 				let type_name = match self.type_name.unmangled_name().as_str() {
 					"Object" => format!("type_{}_{}", self.name.to_c(context)?, self.address.unwrap()),
-					_ => self.type_name.clone().evaluate_at_compile_time(context)?.to_c(context)?,
+					_ => {
+						let type_self = self.get_type(context)?.virtual_deref(context);
+						match type_self.type_name.unmangled_name().as_str() {
+							"Group" => format!(
+								"group_{}_{}",
+								self.type_name.to_c(context)?,
+								self.type_name.clone().evaluate_at_compile_time(context)?.expect_as::<Pointer>()?.value()
+							),
+							_ => format!(
+								"{}_{}",
+								self.type_name.to_c(context)?,
+								self.type_name.clone().evaluate_at_compile_time(context)?.expect_as::<Pointer>()?.value()
+							),
+						}
+					},
 				};
 
 				// Create string builder
@@ -253,6 +289,10 @@ impl TranspileToC for LiteralObject {
 				// Add fields
 				for (field_name, field_pointer) in &self.fields {
 					builder += &format!("\n\t.{} = {},", field_name.to_c(context)?, field_pointer.to_c(context)?);
+				}
+
+				if self.type_name == "Function".into() {
+					builder += &format!("\n\t.call = &call_anonymous_function_{}", self.address.unwrap());
 				}
 
 				// If empty, add the empty thingy

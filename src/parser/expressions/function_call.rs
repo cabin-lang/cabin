@@ -229,7 +229,7 @@ impl TranspileToC for FunctionCall {
 				function
 					.parameters
 					.iter()
-					.map(|parameter| Ok(format!("{}*", parameter.1.to_c(context)?)))
+					.map(|parameter| Ok(format!("{}*", parameter.1.expect_literal(context)?.clone().to_c_type(context)?)))
 					.collect::<anyhow::Result<Vec<_>>>()?
 					.join(", ")
 			},

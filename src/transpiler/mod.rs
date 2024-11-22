@@ -1,6 +1,6 @@
 use crate::{
-	api::{context::Context, traits::TryAs as _},
-	comptime::{memory::Pointer, CompileTime as _},
+	api::context::Context,
+	comptime::memory::Pointer,
 	mapped_err,
 	parser::{
 		expressions::{
@@ -67,29 +67,26 @@ pub fn transpile_types(context: &mut Context) -> anyhow::Result<String> {
 		builder += &match value.type_name.unmangled_name().as_str() {
 			"Group" => {
 				let group = GroupDeclaration::from_literal(&value, context)?;
-				format!("struct {}_{address} {};\n\n", value.name.to_c(context)?, group.to_c(context)?,)
+				format!("struct group_{}_{address} {};\n\n", value.name.to_c(context)?, group.to_c(context)?,)
 			},
 			"Either" => {
 				let either = Either::from_literal(&value, context)?;
-				format!(
-					"enum {} {};\n\n{}\n\n",
-					value.name.to_c(context)?,
-					either.to_c(context)?,
-					either.to_c_metadata(context, address)?
-				)
+				format!("enum {} {};\n\n", value.name.to_c(context)?, either.to_c(context)?,)
 			},
 			"Object" => {
 				let mut builder = format!("struct type_{}_{} {{", value.name.to_c(context)?, address);
+
+				// Add object fields
 				for (field_name, field_value) in value.fields() {
-					builder += &format!(
-						"\n\t{}* {};",
-						field_value.virtual_deref(context).clone().get_type(context)?.to_c(context)?,
-						field_name.to_c(context)?
-					);
+					builder += &format!("\n\t{}* {};", field_value.virtual_deref(context).clone().to_c_type(context)?, field_name.to_c(context)?);
 				}
+
+				// Add empty field thingy
 				if value.fields().next().is_none() {
 					builder += "\n\tchar empty;"
 				}
+
+				// Finish building the string
 				builder += "\n};\n\n";
 				builder
 			},
@@ -142,13 +139,16 @@ pub fn transpile_literal(context: &mut Context, value: &LiteralObject, address: 
 		return Ok(String::new());
 	}
 
+	if value.type_name == "Function".into() {
+		let function = FunctionDeclaration::from_literal(value, context)?;
+		if !function.compile_time_parameters.is_empty() {
+			return Ok(String::new());
+		}
+	}
+
 	// Cycle detection
 	if current_cycle.contains(&address) {
 		current_cycle.push(address);
-		dbg!(current_cycle
-			.iter()
-			.map(|addr| (addr, Pointer::unchecked(*addr).virtual_deref(context)))
-			.collect::<Vec<_>>());
 		anyhow::bail!(
 			"Recursive dependency cycle detected: {}",
 			current_cycle.iter().map(usize::to_string).collect::<Vec<_>>().join(" -> "),
@@ -165,14 +165,7 @@ pub fn transpile_literal(context: &mut Context, value: &LiteralObject, address: 
 
 	// Transpile self
 	let c = {
-		let type_name = match value.type_name.unmangled_name().as_str() {
-			"Object" => format!("type_{}_{address}", value.name.to_c(context)?),
-			_ => format!(
-				"{}_{}",
-				value.type_name.to_c(context)?,
-				value.type_name.clone().evaluate_at_compile_time(context)?.expect_as::<Pointer>()?.value()
-			),
-		};
+		let type_name = value.to_c_type(context)?;
 		format!("{}* {}_{address} = {};\n\n", type_name, value.name.to_c(context)?, value.to_c(context)?)
 	};
 
@@ -189,7 +182,7 @@ pub fn transpile_forward_declarations(context: &mut Context) -> anyhow::Result<S
 	let mut builder = String::new();
 	for (address, value) in context.virtual_memory.entries() {
 		builder += &match value.type_name.unmangled_name().as_str() {
-			"Group" => format!("typedef struct {name}_{address} {name}_{address};\n", name = value.name.to_c(context)?),
+			"Group" => format!("typedef struct group_{name}_{address} group_{name}_{address};\n", name = value.name.to_c(context)?),
 			"Either" => format!("typedef enum either_{name}_{address} {name}_{address};", name = value.name.to_c(context)?),
 			"Object" => {
 				format!("typedef struct type_{name}_{address} type_{name}_{address};\n", name = value.name.to_c(context)?)

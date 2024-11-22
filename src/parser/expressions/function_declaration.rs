@@ -11,7 +11,7 @@ use crate::{
 		expressions::{
 			block::Block,
 			literal::{LiteralConvertible, LiteralObject},
-			name::{Name, NameOption},
+			name::Name,
 			object::{Field, InternalFieldValue, ObjectConstructor, ObjectType},
 			Expression, Parse,
 		},
@@ -200,7 +200,7 @@ impl TranspileToC for FunctionDeclaration {
 		}
 
 		let return_type_c = if let Some(return_type) = self.return_type.as_ref() {
-			format!("{}{}* return_address", if self.parameters.is_empty() { "" } else { ", " }, return_type.to_c(context)?)
+			format!("{}group_{}* return_address", if self.parameters.is_empty() { "" } else { ", " }, return_type.to_c(context)?)
 		} else {
 			String::new()
 		};
@@ -209,7 +209,7 @@ impl TranspileToC for FunctionDeclaration {
 			"({}{}) {{\n{}\n}}",
 			self.parameters
 				.iter()
-				.map(|(name, parameter_type)| Ok(format!("{}* {}", parameter_type.to_c(context)?, name.to_c(context)?)))
+				.map(|(name, parameter_type)| Ok(format!("group_{}* {}", parameter_type.to_c(context)?, name.to_c(context)?)))
 				.collect::<anyhow::Result<Vec<_>>>()?
 				.join(", "),
 			return_type_c,

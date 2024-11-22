@@ -135,9 +135,3 @@ impl TranspileToC for Either {
 		Ok(builder)
 	}
 }
-
-impl Either {
-	pub fn to_c_metadata(&self, context: &Context, address: usize) -> anyhow::Result<String> {
-		Ok(String::new())
-	}
-}

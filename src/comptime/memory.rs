@@ -1,6 +1,10 @@
 use std::collections::HashMap;
 
-use crate::{api::context::Context, parser::expressions::literal::LiteralObject, transpiler::TranspileToC};
+use crate::{
+	api::context::Context,
+	parser::expressions::{literal::LiteralObject, Type},
+	transpiler::TranspileToC,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pointer(usize);
@@ -22,6 +26,12 @@ impl Pointer {
 impl TranspileToC for Pointer {
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		Ok(format!("{}_{}", self.virtual_deref(context).clone().name.to_c(context)?, self.value()))
+	}
+}
+
+impl Type for Pointer {
+	fn get_type(&self, context: &mut Context) -> anyhow::Result<Pointer> {
+		self.virtual_deref(context).clone().get_type(context)
 	}
 }
 

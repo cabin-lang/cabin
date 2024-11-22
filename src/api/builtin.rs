@@ -40,7 +40,8 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			Ok(Expression::Void(()))
 		},
 		to_c: |context, parameter_names| {
-			format!("printf(\"%s\", {});", parameter_names.first().unwrap())
+			let text_address = context.scope_data.expect_global_variable("Text").expect_as::<Pointer>().unwrap().value();
+			format!("printf(\"%s\\n\", ((group_u_Text_{text_address}*) {})->internal_value);", parameter_names.first().unwrap())
 		}
 	},
 	"terminal.input" => BuiltinFunction {
@@ -53,7 +54,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 		to_c: |context, parameter_names| {
 			let return_address = parameter_names.first().unwrap();
 			let text_address = context.scope_data.expect_global_variable("Text").expect_as::<Pointer>().unwrap().value();
-			format!("char* buffer;\nsize_t size;\ngetline(&buffer, &size, stdin);\n*{return_address} = (u_Text_{text_address}) {{ .internal_value = buffer }};")
+			format!("char* buffer = malloc(sizeof(char) * 256);\nfgets(buffer, 256, stdin);\n*{return_address} = (group_u_Text_{text_address}) {{ .internal_value = buffer }};")
 		}
 	},
 	"Number.plus" => BuiltinFunction {
