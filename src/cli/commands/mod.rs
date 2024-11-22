@@ -1,7 +1,7 @@
 use colored::Colorize as _;
 use new::NewCommand;
 use run::RunCommand;
-use set::CompilerConfiguration;
+use set::SetCommand;
 
 use crate::api::context::Context;
 
@@ -18,7 +18,7 @@ pub trait CabinCommand {
 #[enum_dispatch::enum_dispatch(CabinCommand)]
 pub enum SubCommand {
 	Run(RunCommand),
-	Set(CompilerConfiguration),
+	Set(SetCommand),
 	New(NewCommand),
 }
 
@@ -29,16 +29,6 @@ macro_rules! step {
 	) => {{
 		use colored::Colorize as _;
 		use std::io::Write as _;
-
-		let here = $crate::here!();
-
-		if !$context.config.quiet {
-			print!("{}{} {}... ", $context.config.tab(), $action.bold().green(), $object);
-			std::io::stdout().flush().unwrap();
-			if $action == "Running" {
-				println!("\n");
-			}
-		}
 
 		fn move_cursor_up_and_over(up: usize, right: usize) {
 			print!("\x1b[{}A", up);
@@ -52,18 +42,30 @@ macro_rules! step {
 			std::io::stdout().flush().unwrap();
 		}
 
+		let here = $crate::here!();
+
+		if !$context.config.quiet {
+			print!("{}{} {}... ", $context.config.tab(), $action.bold().green(), $object);
+			std::io::stdout().flush().unwrap();
+			if $action == "Running" {
+				println!("\n");
+			}
+		}
+
 		match $expression {
 			Ok(return_value) => {
-				if $action == "Evaluating" && $context.lines_printed != 0 {
-					move_cursor_up_and_over($context.lines_printed, ($context.config.tab() + "evaluating abstract syntax tree... ").len());
-				}
+				if !$context.config.quiet {
+					if $action == "Evaluating" && $context.lines_printed != 0 {
+						move_cursor_up_and_over($context.lines_printed, ($context.config.tab() + "evaluating abstract syntax tree... ").len());
+					}
 
-				if !$context.config.quiet && $action != "Running" {
-					println!("{}", "Done!".bold().green());
-				}
+					if $action != "Running" {
+						println!("{}", "Done!".bold().green());
+					}
 
-				if $action == "Evaluating" && $context.lines_printed != 0 {
-					move_cursor_down_and_left($context.lines_printed, 0);
+					if $action == "Evaluating" && $context.lines_printed != 0 {
+						move_cursor_down_and_left($context.lines_printed, 0);
+					}
 				}
 				return_value
 			},
@@ -141,12 +143,14 @@ macro_rules! step {
 }
 
 pub fn start(action: &str, context: &Context) {
-	println!(
-		"\n{} {}...            {}",
-		action.bold().green(),
-		format!("{}", context.running_context.file_or_project_name().display()).bold(),
-		"(Run with --quiet or -q to silence this output)".dimmed().italic()
-	);
+	if !context.config.quiet {
+		println!(
+			"\n{} {}...            {}",
+			action.bold().green(),
+			format!("{}", context.running_context.file_or_project_name().display()).bold(),
+			"(Run with --quiet or -q to silence this output)".dimmed().italic()
+		);
+	}
 }
 
 pub fn finish() {

@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use crate::api::context::CompilerConfiguration;
+
 pub mod commands;
 
 pub enum RunningContext {
@@ -23,6 +25,13 @@ impl RunningContext {
 			Self::Project(project) => project.main_file(),
 		}
 	}
+
+	pub fn config(&self) -> CompilerConfiguration {
+		match self {
+			Self::SingleFile(_) => CompilerConfiguration::default(),
+			Self::Project(project) => project.config(),
+		}
+	}
 }
 
 pub struct Project {
@@ -44,5 +53,18 @@ impl Project {
 
 	pub fn main_file(&self) -> PathBuf {
 		self.root_directory.join("src").join("main.cabin")
+	}
+
+	pub fn write_config(&mut self) {
+		std::fs::write(self.root_directory.join("cabin.toml"), self.config.to_string()).unwrap()
+	}
+
+	pub fn config(&self) -> CompilerConfiguration {
+		let options = self.config.get("options").unwrap().as_table().unwrap();
+		CompilerConfiguration {
+			quiet: options.get("quiet").map(|value| value.as_bool().unwrap()).unwrap_or(false),
+			developer_mode: options.get("developer-mode").map(|value| value.as_bool().unwrap()).unwrap_or(false),
+			code_tab_size: options.get("terminal-tab-size").map(|value| value.as_integer().unwrap()).unwrap_or(4).try_into().unwrap(),
+		}
 	}
 }

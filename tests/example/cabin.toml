@@ -2,3 +2,5 @@
 name = "example"
 
 [options]
+developer-mode = true
+quiet = false

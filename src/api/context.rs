@@ -45,7 +45,7 @@ impl Context {
 			error_location: RefCell::new(None),
 			error_details: RefCell::new(None),
 			compiler_error_position: RefCell::new(Vec::new()),
-			config: CompilerConfiguration::default(),
+			config: running_context.config(),
 			lines_printed: 0,
 			running_context,
 		})
