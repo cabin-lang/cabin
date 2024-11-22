@@ -63,7 +63,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.expect_as::<f64>()?;
 			Ok(number(first + second, context))
 		},
-		to_c: |context, parameter_names| {
+		to_c: |_context, _parameter_names| {
 			String::new()
 		}
 	},
@@ -73,7 +73,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.expect_as::<f64>()?;
 			Ok(number(first - second, context))
 		},
-		to_c: |context, parameter_names| {
+		to_c: |_context, _parameter_names| {
 			String::new()
 		}
 	},
@@ -86,7 +86,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 				_ => anyhow::bail!("Unsupported expression: {this:?}")
 			}, context))
 		},
-		to_c: |context, parameter_names| {
+		to_c: |_context, _parameter_names| {
 			String::new()
 		}
 	},

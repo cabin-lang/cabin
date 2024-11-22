@@ -1,6 +1,5 @@
 use crate::{
 	api::context::Context,
-	comptime::memory::Pointer,
 	mapped_err,
 	parser::{
 		expressions::{
@@ -8,7 +7,6 @@ use crate::{
 			function_declaration::FunctionDeclaration,
 			group::GroupDeclaration,
 			literal::{LiteralConvertible, LiteralObject},
-			Type as _,
 		},
 		Program,
 	},

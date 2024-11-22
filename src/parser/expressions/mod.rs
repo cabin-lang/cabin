@@ -273,19 +273,7 @@ impl Type for Expression {
 	fn get_type(&self, context: &mut Context) -> anyhow::Result<Pointer> {
 		match self {
 			Expression::Pointer(pointer) => pointer.virtual_deref(context).clone().get_type(context),
-			Expression::Block(block) => todo!(),
-			Expression::Either(either) => todo!(),
-			Expression::FieldAccess(field_access) => todo!(),
-			Expression::FunctionCall(function_call) => todo!(),
-			Expression::Group(group_declaration) => todo!(),
-			Expression::FunctionDeclaration(function_declaration) => todo!(),
-			Expression::If(if_expression) => todo!(),
-			Expression::Name(name) => todo!(),
-			Expression::ObjectConstructor(object_constructor) => todo!(),
-			Expression::ForEachLoop(for_each_loop) => todo!(),
-			Expression::OneOf(one_of) => todo!(),
-			Expression::Void(_) => todo!(),
-			Expression::Run(_) => todo!(),
+			_ => todo!(),
 		}
 	}
 }
