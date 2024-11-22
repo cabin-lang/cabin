@@ -201,7 +201,7 @@ macro_rules! parse_list {
 			}
 		}
 
-		$tokens.pop($list_type.closing())?;
+		$tokens.pop($list_type.closing())?
 	}};
 }
 

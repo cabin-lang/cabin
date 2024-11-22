@@ -306,8 +306,8 @@ impl Spanned for Expression {
 		match self {
 			Expression::Name(name) => name.span(),
 			Expression::Run(run_expression) => run_expression.span(),
-			Expression::Block(block) => todo!(),
-			Expression::Either(either) => todo!(),
+			Expression::Block(block) => block.span(),
+			Expression::Either(either) => either.span(),
 			Expression::FieldAccess(field_access) => todo!(),
 			Expression::FunctionCall(function_call) => todo!(),
 			Expression::Group(group_declaration) => todo!(),

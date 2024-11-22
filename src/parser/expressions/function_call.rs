@@ -7,7 +7,7 @@ use crate::{
 	lexer::{Token, TokenType},
 	mapped_err, parse_list,
 	parser::{
-		expressions::{function_declaration::FunctionDeclaration, literal::LiteralConvertible, name::Name, operators::FieldAccess, Expression, Parse},
+		expressions::{function_declaration::FunctionDeclaration, literal::LiteralConvertible, name::Name, operators::FieldAccess, Expression, Parse, Spanned as _},
 		ListType, TokenQueueFunctionality,
 	},
 	transpiler::TranspileToC,
@@ -177,6 +177,7 @@ impl CompileTime for FunctionCall {
 									),
 									while = "validating the arguments in a function call",
 									context = context,
+									position = argument.span()
 								};
 							}
 							context.scope_data.reassign_variable_from_id(parameter_name, argument.clone(), block.inner_scope_id)?;

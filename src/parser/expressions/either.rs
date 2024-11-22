@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
 	api::{context::Context, macros::string, traits::TryAs as _},
 	comptime::CompileTime,
-	lexer::TokenType,
+	lexer::{Span, TokenType},
 	literal, literal_list, mapped_err, parse_list,
 	parser::{
 		expressions::{
@@ -17,27 +17,32 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
+use super::Spanned;
+
 #[derive(Debug, Clone)]
 pub struct Either {
 	variants: Vec<Name>,
 	scope_id: usize,
 	pub name: Name,
+	span: Span,
 }
 
 impl Parse for Either {
 	type Output = Either;
 
 	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
-		tokens.pop(TokenType::KeywordEither)?;
+		let start = tokens.pop(TokenType::KeywordEither)?.span;
 		let mut variants = Vec::new();
-		parse_list!(tokens, ListType::Braced, {
+		let end = parse_list!(tokens, ListType::Braced, {
 			variants.push(Name::parse(tokens, context)?);
-		});
+		})
+		.span;
 
 		Ok(Either {
 			variants,
 			scope_id: context.scope_data.unique_id(),
 			name: "anonymous_either".into(),
+			span: start.to(&end),
 		})
 	}
 }
@@ -119,6 +124,7 @@ impl LiteralConvertible for Either {
 			variants,
 			scope_id: literal.declared_scope_id(),
 			name: literal.name.clone(),
+			span: Span::zero(), // TODO: rah
 		})
 	}
 }
@@ -133,5 +139,11 @@ impl TranspileToC for Either {
 		builder += "\n}";
 
 		Ok(builder)
+	}
+}
+
+impl Spanned for Either {
+	fn span(&self) -> Span {
+		self.span.to_owned()
 	}
 }

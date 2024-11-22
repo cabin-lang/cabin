@@ -1,15 +1,18 @@
 use crate::{
 	api::{context::Context, scope::ScopeType},
 	comptime::CompileTime,
-	lexer::TokenType,
+	lexer::{Span, TokenType},
 	parser::{expressions::Expression, statements::Statement, Parse, TokenQueue, TokenQueueFunctionality as _},
 	transpiler::TranspileToC,
 };
+
+use super::Spanned;
 
 #[derive(Debug, Clone)]
 pub struct Block {
 	pub statements: Vec<Statement>,
 	pub inner_scope_id: usize,
+	span: Span,
 }
 
 impl Block {
@@ -22,16 +25,17 @@ impl Block {
 		}
 
 		let scope_id = context.scope_data.unique_id();
-		tokens.pop(TokenType::LeftBrace)?;
+		let start = tokens.pop(TokenType::LeftBrace)?.span;
 		let mut statements = Vec::new();
 		while !tokens.next_is(TokenType::RightBrace) {
 			statements.push(Statement::parse(tokens, context)?);
 		}
-		tokens.pop(TokenType::RightBrace)?;
+		let end = tokens.pop(TokenType::RightBrace)?.span;
 		context.scope_data.exit_scope()?;
 		Ok(Block {
 			statements,
 			inner_scope_id: scope_id,
+			span: start.to(&end),
 		})
 	}
 }
@@ -75,6 +79,7 @@ impl CompileTime for Block {
 		Ok(Expression::Block(Block {
 			statements,
 			inner_scope_id: self.inner_scope_id,
+			span: self.span,
 		}))
 	}
 }
@@ -91,5 +96,11 @@ impl TranspileToC for Block {
 		builder += "\n})";
 
 		Ok(builder)
+	}
+}
+
+impl Spanned for Block {
+	fn span(&self) -> Span {
+		self.span.to_owned()
 	}
 }
