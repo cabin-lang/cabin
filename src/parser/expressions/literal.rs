@@ -9,7 +9,7 @@ use crate::{
 	lexer::Position,
 	parser::expressions::{
 		group::GroupDeclaration,
-		name::{Name, NameOption},
+		name::Name,
 		object::{InternalFieldValue, ObjectConstructor, ObjectType},
 		Expression,
 	},
@@ -25,7 +25,7 @@ pub struct LiteralObject {
 	internal_fields: HashMap<String, InternalFieldValue>,
 	object_type: ObjectType,
 	scope_id: usize,
-	pub name: Option<Name>,
+	pub name: Name,
 	pub address: Option<usize>,
 }
 
@@ -240,26 +240,27 @@ impl TranspileToC for LiteralObject {
 					self.expect_as::<String>()?.to_owned()
 				)
 			},
-			"Group" => GroupDeclaration::from_literal(self, context)?.to_c(context)?,
 			_ => {
-				let name = if self.type_name == "Object".into() {
-					format!("type_{}", self.name.to_c_or_pointer(self.address.unwrap()))
-				} else {
-					self.type_name.clone().evaluate_at_compile_time(context)?.to_c(context)?
+				// Type name
+				let type_name = match self.type_name.unmangled_name().as_str() {
+					"Object" => format!("type_{}_{}", self.name.to_c(context)?, self.address.unwrap()),
+					_ => self.type_name.clone().evaluate_at_compile_time(context)?.to_c(context)?,
 				};
-				let mut builder = format!("&({}) {{", name);
+
+				// Create string builder
+				let mut builder = format!("&({}) {{", type_name);
+
+				// Add fields
 				for (field_name, field_pointer) in &self.fields {
-					let value = field_pointer.virtual_deref(context);
-					let value_c = if matches!(value.type_name.unmangled_name().as_str(), "Group" | "Either") {
-						format!("metadata_instance_{}", value.name.to_c_or_pointer(field_pointer.value()))
-					} else {
-						field_pointer.to_c(context)?
-					};
-					builder += &format!("\n\t.{} = {},", field_name.to_c(context)?, value_c);
+					builder += &format!("\n\t.{} = {},", field_name.to_c(context)?, field_pointer.to_c(context)?);
 				}
+
+				// If empty, add the empty thingy
 				if self.fields.is_empty() {
 					builder += "\n\t.empty = '0'";
 				}
+
+				// Finish building the string
 				builder += "\n}";
 				builder
 			},

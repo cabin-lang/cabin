@@ -219,7 +219,20 @@ impl CompileTime for FunctionCall {
 impl TranspileToC for FunctionCall {
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		Ok(format!(
-			"{}({})",
+			"(((void (*)({}))({}->call))({}))",
+			{
+				let function = FunctionDeclaration::from_literal(
+					self.function.clone().evaluate_at_compile_time(context)?.expect_as::<Pointer>()?.virtual_deref(context),
+					context,
+				)?;
+
+				function
+					.parameters
+					.iter()
+					.map(|parameter| Ok(format!("{}*", parameter.1.to_c(context)?)))
+					.collect::<anyhow::Result<Vec<_>>>()?
+					.join(", ")
+			},
 			self.function.to_c(context)?,
 			self.arguments
 				.as_ref()

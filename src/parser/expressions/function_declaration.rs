@@ -1,13 +1,10 @@
-use std::{
-	collections::HashMap,
-	sync::atomic::{AtomicUsize, Ordering},
-};
+use std::collections::HashMap;
 
 use colored::Colorize as _;
 
 use crate::{
 	api::{builtin::transpile_builtin_to_c, context::Context, macros::string, scope::ScopeType, traits::TryAs as _},
-	comptime::{memory::Pointer, CompileTime},
+	comptime::CompileTime,
 	lexer::TokenType,
 	literal, literal_list, mapped_err, parse_list,
 	parser::{
@@ -33,10 +30,8 @@ pub struct FunctionDeclaration {
 	pub scope_id: usize,
 	pub tags: TagList,
 	pub this_object: Option<Box<Expression>>,
-	pub name: Option<Name>,
+	pub name: Name,
 }
-
-static ANONYMOUS_FUNCTION_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 impl Parse for FunctionDeclaration {
 	type Output = FunctionDeclaration;
@@ -103,10 +98,7 @@ impl Parse for FunctionDeclaration {
 			body,
 			scope_id: context.scope_data.unique_id(),
 			this_object: None,
-			name: Some(Name::non_mangled(format!(
-				"anonymous_function_{}",
-				ANONYMOUS_FUNCTION_COUNT.fetch_add(1, Ordering::Relaxed)
-			))),
+			name: Name::non_mangled("anonymous_function"),
 		})
 	}
 }
@@ -202,7 +194,7 @@ impl TranspileToC for FunctionDeclaration {
 					let builtin_name = object.get_field_literal("internal_name", context).unwrap().expect_as::<String>()?.to_owned();
 					let mut parameters = self.parameters.iter().map(|(parameter_name, _)| parameter_name.to_c(context).unwrap()).collect::<Vec<_>>();
 					parameters.push("return_address".to_string());
-					body = Some(transpile_builtin_to_c(&builtin_name, &parameters)?);
+					body = Some(transpile_builtin_to_c(&builtin_name, context, &parameters)?);
 				}
 			}
 		}
@@ -244,7 +236,7 @@ impl LiteralConvertible for FunctionDeclaration {
 			.into_iter()
 			.map(|(parameter_name, parameter_type)| {
 				literal! {
-					name = self.name.with_field(&parameter_name),
+					name = format!("{}_{}", self.name.unmangled_name(), parameter_name.unmangled_name()).into(),
 					context = context,
 					Parameter {
 						name = string(&parameter_name.unmangled_name(), context),
@@ -261,7 +253,7 @@ impl LiteralConvertible for FunctionDeclaration {
 			.into_iter()
 			.map(|(parameter_name, parameter_type)| {
 				literal! {
-					name = self.name.with_field(&parameter_name),
+					name = format!("{}_{}", self.name.unmangled_name(), parameter_name.unmangled_name()).into(),
 					context = context,
 					Parameter {
 						name = string(&parameter_name.unmangled_name(), context),

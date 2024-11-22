@@ -21,12 +21,7 @@ impl Pointer {
 
 impl TranspileToC for Pointer {
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
-		Ok(self
-			.virtual_deref(context)
-			.name
-			.clone()
-			.map(|name| name.to_c(context).unwrap())
-			.unwrap_or(format!("POINTER_{}", self.0)))
+		Ok(format!("{}_{}", self.virtual_deref(context).clone().name.to_c(context)?, self.value()))
 	}
 }
 

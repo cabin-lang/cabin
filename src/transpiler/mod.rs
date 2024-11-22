@@ -1,6 +1,6 @@
 use crate::{
-	api::context::Context,
-	comptime::memory::Pointer,
+	api::{context::Context, traits::TryAs as _},
+	comptime::{memory::Pointer, CompileTime as _},
 	mapped_err,
 	parser::{
 		expressions::{
@@ -8,7 +8,6 @@ use crate::{
 			function_declaration::FunctionDeclaration,
 			group::GroupDeclaration,
 			literal::{LiteralConvertible, LiteralObject},
-			name::NameOption,
 			Type as _,
 		},
 		Program,
@@ -29,7 +28,12 @@ pub fn transpile(program: &Program, context: &mut Context) -> anyhow::Result<Str
 	})?;
 
 	// Transpile virtual memory
-	builder += &transpile_virtual_memory(context).map_err(mapped_err! {
+	builder += &transpile_types(context).map_err(mapped_err! {
+		while = "transpiling the program's functions and groups to C",
+		context = context,
+	})?;
+
+	builder += &transpile_functions(context).map_err(mapped_err! {
 		while = "transpiling the program's functions and groups to C",
 		context = context,
 	})?;
@@ -57,45 +61,28 @@ pub fn transpile_program(program: &Program, context: &mut Context) -> anyhow::Re
 	Ok(builder)
 }
 
-pub fn transpile_virtual_memory(context: &mut Context) -> anyhow::Result<String> {
+pub fn transpile_types(context: &mut Context) -> anyhow::Result<String> {
 	let mut builder = String::new();
 	for (address, value) in context.virtual_memory.entries() {
 		builder += &match value.type_name.unmangled_name().as_str() {
 			"Group" => {
 				let group = GroupDeclaration::from_literal(&value, context)?;
-				format!(
-					"struct {} {};\n\n{}\n\n",
-					value.name.to_c_or_pointer(address),
-					group.to_c(context)?,
-					group.to_c_metadata(context, address)?
-				)
+				format!("struct {}_{address} {};\n\n", value.name.to_c(context)?, group.to_c(context)?,)
 			},
 			"Either" => {
 				let either = Either::from_literal(&value, context)?;
 				format!(
 					"enum {} {};\n\n{}\n\n",
-					value.name.to_c_or_pointer(address),
+					value.name.to_c(context)?,
 					either.to_c(context)?,
 					either.to_c_metadata(context, address)?
 				)
 			},
-			"Function" => {
-				let function = FunctionDeclaration::from_literal(&value, context).map_err(mapped_err! {
-					while = "deserializing a function declaration literal into a function declaration",
-					context = context,
-				})?;
-				let value = function.to_c(context)?;
-				if value.is_empty() {
-					String::new()
-				} else {
-					format!("void {}{}\n\n", function.name.to_c_or_pointer(address), value)
-				}
-			},
 			"Object" => {
-				let mut builder = format!("struct type_{} {{", value.name.to_c_or_pointer(address));
+				let mut builder = format!("struct type_{}_{} {{", value.name.to_c(context)?, address);
 				for (field_name, field_value) in value.fields() {
 					builder += &format!(
-						"\n\t{} {};",
+						"\n\t{}* {};",
 						field_value.virtual_deref(context).clone().get_type(context)?.to_c(context)?,
 						field_name.to_c(context)?
 					);
@@ -112,16 +99,38 @@ pub fn transpile_virtual_memory(context: &mut Context) -> anyhow::Result<String>
 	Ok(builder)
 }
 
+pub fn transpile_functions(context: &mut Context) -> anyhow::Result<String> {
+	let mut builder = String::new();
+	for (address, value) in context.virtual_memory.entries() {
+		builder += &match value.type_name.unmangled_name().as_str() {
+			"Function" => {
+				let function = FunctionDeclaration::from_literal(&value, context).map_err(mapped_err! {
+					while = "deserializing a function declaration literal into a function declaration",
+					context = context,
+				})?;
+				let value = function.to_c(context)?;
+				if value.is_empty() {
+					String::new()
+				} else {
+					format!("void call_{}_{address}{}\n\n", function.name.to_c(context)?, value)
+				}
+			},
+			_ => String::new(),
+		}
+	}
+	Ok(builder)
+}
+
 pub fn transpile_main(context: &mut Context) -> anyhow::Result<String> {
 	let mut builder = "int main(int argc, char** argv) {".to_owned();
 
 	let mut visited = Vec::new();
 	for (address, value) in context.virtual_memory.entries() {
-		if matches!(value.type_name.unmangled_name().as_str(), "Group" | "Function" | "OneOf" | "Either") {
+		if matches!(value.type_name.unmangled_name().as_str(), "OneOf" | "Either") {
 			continue;
 		}
 
-		let mut current_tree = Vec::new();
+		let mut current_tree: Vec<usize> = Vec::new();
 		builder += &transpile_literal(context, &value, address, &mut visited, &mut current_tree)?;
 	}
 	Ok(builder)
@@ -155,22 +164,18 @@ pub fn transpile_literal(context: &mut Context, value: &LiteralObject, address: 
 	}
 
 	// Transpile self
-	let c = if value.type_name == "Group".into() {
-		let group = GroupDeclaration::from_literal(value, context)?;
-		format!(
-			"{}* metadata_instance_{} = {};\n\n",
-			value.get_type(context)?.to_c(context)?,
-			value.name.to_c_or_pointer(address),
-			group.to_c_metadata_instance(context, address)?
-		)
-	} else {
-		format!(
-			"{}* {} = {};\n\n",
-			value.get_type(context)?.to_c(context)?,
-			value.name.to_c_or_pointer(address),
-			value.to_c(context)?
-		)
+	let c = {
+		let type_name = match value.type_name.unmangled_name().as_str() {
+			"Object" => format!("type_{}_{address}", value.name.to_c(context)?),
+			_ => format!(
+				"{}_{}",
+				value.type_name.to_c(context)?,
+				value.type_name.clone().evaluate_at_compile_time(context)?.expect_as::<Pointer>()?.value()
+			),
+		};
+		format!("{}* {}_{address} = {};\n\n", type_name, value.name.to_c(context)?, value.to_c(context)?)
 	};
+
 	for line in c.lines() {
 		builder += &format!("\n\t{line}");
 	}
@@ -180,20 +185,14 @@ pub fn transpile_literal(context: &mut Context, value: &LiteralObject, address: 
 	Ok(builder)
 }
 
-pub fn transpile_forward_declarations(context: &Context) -> anyhow::Result<String> {
+pub fn transpile_forward_declarations(context: &mut Context) -> anyhow::Result<String> {
 	let mut builder = String::new();
 	for (address, value) in context.virtual_memory.entries() {
 		builder += &match value.type_name.unmangled_name().as_str() {
-			"Group" => format!(
-				"typedef struct {name} {name};\ntypedef struct metadata_{name} metadata_{name};\n",
-				name = value.name.to_c_or_pointer(address)
-			),
-			"Either" => format!(
-				"typedef enum {name} {name};\ntypedef enum metadata_{name} metadata_{name};\n",
-				name = value.name.to_c_or_pointer(address)
-			),
+			"Group" => format!("typedef struct {name}_{address} {name}_{address};\n", name = value.name.to_c(context)?),
+			"Either" => format!("typedef enum either_{name}_{address} {name}_{address};", name = value.name.to_c(context)?),
 			"Object" => {
-				format!("typedef struct type_{name} type_{name};\n", name = value.name.to_c_or_pointer(address))
+				format!("typedef struct type_{name}_{address} type_{name}_{address};\n", name = value.name.to_c(context)?)
 			},
 			_ => String::new(),
 		}

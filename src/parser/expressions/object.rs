@@ -1,7 +1,4 @@
-use std::{
-	collections::HashMap,
-	sync::atomic::{AtomicUsize, Ordering},
-};
+use std::collections::HashMap;
 
 use try_as::traits::{self as try_as_traits};
 
@@ -27,7 +24,7 @@ pub struct ObjectConstructor {
 	pub internal_fields: HashMap<String, InternalFieldValue>,
 	pub scope_id: usize,
 	pub object_type: ObjectType,
-	pub name: Option<Name>,
+	pub name: Name,
 }
 
 #[derive(Debug, Clone)]
@@ -50,8 +47,6 @@ impl Fields for Vec<Field> {
 	}
 }
 
-static STRING_COUNT: AtomicUsize = AtomicUsize::new(0);
-
 impl ObjectConstructor {
 	pub fn get_field(&self, name: &Name) -> Option<&Expression> {
 		self.fields.iter().find_map(|field| if &field.name == name { field.value.as_ref() } else { None })
@@ -65,7 +60,7 @@ impl ObjectConstructor {
 				internal_fields: HashMap::from([("internal_value".to_owned(), InternalFieldValue::String(string.to_owned()))]),
 				scope_id: 0,
 				object_type: ObjectType::Normal,
-				name: Some(Name::non_mangled(format!("anonymous_string_literal_{}", STRING_COUNT.fetch_add(1, Ordering::Relaxed)))),
+				name: Name::non_mangled("anonymous_string_literal"),
 			},
 			context,
 		)
@@ -80,7 +75,7 @@ impl ObjectConstructor {
 			internal_fields: HashMap::from([("internal_value".to_owned(), InternalFieldValue::Number(number))]),
 			scope_id: 0,
 			object_type: ObjectType::Normal,
-			name: None,
+			name: "anonymous_number".into(),
 		}
 	}
 
@@ -111,8 +106,6 @@ impl ObjectConstructor {
 		self.internal_fields.get(name)
 	}
 }
-
-static ANONYMOUS_OBJECT_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 impl Parse for ObjectConstructor {
 	type Output = ObjectConstructor;
@@ -165,7 +158,7 @@ impl Parse for ObjectConstructor {
 			scope_id: context.scope_data.unique_id(),
 			internal_fields: HashMap::new(),
 			object_type: ObjectType::Normal,
-			name: Some(Name::non_mangled(format!("anonymous_object_{}", ANONYMOUS_OBJECT_COUNT.fetch_add(1, Ordering::Relaxed)))),
+			name: Name::non_mangled("anonymous_object"),
 		})
 	}
 }
@@ -303,7 +296,7 @@ impl TranspileToC for ObjectConstructor {
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		// Type name
 		let name = if self.type_name == "Object".into() {
-			format!("type_{}", self.name.as_ref().unwrap().to_c(context)?)
+			format!("type_{}_UNKNOWN", self.name.to_c(context)?)
 		} else {
 			self.type_name.clone().evaluate_at_compile_time(context)?.to_c(context)?
 		};

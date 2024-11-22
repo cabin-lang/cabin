@@ -27,7 +27,7 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
-use super::sugar::list::List;
+use super::{run::RunExpression, sugar::list::List};
 
 /// A binary operation. More specifically, this represents not one operation, but a group of operations that share the same precedence.
 /// For example, the `+` and `-` operators share the same precedence, so they are grouped together in the `ADDITIVE` constant.
@@ -226,7 +226,16 @@ impl CompileTime for FieldAccess {
 
 impl TranspileToC for FieldAccess {
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
-		Ok(format!("{}->{}", self.left.to_c(context)?, self.right.mangled_name()))
+		let left = if let Ok(name) = self.left.as_ref().try_as::<Name>() {
+			format!(
+				"{}_{}",
+				self.left.to_c(context)?,
+				name.clone().evaluate_at_compile_time(context)?.try_as_literal(context)?.address.unwrap()
+			)
+		} else {
+			self.left.to_c(context)?
+		};
+		Ok(format!("{}->{}", left, self.right.mangled_name()))
 	}
 }
 
@@ -257,6 +266,7 @@ impl Parse for PrimaryExpression {
 			TokenType::KeywordIf => Expression::If(IfExpression::parse(tokens, context)?),
 			TokenType::KeywordForEach => Expression::ForEachLoop(ForEachLoop::parse(tokens, context)?),
 			TokenType::LeftBracket => List::parse(tokens, context)?,
+			TokenType::KeywordRuntime => Expression::Run(RunExpression::parse(tokens, context)?),
 			TokenType::String => {
 				let with_quotes = tokens.pop(TokenType::String)?.value;
 				let without_quotes = with_quotes.get(1..with_quotes.len() - 1).unwrap().to_owned();

@@ -4,6 +4,7 @@ use colored::Colorize as _;
 
 use crate::{
 	api::{context::Context, macros::number, traits::TryAs as _},
+	comptime::memory::Pointer,
 	mapped_err,
 	parser::expressions::{object::ObjectConstructor, Expression},
 };
@@ -12,7 +13,7 @@ use super::macros::string;
 
 pub struct BuiltinFunction {
 	evaluate_at_compile_time: fn(&mut Context, usize, Vec<Expression>) -> anyhow::Result<Expression>,
-	to_c: fn(&[String]) -> String,
+	to_c: fn(&Context, &[String]) -> String,
 }
 
 static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
@@ -38,7 +39,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 
 			Ok(Expression::Void(()))
 		},
-		to_c: |parameter_names| {
+		to_c: |context, parameter_names| {
 			format!("printf(\"%s\", {});", parameter_names.first().unwrap())
 		}
 	},
@@ -49,9 +50,10 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			line = line.get(0..line.len() - 1).unwrap().to_owned();
 			Ok(Expression::Pointer(ObjectConstructor::from_string(&line, context)))
 		},
-		to_c: |parameter_names| {
+		to_c: |context, parameter_names| {
 			let return_address = parameter_names.first().unwrap();
-			format!("char* buffer;\nsize_t size;\ngetline(&buffer, &size, stdin);\n*{return_address} = (u_Text) {{ .internal_value = buffer }};")
+			let text_address = context.scope_data.expect_global_variable("Text").expect_as::<Pointer>().unwrap().value();
+			format!("char* buffer;\nsize_t size;\ngetline(&buffer, &size, stdin);\n*{return_address} = (u_Text_{text_address}) {{ .internal_value = buffer }};")
 		}
 	},
 	"Number.plus" => BuiltinFunction {
@@ -60,8 +62,8 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.expect_as::<f64>()?;
 			Ok(number(first + second, context))
 		},
-		to_c: |parameter_names| {
-			format!("printf(\"%s\", {});", parameter_names.first().unwrap())
+		to_c: |context, parameter_names| {
+			String::new()
 		}
 	},
 	"Number.minus" => BuiltinFunction {
@@ -70,8 +72,8 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.expect_as::<f64>()?;
 			Ok(number(first - second, context))
 		},
-		to_c: |parameter_names| {
-			format!("printf(\"%s\", {});", parameter_names.first().unwrap())
+		to_c: |context, parameter_names| {
+			String::new()
 		}
 	},
 	"Anything.to_string" => BuiltinFunction {
@@ -83,10 +85,8 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 				_ => anyhow::bail!("Unsupported expression: {this:?}")
 			}, context))
 		},
-		to_c: |parameter_names| {
-			let this = parameter_names.first().unwrap();
-			let return_address = parameter_names.get(1).unwrap();
-			format!("*{return_address} = {this};")
+		to_c: |context, parameter_names| {
+			String::new()
 		}
 	},
 };
@@ -107,7 +107,7 @@ pub fn call_builtin_at_compile_time(name: &str, context: &mut Context, caller_sc
 	})
 }
 
-pub fn transpile_builtin_to_c(name: &str, parameters: &[String]) -> anyhow::Result<String> {
+pub fn transpile_builtin_to_c(name: &str, context: &Context, parameters: &[String]) -> anyhow::Result<String> {
 	Ok((BUILTINS
 		.get(name)
 		.ok_or_else(|| {
@@ -116,5 +116,5 @@ pub fn transpile_builtin_to_c(name: &str, parameters: &[String]) -> anyhow::Resu
 				name.bold().cyan()
 			)
 		})?
-		.to_c)(parameters))
+		.to_c)(context, parameters))
 }

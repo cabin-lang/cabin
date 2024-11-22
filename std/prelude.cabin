@@ -14,12 +14,16 @@ let Optional = oneof<Data> {
 // Results -------------------------------------------------------------------------------------------------------------------
 
 // Anything ------------------------------------------------------------------------------------------------------------------
+
 let Text = group {};
 
 let Anything = group {};
 
 let Object = group {};
-let Group = group {};
+
+let Group = group {
+	fields: Anything,
+};
 
 let Parameter = group {
 	name: Text,

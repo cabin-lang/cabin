@@ -52,7 +52,7 @@ impl Parse for Declaration {
 
 		// Set name
 		if let Some(expression_name) = value.name_mut() {
-			*expression_name = Some(name.clone());
+			*expression_name = name.clone();
 		}
 
 		// Add the name declaration to the scope

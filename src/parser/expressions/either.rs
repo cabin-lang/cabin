@@ -8,7 +8,7 @@ use crate::{
 	parser::{
 		expressions::{
 			literal::{LiteralConvertible, LiteralObject},
-			name::{Name, NameOption as _},
+			name::Name,
 			object::{Field, ObjectConstructor, ObjectType},
 			Expression,
 		},
@@ -21,7 +21,7 @@ use crate::{
 pub struct Either {
 	variants: Vec<Name>,
 	scope_id: usize,
-	pub name: Option<Name>,
+	pub name: Name,
 }
 
 impl Parse for Either {
@@ -37,7 +37,7 @@ impl Parse for Either {
 		Ok(Either {
 			variants,
 			scope_id: context.scope_data.unique_id(),
-			name: None,
+			name: "anonymous_either".into(),
 		})
 	}
 }
@@ -57,7 +57,7 @@ impl LiteralConvertible for Either {
 			.iter()
 			.map(|field| {
 				literal! {
-					name = self.name.with_field(field),
+					name = field.to_owned(),
 					context = context,
 					Field {
 						name = string(&field.unmangled_name(), context),
@@ -78,7 +78,7 @@ impl LiteralConvertible for Either {
 				value: Some(literal_list!(context, self.scope_id, variants)),
 				field_type: None,
 			}],
-			name: None,
+			name: self.name,
 			scope_id: self.scope_id,
 			internal_fields: HashMap::new(),
 			type_name: "Either".into(),

@@ -1,4 +1,5 @@
 use colored::Colorize as _;
+use run::RunExpression;
 use try_as::traits as try_as_traits;
 
 use crate::{
@@ -39,6 +40,7 @@ pub mod name;
 pub mod object;
 pub mod oneof;
 pub mod operators;
+pub mod run;
 pub mod sugar;
 
 #[derive(Debug, Clone, try_as::macros::From, try_as::macros::TryInto, try_as::macros::TryAsRef)]
@@ -65,6 +67,7 @@ pub enum Expression {
 	OneOf(OneOf),
 
 	Pointer(Pointer),
+	Run(RunExpression),
 
 	Void(()),
 }
@@ -115,6 +118,11 @@ impl CompileTime for Expression {
 			Self::ForEachLoop(for_loop) => for_loop
 				.evaluate_at_compile_time(context)
 				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a for-each loop at compile-time".dimmed()))?,
+			Self::Run(run_expression) => Expression::Run(
+				run_expression
+					.evaluate_at_compile_time(context)
+					.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a for-each loop at compile-time".dimmed()))?,
+			),
 			Self::Void(_) | Self::Pointer(_) => self,
 		})
 	}
@@ -164,6 +172,7 @@ impl Expression {
 			Self::Pointer(_) => "pointer",
 			Self::If(_) => "if expression",
 			Self::ForEachLoop(_) => "for-each loop",
+			Self::Run(_) => "run expression",
 		}
 	}
 
@@ -231,7 +240,7 @@ impl Expression {
 	}
 
 	/// This function should only be called during parse-time.
-	pub fn name_mut(&mut self) -> Option<&mut Option<Name>> {
+	pub fn name_mut(&mut self) -> Option<&mut Name> {
 		match self {
 			Self::FunctionDeclaration(function) => Some(&mut function.name),
 			Self::Group(group) => Some(&mut group.name),
@@ -253,6 +262,7 @@ impl TranspileToC for Expression {
 			Self::ForEachLoop(for_each_loop) => for_each_loop.to_c(context)?,
 			Self::Pointer(pointer) => pointer.to_c(context)?,
 			Self::ObjectConstructor(object_constructor) => object_constructor.to_c(context)?,
+			Self::Run(run_expression) => run_expression.to_c(context)?,
 			Self::Void(_) => "void".to_owned(),
 			Self::Either(_) | Self::FunctionDeclaration(_) | Self::Group(_) | Self::OneOf(_) => anyhow::bail!("Attempted to transpile a literal to C as an expression"),
 		})
@@ -275,6 +285,7 @@ impl Type for Expression {
 			Expression::ForEachLoop(for_each_loop) => todo!(),
 			Expression::OneOf(one_of) => todo!(),
 			Expression::Void(_) => todo!(),
+			Expression::Run(_) => todo!(),
 		}
 	}
 }

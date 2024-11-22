@@ -3,19 +3,14 @@ use std::collections::{HashMap, VecDeque};
 use colored::Colorize as _;
 
 use crate::{
-	api::{
-		context::{self, Context},
-		macros::string,
-		scope::ScopeType,
-		traits::TryAs as _,
-	},
+	api::{context::Context, macros::string, scope::ScopeType, traits::TryAs as _},
 	comptime::CompileTime,
 	lexer::{Token, TokenType},
 	literal, literal_list, mapped_err, parse_list,
 	parser::{
 		expressions::{
 			literal::{LiteralConvertible, LiteralObject},
-			name::{Name, NameOption},
+			name::Name,
 			object::{Field, ObjectConstructor, ObjectType},
 			Expression, Parse,
 		},
@@ -29,7 +24,7 @@ use crate::{
 pub struct GroupDeclaration {
 	pub fields: Vec<Field>,
 	pub scope_id: usize,
-	pub name: Option<Name>,
+	pub name: Name,
 }
 
 impl Parse for GroupDeclaration {
@@ -89,7 +84,7 @@ impl Parse for GroupDeclaration {
 		Ok(Expression::Group(GroupDeclaration {
 			fields,
 			scope_id: inner_scope_id,
-			name: None,
+			name: "anonymous_group".into(),
 		}))
 	}
 }
@@ -162,8 +157,10 @@ impl TranspileToC for GroupDeclaration {
 		for field in &self.fields {
 			builder += &format!("\n\tvoid* {};", field.name.to_c(context)?);
 		}
-		if self.name == Some("Text".into()) {
+		if self.name == "Text".into() {
 			builder += "\n\tchar* internal_value;";
+		} else if self.name == "Function".into() {
+			builder += "\n\tvoid* call;";
 		} else if self.fields.is_empty() {
 			builder += "\n\tchar empty;";
 		}
@@ -180,7 +177,7 @@ impl LiteralConvertible for GroupDeclaration {
 			.map(|field| {
 				let value = if let Some(value) = field.value { value } else { context.nothing() };
 				literal! {
-					name = self.name.with_field(&field.name),
+					name = format!("{}_{}", self.name.unmangled_name(), field.name.unmangled_name()).into(),
 					context = context,
 					Field {
 						name = string(&field.name.unmangled_name(), context),
@@ -230,17 +227,5 @@ impl LiteralConvertible for GroupDeclaration {
 			scope_id: literal.declared_scope_id(),
 			name: literal.name.clone(),
 		})
-	}
-}
-
-impl GroupDeclaration {
-	pub fn to_c_metadata(&self, context: &Context, address: usize) -> anyhow::Result<String> {
-		let builder = format!("struct metadata_{} {{ char empty; }};", self.name.to_c_or_pointer(address));
-		Ok(builder)
-	}
-
-	pub fn to_c_metadata_instance(&self, context: &Context, address: usize) -> anyhow::Result<String> {
-		let builder = format!("&(metadata_{}) {{ .empty = '0' }}", self.name.to_c_or_pointer(address));
-		Ok(builder)
 	}
 }

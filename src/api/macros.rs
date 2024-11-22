@@ -160,7 +160,7 @@ macro_rules! list {
 				internal_fields: std::collections::HashMap::from([("elements".to_owned(), $crate::parser::expressions::object::InternalFieldValue::List($elements))]),
 				scope_id: $scope_id,
 				object_type: $crate::parser::expressions::object::ObjectType::Normal,
-				name: None,
+				name: "anonymous_list".into(),
 			};
 
 			Expression::Pointer(
@@ -177,7 +177,7 @@ macro_rules! list {
 				internal_fields: std::collections::HashMap::from([("elements".to_owned(), $crate::parser::expressions::object::InternalFieldValue::List($elements))]),
 				scope_id: $scope_id,
 				object_type: $crate::parser::expressions::object::ObjectType::Normal,
-				name: None,
+				name: "anonymous_runtime_list".into(),
 			};
 			Expression::ObjectConstructor(constructor)
 		}
@@ -195,7 +195,7 @@ macro_rules! literal_list {
 			internal_fields: HashMap::from([("elements".to_owned(), $crate::parser::expressions::object::InternalFieldValue::List($elements))]),
 			scope_id: $scope_id,
 			object_type: ObjectType::Normal,
-			name: None,
+			name: "anonymous_list".into(),
 		};
 
 		let literal = LiteralObject::try_from_object_constructor(constructor, $context).unwrap();
@@ -222,7 +222,7 @@ macro_rules! new_object {
 			internal_fields: std::collections::HashMap::new(),
 			scope_id: $scope_id,
 			object_type: $crate::parser::expressions::object::ObjectType::Normal,
-			name: None,
+			name: "anonymous_object".into(),
 		}
 	};
 }

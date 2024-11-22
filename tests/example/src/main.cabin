@@ -1,1 +1,1 @@
-terminal.print("Hello world!");
+run terminal.print("Hello world!");
