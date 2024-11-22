@@ -15,6 +15,7 @@ use crate::{
 pub struct Declaration {
 	name: Name,
 	scope_id: usize,
+	initial_value: Expression,
 }
 
 impl Declaration {
@@ -42,6 +43,7 @@ impl Parse for Declaration {
 		// Value
 		tokens.pop(TokenType::Equal)?;
 		let mut value = Expression::parse(tokens, context)?;
+		let initial_value = value.clone();
 
 		// Tags
 		if let Some(expression_tags) = value.tags_mut() {
@@ -65,6 +67,7 @@ impl Parse for Declaration {
 		Ok(Declaration {
 			name,
 			scope_id: context.scope_data.unique_id(),
+			initial_value,
 		})
 	}
 }
@@ -148,6 +151,7 @@ impl CompileTime for Declaration {
 		Ok(Declaration {
 			name: self.name,
 			scope_id: self.scope_id,
+			initial_value: self.initial_value,
 		})
 	}
 }

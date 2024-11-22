@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use crate::api::context::CompilerConfiguration;
 
 pub mod commands;
+pub mod theme;
 
 pub enum RunningContext {
 	SingleFile(PathBuf),

@@ -4,7 +4,10 @@ use smart_default::SmartDefault;
 
 use crate::{
 	api::scope::ScopeData,
-	cli::{Project, RunningContext},
+	cli::{
+		theme::{Theme, CATPPUCCIN_MOCHA},
+		Project, RunningContext,
+	},
 	comptime::memory::VirtualMemory,
 	lexer::Position,
 	parser::expressions::{name::Name, Expression},
@@ -18,6 +21,8 @@ pub struct Context {
 	pub config: CompilerConfiguration,
 	pub running_context: RunningContext,
 	pub lines_printed: usize,
+	pub theme: Theme,
+	pub colored_program: Option<String>,
 
 	// Privately mutable
 	side_effects_stack: Vec<bool>,
@@ -48,6 +53,8 @@ impl Context {
 			config: running_context.config(),
 			lines_printed: 0,
 			running_context,
+			theme: CATPPUCCIN_MOCHA,
+			colored_program: None,
 		})
 	}
 

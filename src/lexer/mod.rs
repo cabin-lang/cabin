@@ -9,6 +9,12 @@ use convert_case::Casing as _;
 // The trait is not referenced directly and only used to bring its methods into scope to be called.
 use strum::IntoEnumIterator as _;
 
+use crate::{
+	api::context::Context,
+	cli::theme::{Style, Styled},
+	PRELUDE,
+};
+
 /// A type of token in Cabin source code. The first step in Cabin compilation is tokenization, which is the process of splitting a raw String of source code into
 /// "tokens" which each have a "type" representing the kind of token it is, and a "value" representing the string of source code that is associated with it. This
 /// enum defines the different "types" of values. Tokens themselves are stored in a separate `Token` struct, which has a `token_type: TokenType` field. This *is*
@@ -437,6 +443,52 @@ pub struct Token {
 	pub position: Position,
 }
 
+impl Token {
+	fn style<'a>(&self, next: Option<&Token>, context: &'a Context) -> &'a Style {
+		match self.token_type {
+			// Comments
+			TokenType::LineComment => context.theme.comment(),
+
+			// Numbers
+			TokenType::Number => context.theme.number(),
+
+			// String
+			TokenType::String => context.theme.string(),
+
+			// Keywords
+			TokenType::KeywordAction
+			| TokenType::KeywordNew
+			| TokenType::KeywordOtherwise
+			| TokenType::KeywordGroup
+			| TokenType::KeywordIf
+			| TokenType::KeywordRuntime
+			| TokenType::KeywordIs
+			| TokenType::KeywordReturn
+			| TokenType::KeywordOneOf
+			| TokenType::KeywordLet
+			| TokenType::KeywordForEach
+			| TokenType::KeywordIn
+			| TokenType::KeywordWhile
+			| TokenType::KeywordEither => context.theme.keyword(),
+
+			// Identifiers
+			TokenType::Identifier => {
+				if let Some(next) = next {
+					if next.token_type == TokenType::LeftAngleBracket || next.token_type == TokenType::LeftParenthesis {
+						return context.theme.function();
+					}
+				}
+				if self.value.starts_with(|character: char| character.is_uppercase()) {
+					context.theme.type_name()
+				} else {
+					context.theme.variable_name()
+				}
+			},
+			_ => context.theme.normal(),
+		}
+	}
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Position {
 	pub line: usize,
@@ -464,7 +516,7 @@ impl Position {
 /// # Errors
 /// If the given code string is not syntactically valid Cabin code. It needn't be semantically valid, but it must be comprised of the proper tokens.
 #[allow(clippy::missing_panics_doc)]
-pub fn tokenize(code: &str) -> anyhow::Result<VecDeque<Token>> {
+pub fn tokenize_program(code: &str, context: &mut Context, is_prelude: bool) -> anyhow::Result<VecDeque<Token>> {
 	let mut code = code.to_owned();
 	code = code.replace('\t', "    ");
 
@@ -480,17 +532,16 @@ pub fn tokenize(code: &str) -> anyhow::Result<VecDeque<Token>> {
 			let length = value.len(); // This must be done early so that we aren't trying to get the length of a moved value
 			let newline_count = value.chars().filter(|char| *char == '\n').count();
 
-			// Add the token - ignore whitespace and comments!
-			if token_type != TokenType::Whitespace && token_type != TokenType::LineComment {
-				let token = Token {
-					token_type,
-					value,
-					position: Position { line, column },
-				};
-				tokens.push(token);
-			}
+			// Add the token
+			let token = Token {
+				token_type: token_type.clone(),
+				value,
+				position: Position { line, column },
+			};
+			tokens.push(token);
+
 			// If it is whitespace, Add to the newlines!
-			else {
+			if token_type == TokenType::Whitespace || token_type == TokenType::LineComment {
 				line += newline_count;
 			}
 
@@ -508,6 +559,24 @@ pub fn tokenize(code: &str) -> anyhow::Result<VecDeque<Token>> {
 		}
 	}
 
-	// We'll only get here if we didn't get any errors, so we can just return the tokens wrapped in an `Ok`
+	if !is_prelude {
+		context.colored_program = Some({
+			let mut program = String::new();
+			for (index, token) in tokens.iter().enumerate() {
+				program += &format!("{}", token.value.style(token.style(tokens.get(index + 1), context)))
+			}
+			program
+		});
+	}
+
+	tokens.retain(|token| token.token_type != TokenType::Whitespace && token.token_type != TokenType::LineComment);
+
 	Ok(VecDeque::from(tokens))
+}
+
+pub fn tokenize(code: &str, context: &mut Context) -> anyhow::Result<VecDeque<Token>> {
+	let mut tokens = tokenize_program(code, context, false)?;
+	let mut prelude_tokens = tokenize_program(PRELUDE, context, true)?;
+	prelude_tokens.append(&mut tokens);
+	Ok(prelude_tokens)
 }

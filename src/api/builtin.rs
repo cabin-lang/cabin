@@ -140,7 +140,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			let this = arguments.first().unwrap();
 			Ok(Expression::Pointer(this.get_type(context)?))
 		},
-		to_c: |_context, parameter_names| {
+		to_c: |_context, _parameter_names| {
 			String::new()
 		}
 	},

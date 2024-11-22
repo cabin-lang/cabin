@@ -30,6 +30,7 @@ macro_rules! step {
 		use colored::Colorize as _;
 		use std::io::Write as _;
 		use $crate::api::macros::TerminalOutput as _;
+		use $crate::cli::theme::Styled as _;
 
 		fn move_cursor_up_and_over(up: usize, right: usize) {
 			print!("\x1b[{}A", up);
@@ -98,14 +99,25 @@ macro_rules! step {
 
 				// Print error location
 				eprintln!(
-					"\nThis error occurred in {}{}:\n",
-					format!("{}", $context.running_context.file_or_project_name().display()).bold().cyan(),
+					"\nThis error occurred in {}{}:",
+					format!("{}", $context.running_context.entry_point().display()).bold().cyan(),
 					if let Some(position) = $context.error_position() {
 						format!(" on {}", format!("line {}", position.line).bold().cyan())
 					} else {
 						String::new()
 					}
 				);
+
+				println!("{}", format!("\n\n{}\n", $context
+					.colored_program
+					.as_ref()
+					.unwrap()
+					.lines()
+					.enumerate()
+					.map(|(line_number, line)| format!("    {}  {line}", (line_number + 1).to_string().style($context.theme.line_numbers())))
+					.collect::<Vec<_>>()
+					.join("\n"))
+					.style($context.theme.background()));
 
 				// Print additional error information
 				if !$context.config.quiet {

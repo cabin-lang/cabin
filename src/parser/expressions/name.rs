@@ -119,18 +119,3 @@ impl ToCabin for Name {
 		self.unmangled_name()
 	}
 }
-
-pub trait NameOption {
-	fn to_c_or_pointer(&self, address: usize) -> String;
-	fn with_field(&self, field_name: &Name) -> Option<Name>;
-}
-
-impl NameOption for Option<Name> {
-	fn to_c_or_pointer(&self, address: usize) -> String {
-		self.clone().map(|name| name.mangled_name()).unwrap_or_else(|| format!("POINTER_{address}"))
-	}
-
-	fn with_field(&self, field_name: &Name) -> Option<Name> {
-		self.clone().map(|name| format!("{}_{}", name.unmangled_name(), field_name.unmangled_name()).into())
-	}
-}

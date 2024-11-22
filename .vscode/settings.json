@@ -1,21 +1,22 @@
 {
   "cSpell.words": [
-    "BUILTINS",
-    "comptime",
-    "Deque",
-    "eithers",
-    "evaluable",
-    "ferror",
-    "nfgets",
-    "ngetline",
-    "oneof",
-    "oneofs",
-    "pathbuf",
-    "reusals",
-    "shhh",
-    "Transpiling",
-    "uformat",
-    "unmangled",
-    "untoggle"
-  ]
+	"BUILTINS",
+	"CATPPUCCIN",
+	"comptime",
+	"Deque",
+	"eithers",
+	"evaluable",
+	"ferror",
+	"nfgets",
+	"ngetline",
+	"oneof",
+	"oneofs",
+	"pathbuf",
+	"reusals",
+	"shhh",
+	"Transpiling",
+	"uformat",
+	"unmangled",
+	"untoggle"
+]
 }
