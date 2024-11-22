@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 
 use colored::Colorize as _;
+use unindent::unindent;
 
 use crate::{
 	api::{
@@ -8,10 +9,9 @@ use crate::{
 		macros::{number, string},
 		traits::TryAs as _,
 	},
-	comptime::{memory::Pointer, CompileTime},
+	comptime::memory::Pointer,
 	mapped_err,
-	parser::expressions::{function_call::FunctionCall, object::ObjectConstructor, operators::FieldAccess, Expression},
-	transpiler::TranspileToC,
+	parser::expressions::{object::ObjectConstructor, Expression, Type},
 };
 
 pub struct BuiltinFunction {
@@ -53,8 +53,8 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			unindent::unindent(&format!(
 				"
 				group_u_Text_{text_address}* return_address;
-				(((void (*)(group_u_Anything_{anything_address}*, group_u_Text_{text_address}*))({object}->to_string->call))(object, return_address));
-				printf(\"%s\\n\", result->internal_value);
+				(((void (*)(group_u_Anything_{anything_address}*, group_u_Text_{text_address}*))({object}->u_to_string->call))({object}, return_address));
+				printf(\"%s\\n\", return_address->internal_value);
 				"
 			))
 		}
@@ -108,7 +108,40 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 				_ => anyhow::bail!("Unsupported expression: {this:?}")
 			}, context))
 		},
-		to_c: |_context, _parameter_names| {
+		to_c: |context, parameter_names| {
+			let object = parameter_names.first().unwrap();
+			let return_address = parameter_names.get(1).unwrap();
+			let group_address = context.scope_data.expect_global_variable("Group").expect_as::<Pointer>().unwrap().value();
+			let text_address = context.scope_data.expect_global_variable("Text").expect_as::<Pointer>().unwrap().value();
+			let anything_address = context.scope_data.expect_global_variable("Anything").expect_as::<Pointer>().unwrap().value();
+			unindent::unindent(&format!(
+				r#"
+				// Get the type metadata of the value
+				group_u_Group_{group_address} type;
+				(((void (*)(group_u_Anything_{anything_address}*, group_u_Group_{group_address}*))({object}->u_type->call))({object}, &type));
+
+				// Build the string
+				DynamicString result = (DynamicString) {{ .value = type.name, .capacity = 16 }};
+				push_to_dynamic_string(&result, " {{");
+
+				// Add fields
+				for (int fieldNumber = 0; fieldNumber < type.u_fields->elements.size; fieldNumber++) {{										
+					push_to_dynamic_string(&result, (char*) type.u_fields->elements.data[fieldNumber]);
+				}}
+
+				// Return the built string
+				push_to_dynamic_string(&result, " }}");
+				*{return_address} = (group_u_Text_{text_address}) {{ .internal_value = result.value }};
+				"#
+			))
+		}
+	},
+	"Anything.type" => BuiltinFunction {
+		evaluate_at_compile_time: |context: &mut Context, _caller_scope_id: usize, arguments: Vec<Expression>| {
+			let this = arguments.first().unwrap();
+			Ok(Expression::Pointer(this.get_type(context)?))
+		},
+		to_c: |_context, parameter_names| {
 			String::new()
 		}
 	},
@@ -135,7 +168,7 @@ pub fn transpile_builtin_to_c(name: &str, context: &mut Context, parameters: &[S
 		.get(name)
 		.ok_or_else(|| {
 			anyhow::anyhow!(
-				"Attempted to call the built-in function \"{}\", but no built-in function with that name exists.",
+				"Attempted to transpile the built-in function \"{}\" to C, but no built-in function with that name exists.",
 				name.bold().cyan()
 			)
 		})?

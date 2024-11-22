@@ -271,10 +271,15 @@ impl TranspileToC for Expression {
 
 impl Type for Expression {
 	fn get_type(&self, context: &mut Context) -> anyhow::Result<Pointer> {
-		match self {
-			Expression::Pointer(pointer) => pointer.virtual_deref(context).clone().get_type(context),
-			_ => todo!(),
-		}
+		Ok(match self {
+			Expression::Pointer(pointer) => pointer.virtual_deref(context).clone().get_type(context)?,
+			Expression::FunctionCall(function_call) => function_call.get_type(context)?,
+			Expression::Run(run_expression) => run_expression.get_type(context)?,
+			value => {
+				dbg!(value);
+				todo!()
+			},
+		})
 	}
 }
 

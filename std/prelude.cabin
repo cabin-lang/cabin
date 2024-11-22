@@ -17,7 +17,14 @@ let Optional = oneof<Data> {
 
 let Text = group {};
 
-let Anything = group {};
+let Anything = group {
+
+	#[builtin<"Anything.type">]
+	type = action(this: Anything): Group,
+
+	#[builtin<"Anything.to_string">]
+	to_string = action(this: Anything): Text
+};
 
 let Object = group {};
 

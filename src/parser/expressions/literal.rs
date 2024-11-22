@@ -5,7 +5,7 @@ use try_as::traits::TryAsRef;
 use crate::{
 	api::{context::Context, macros::TerminalOutput, traits::TryAs as _},
 	bail_err,
-	comptime::{memory::Pointer, CompileTime},
+	comptime::memory::Pointer,
 	lexer::Position,
 	parser::expressions::{
 		name::Name,
@@ -14,6 +14,8 @@ use crate::{
 	},
 	transpiler::TranspileToC,
 };
+
+use super::group::GroupDeclaration;
 
 #[derive(Debug, Clone)]
 pub struct LiteralObject {
@@ -263,6 +265,14 @@ impl TranspileToC for LiteralObject {
 				// Create string builder
 				let mut builder = format!("&({}) {{", type_name);
 
+				// Anything fields
+				if self.name != "Anything".into() {
+					let anything = GroupDeclaration::from_literal(context.scope_data.expect_global_variable("Anything").expect_literal(context)?, context)?;
+					for field in &anything.fields {
+						builder += &format!("\n\t.{} = {},", field.name.to_c(context)?, field.value.as_ref().unwrap().to_c(context)?);
+					}
+				}
+
 				// Add fields
 				for (field_name, field_pointer) in &self.fields {
 					builder += &format!("\n\t.{} = {},", field_name.to_c(context)?, field_pointer.to_c(context)?);
@@ -270,11 +280,6 @@ impl TranspileToC for LiteralObject {
 
 				if self.type_name == "Function".into() {
 					builder += &format!("\n\t.call = &call_anonymous_function_{}", self.address.unwrap());
-				}
-
-				// If empty, add the empty thingy
-				if self.fields.is_empty() {
-					builder += "\n\t.empty = '0'";
 				}
 
 				// Finish building the string

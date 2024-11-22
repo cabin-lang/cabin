@@ -21,6 +21,8 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
+use super::Type;
+
 #[derive(Debug, Clone)]
 pub struct GroupDeclaration {
 	pub fields: Vec<Field>,
@@ -156,19 +158,46 @@ impl TranspileToC for GroupDeclaration {
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		let mut builder = "{".to_owned();
 
+		// Anything fields
+		if self.name != "Anything".into() {
+			let anything = GroupDeclaration::from_literal(context.scope_data.expect_global_variable("Anything").expect_literal(context)?, context)?;
+			for field in &anything.fields {
+				builder += &format!(
+					"\n\t{}* {};",
+					field
+						.value
+						.as_ref()
+						.unwrap_or(&Expression::Void(()))
+						.get_type(context)?
+						.virtual_deref(context)
+						.clone()
+						.to_c_type(context)?,
+					field.name.to_c(context)?
+				);
+			}
+		}
+
 		for field in &self.fields {
-			builder += &format!("\n\tvoid* {};", field.name.to_c(context)?);
+			builder += &format!(
+				"\n\t{}* {};",
+				field
+					.value
+					.as_ref()
+					.unwrap_or(&Expression::Void(()))
+					.get_type(context)?
+					.virtual_deref(context)
+					.clone()
+					.to_c_type(context)?,
+				field.name.to_c(context)?
+			);
 		}
 
 		match self.name.unmangled_name().as_str() {
 			"Text" => builder += "\n\tchar* internal_value;",
 			"Number" => builder += "\n\tfloat internal_value;",
 			"Function" => builder += "\n\tvoid* call;",
+			"List" => builder += "\n\tvoid* elements;\n\tint size;\n\tint capacity;",
 			_ => {},
-		}
-
-		if self.fields.is_empty() {
-			builder += "\n\tchar empty;";
 		}
 
 		builder += "\n}";

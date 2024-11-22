@@ -294,7 +294,7 @@ impl TranspileToC for ObjectConstructor {
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		// Type name
 		let name = if self.type_name == "Object".into() {
-			format!("type_{}_UNKNOWN", self.name.to_c(context)?)
+			format!("type_{}_UNKNOWN", self.name.to_c(context)?) // TODO
 		} else {
 			self.type_name.clone().evaluate_at_compile_time(context)?.to_c(context)?
 		};
@@ -306,9 +306,6 @@ impl TranspileToC for ObjectConstructor {
 			builder += &format!("\n\t.{} = {},", field.name.to_c(context)?, field.value.as_ref().unwrap().to_c(context)?);
 		}
 
-		if self.fields.is_empty() {
-			builder += "\n\t.empty = '0'";
-		}
 		builder += "\n}";
 		Ok(builder)
 	}

@@ -7,7 +7,7 @@ use crate::{
 			function_declaration::FunctionDeclaration,
 			group::GroupDeclaration,
 			literal::{LiteralConvertible, LiteralObject},
-			Type,
+			Expression, Type,
 		},
 		Program,
 	},
@@ -18,7 +18,29 @@ pub trait TranspileToC {
 }
 
 pub fn transpile(program: &Program, context: &mut Context) -> anyhow::Result<String> {
-	let mut builder = "#include <stdio.h>\n#include <stdlib.h>\n\n".to_string();
+	let mut builder = unindent::unindent(
+		"
+		#include <stdio.h>
+		#include <stdlib.h>
+		#include <string.h>
+
+		// Cabin internals -----------------------------------------------------------------------------------------------------------------
+
+		typedef struct {
+			char* value;
+			int capacity;
+		} DynamicString;
+
+		void push_to_dynamic_string(DynamicString* string, char* append) {
+			if (strlen(string->value) + strlen(append) > string->capacity) {
+				string->capacity *= 2;
+				string->value = (char*) realloc(string->value, sizeof(char) * string->capacity);
+			}
+
+			strcat(&string->value, append);
+		}
+		",
+	) + "\n";
 
 	// Forward declarations
 	builder += &transpile_forward_declarations(context).map_err(mapped_err! {
@@ -75,6 +97,25 @@ pub fn transpile_types(context: &mut Context) -> anyhow::Result<String> {
 			"Object" => {
 				let mut builder = format!("struct type_{}_{} {{", value.name.to_c(context)?, address);
 
+				// Anything fields
+				if value.name != "Anything".into() {
+					let anything = GroupDeclaration::from_literal(context.scope_data.expect_global_variable("Anything").expect_literal(context)?, context)?;
+					for field in &anything.fields {
+						builder += &format!(
+							"\n\t{}* {};",
+							field
+								.value
+								.as_ref()
+								.unwrap_or(&Expression::Void(()))
+								.get_type(context)?
+								.virtual_deref(context)
+								.clone()
+								.to_c_type(context)?,
+							field.name.to_c(context)?
+						);
+					}
+				}
+
 				// Add object fields
 				for (field_name, field_value) in value.fields() {
 					builder += &format!(
@@ -88,11 +129,6 @@ pub fn transpile_types(context: &mut Context) -> anyhow::Result<String> {
 							.to_c_type(context)?,
 						field_name.to_c(context)?
 					);
-				}
-
-				// Add empty field thingy
-				if value.fields().next().is_none() {
-					builder += "\n\tchar empty;"
 				}
 
 				// Finish building the string
@@ -128,9 +164,10 @@ pub fn transpile_functions(context: &mut Context) -> anyhow::Result<String> {
 }
 
 pub fn transpile_main(context: &mut Context) -> anyhow::Result<String> {
+	let mut visited = Vec::new();
 	let mut builder = "int main(int argc, char** argv) {".to_owned();
 
-	let mut visited = Vec::new();
+	// Virtual memory
 	for (address, value) in context.virtual_memory.entries() {
 		if matches!(value.type_name.unmangled_name().as_str(), "OneOf" | "Either") {
 			continue;
@@ -188,7 +225,7 @@ pub fn transpile_literal(context: &mut Context, value: &LiteralObject, address: 
 }
 
 pub fn transpile_forward_declarations(context: &mut Context) -> anyhow::Result<String> {
-	let mut builder = String::new();
+	let mut builder = "// Forward declarations -----------------------------------------------------------------------\n\n".to_owned();
 	for (address, value) in context.virtual_memory.entries() {
 		builder += &match value.type_name.unmangled_name().as_str() {
 			"Group" => format!("typedef struct {name} {name};\n", name = value.to_c_type(context)?),

@@ -13,7 +13,7 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
-use super::run::ParentExpression;
+use super::{run::ParentExpression, Type};
 
 #[derive(Debug, Clone)]
 pub struct FunctionCall {
@@ -244,13 +244,13 @@ impl TranspileToC for FunctionCall {
 			String::new()
 		};
 
-		let ending_return_address = if let Some(return_type) = function.return_type.as_ref() {
+		let ending_return_address = if let Some(_return_type) = function.return_type.as_ref() {
 			"return_address;".to_owned()
 		} else {
 			String::new()
 		};
 
-		let maybe_return_address = if let Some(return_type) = function.return_type.as_ref() {
+		let maybe_return_address = if let Some(_return_type) = function.return_type.as_ref() {
 			let maybe_comma = if function.parameters.is_empty() { "" } else { ", " };
 			format!("{maybe_comma}return_address")
 		} else {
@@ -296,7 +296,11 @@ impl TranspileToC for FunctionCall {
 				.as_ref()
 				.unwrap_or(&Vec::new())
 				.iter()
-				.map(|argument| Ok(format!("void* arg0 = {};", argument.to_c(context)?)))
+				.map(|argument| Ok(format!(
+					"{}* arg0 = {};",
+					argument.get_type(context)?.virtual_deref(context).clone().to_c_type(context)?,
+					argument.to_c(context)?
+				)))
 				.collect::<anyhow::Result<Vec<_>>>()?
 				.join(", "),
 			arguments = (0..self.arguments.as_ref().unwrap_or(&Vec::new()).len())
@@ -344,5 +348,16 @@ impl ParentExpression for FunctionCall {
 			arguments,
 			scope_id: self.scope_id,
 		})
+	}
+}
+
+impl Type for FunctionCall {
+	fn get_type(&self, context: &mut Context) -> anyhow::Result<Pointer> {
+		let function = FunctionDeclaration::from_literal(self.function.expect_literal(context)?, context)?;
+		if let Some(return_type) = function.return_type {
+			return_type.as_ref().expect_as::<Pointer>().cloned()
+		} else {
+			context.scope_data.expect_global_variable("Nothing").expect_as::<Pointer>().cloned()
+		}
 	}
 }
