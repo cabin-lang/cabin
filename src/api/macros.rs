@@ -1,7 +1,7 @@
 use crate::{
 	api::context::Context,
 	comptime::CompileTime,
-	lexer::Position,
+	lexer::Span,
 	parser::expressions::{object::ObjectConstructor, Expression},
 };
 
@@ -145,7 +145,7 @@ impl<T: AsRef<str>> TerminalOutput for T {
 pub struct CabinError {
 	pub base: Option<anyhow::Error>,
 	pub details: Option<String>,
-	pub position: Option<Position>,
+	pub position: Option<Span>,
 	pub process: Option<String>,
 }
 

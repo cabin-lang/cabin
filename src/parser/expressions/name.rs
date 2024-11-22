@@ -3,16 +3,18 @@ use std::hash::Hash;
 use crate::{
 	api::context::Context,
 	comptime::CompileTime,
-	lexer::{Position, TokenType},
+	lexer::{Span, TokenType},
 	mapped_err,
 	parser::{expressions::Expression, Parse, ToCabin, TokenQueue, TokenQueueFunctionality as _},
 	transpiler::TranspileToC,
 };
 
+use super::Spanned;
+
 #[derive(Debug, Clone, Eq)]
 pub struct Name {
 	name: String,
-	position: Option<Position>,
+	span: Option<Span>,
 	should_mangle: bool,
 }
 
@@ -32,7 +34,7 @@ impl Name {
 	pub fn non_mangled<T: AsRef<str>>(name: T) -> Name {
 		Name {
 			name: name.as_ref().to_owned(),
-			position: None,
+			span: None,
 			should_mangle: false,
 		}
 	}
@@ -49,8 +51,8 @@ impl Name {
 		}
 	}
 
-	pub fn position(&self) -> Option<Position> {
-		self.position.clone()
+	pub fn position(&self) -> Option<Span> {
+		self.span.clone()
 	}
 }
 
@@ -63,12 +65,12 @@ impl Parse for Name {
 		let token = tokens.pop(TokenType::Identifier).map_err(mapped_err! {
 			while = "attempting to parse a variable name",
 			context = context,
-			position = position.unwrap_or_else(Position::zero),
+			position = position.unwrap_or_else(Span::zero),
 		})?;
 
 		Ok(Name {
 			name: token.value,
-			position: Some(token.position),
+			span: Some(token.span),
 			should_mangle: true,
 		})
 	}
@@ -102,7 +104,7 @@ impl<T: AsRef<str>> From<T> for Name {
 	fn from(value: T) -> Self {
 		Name {
 			name: value.as_ref().to_owned(),
-			position: None,
+			span: None,
 			should_mangle: true,
 		}
 	}
@@ -117,5 +119,11 @@ impl AsRef<Name> for Name {
 impl ToCabin for Name {
 	fn to_cabin(&self) -> String {
 		self.unmangled_name()
+	}
+}
+
+impl Spanned for Name {
+	fn span(&self) -> Span {
+		self.span.as_ref().unwrap().to_owned()
 	}
 }

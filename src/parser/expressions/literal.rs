@@ -6,7 +6,7 @@ use crate::{
 	api::{context::Context, macros::TerminalOutput, traits::TryAs as _},
 	bail_err,
 	comptime::memory::VirtualPointer,
-	lexer::Position,
+	lexer::Span,
 	parser::expressions::{
 		group::GroupDeclaration,
 		name::Name,
@@ -82,7 +82,7 @@ impl LiteralObject {
 					base = "A value that's not fully known at compile-time was used as a type.",
 					while = format!("checking the field \"{}\" of a value at compile-time", field.name.unmangled_name().bold().cyan()),
 					context = context,
-					position = field.name.position().unwrap_or_else(Position::zero),
+					position = field.name.position().unwrap_or_else(Span::zero),
 					details = expression_formatter::format!(
 						r#"
                         Although Cabin allows arbitrary expressions to be used as types, the expression needs to be able to 

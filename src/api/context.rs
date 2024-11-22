@@ -9,7 +9,7 @@ use crate::{
 		Project, RunningContext,
 	},
 	comptime::memory::VirtualMemory,
-	lexer::Position,
+	lexer::Span,
 	parser::expressions::{name::Name, Expression},
 };
 
@@ -26,7 +26,7 @@ pub struct Context {
 
 	// Privately mutable
 	side_effects_stack: Vec<bool>,
-	error_location: RefCell<Option<Position>>,
+	error_location: RefCell<Option<Span>>,
 	error_details: RefCell<Option<String>>,
 	compiler_error_position: RefCell<Vec<SourceFilePosition>>,
 	// Completely immutable
@@ -74,7 +74,7 @@ impl Context {
 		self.scope_data.expect_global_variable("nothing").expect_clone_pointer(self)
 	}
 
-	pub fn set_error_position(&self, position: &Position) {
+	pub fn set_error_position(&self, position: &Span) {
 		if self.error_location.borrow().is_none() {
 			*self.error_location.borrow_mut() = Some(position.clone());
 		}
@@ -90,7 +90,7 @@ impl Context {
 		self.error_details.borrow().clone()
 	}
 
-	pub fn error_position(&self) -> Option<Position> {
+	pub fn error_position(&self) -> Option<Span> {
 		self.error_location.borrow().clone()
 	}
 

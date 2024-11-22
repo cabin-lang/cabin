@@ -1,5 +1,5 @@
-let accepts_text = action(text: Text) {
-
+let special_print = action(text: Text) {
+	terminal.print(text);
 };
 
-accepts_text(4);
+special_print(4);

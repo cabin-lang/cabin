@@ -6,6 +6,7 @@ use crate::{
 	api::{context::Context, traits::TryAs as _},
 	bail_err,
 	comptime::{memory::VirtualPointer, CompileTime},
+	lexer::Span,
 	mapped_err,
 	parser::{
 		expressions::{
@@ -300,8 +301,33 @@ impl Typed for Expression {
 	}
 }
 
+impl Spanned for Expression {
+	fn span(&self) -> Span {
+		match self {
+			Expression::Name(name) => name.span(),
+			Expression::Run(run_expression) => run_expression.span(),
+			Expression::Block(block) => todo!(),
+			Expression::Either(either) => todo!(),
+			Expression::FieldAccess(field_access) => todo!(),
+			Expression::FunctionCall(function_call) => todo!(),
+			Expression::Group(group_declaration) => todo!(),
+			Expression::FunctionDeclaration(function_declaration) => todo!(),
+			Expression::If(if_expression) => todo!(),
+			Expression::ObjectConstructor(object_constructor) => todo!(),
+			Expression::ForEachLoop(for_each_loop) => todo!(),
+			Expression::OneOf(one_of) => todo!(),
+			Expression::Pointer(virtual_pointer) => todo!(),
+			Expression::Void(_) => panic!(),
+		}
+	}
+}
+
 pub trait Typed {
 	fn get_type(&self, context: &mut Context) -> anyhow::Result<VirtualPointer>;
+}
+
+pub trait Spanned {
+	fn span(&self) -> Span;
 }
 
 impl ParentExpression for Expression {

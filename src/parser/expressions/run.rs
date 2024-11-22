@@ -1,12 +1,12 @@
 use crate::{
 	api::context::Context,
 	comptime::CompileTime,
-	lexer::TokenType,
+	lexer::{Span, TokenType},
 	parser::{expressions::Expression, Parse, TokenQueue, TokenQueueFunctionality as _},
 	transpiler::TranspileToC,
 };
 
-use super::Typed;
+use super::{Spanned, Typed};
 
 /// A `Run` expression in the language. Run-expressions forcibly run an expression at runtime instead of compile-time. Since
 /// Cabin runs all code at compile-time by default, this is the only way to forcibly run an expression at runtime.
@@ -35,16 +35,17 @@ use super::Typed;
 #[derive(Debug, Clone)]
 pub struct RunExpression {
 	expression: Box<Expression>,
+	span: Span,
 }
 
 impl Parse for RunExpression {
 	type Output = RunExpression;
 
 	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
-		tokens.pop(TokenType::KeywordRuntime)?;
-		Ok(RunExpression {
-			expression: Box::new(Expression::parse(tokens, context)?),
-		})
+		let mut span = tokens.pop(TokenType::KeywordRuntime)?.span;
+		let expression = Box::new(Expression::parse(tokens, context)?);
+		span = span.to(&expression.span());
+		Ok(RunExpression { span, expression })
 	}
 }
 
@@ -54,6 +55,7 @@ impl CompileTime for RunExpression {
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
 		Ok(RunExpression {
 			expression: Box::new(self.expression.evaluate_subexpressions_at_compile_time(context)?),
+			span: self.span,
 		})
 	}
 }
@@ -72,4 +74,10 @@ impl Typed for RunExpression {
 
 pub trait ParentExpression: Sized {
 	fn evaluate_subexpressions_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self>;
+}
+
+impl Spanned for RunExpression {
+	fn span(&self) -> Span {
+		self.span.to_owned()
+	}
 }

@@ -5,7 +5,7 @@ use colored::Colorize as _;
 use crate::{
 	api::context::Context,
 	comptime::CompileTime,
-	lexer::{Position, Token, TokenType},
+	lexer::{Span, Token, TokenType},
 	mapped_err,
 	parser::statements::Statement,
 	transpiler::TranspileToC,
@@ -128,7 +128,7 @@ pub trait TokenQueueFunctionality {
 		token_types.iter().any(|token_type| self.next_is(token_type.clone()))
 	}
 
-	fn current_position(&self) -> Option<Position>;
+	fn current_position(&self) -> Option<Span>;
 }
 
 impl TokenQueueFunctionality for std::collections::VecDeque<Token> {
@@ -176,8 +176,8 @@ impl TokenQueueFunctionality for std::collections::VecDeque<Token> {
 		self.peek_type().map_or(false, |token| token == &token_type)
 	}
 
-	fn current_position(&self) -> Option<Position> {
-		self.front().map(|front| front.position.clone())
+	fn current_position(&self) -> Option<Span> {
+		self.front().map(|front| front.span.clone())
 	}
 }
 

@@ -440,7 +440,7 @@ pub struct Token {
 	/// part of the value; For example, all strings retain their quotes in this field. For information about what is considered part of the `value` for
 	/// a specific token type, refer to the documentation for that specific token type.
 	pub value: String,
-	pub position: Position,
+	pub span: Span,
 }
 
 impl Token {
@@ -490,14 +490,25 @@ impl Token {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Position {
-	pub line: usize,
-	pub column: usize,
+pub struct Span {
+	pub start: usize,
+	pub length: usize,
 }
 
-impl Position {
-	pub fn zero() -> Position {
-		Position { line: 0, column: 0 }
+impl Span {
+	pub fn zero() -> Span {
+		Span { start: 0, length: 0 }
+	}
+
+	pub fn cover(first: &Span, second: &Span) -> Span {
+		Span {
+			start: first.start,
+			length: second.start - first.start,
+		}
+	}
+
+	pub fn to(&self, other: &Span) -> Span {
+		Span::cover(self, other)
 	}
 }
 
@@ -521,8 +532,7 @@ pub fn tokenize_program(code: &str, context: &mut Context, is_prelude: bool) -> 
 	code = code.replace('\t', "    ");
 
 	let mut tokens = Vec::new();
-	let mut line = 1;
-	let mut column = 1;
+	let mut position = 0;
 
 	// We only read tokens from the start of a string, so we repeatedly loop over the code and remove the tokenized text when we find tokens.
 	// This means we can just iterate while code isn't empty.
@@ -530,32 +540,21 @@ pub fn tokenize_program(code: &str, context: &mut Context, is_prelude: bool) -> 
 		// We've got a match - we found a token that matches the start of the code
 		if let Some((token_type, value)) = TokenType::find_match(&code) {
 			let length = value.len(); // This must be done early so that we aren't trying to get the length of a moved value
-			let newline_count = value.chars().filter(|char| *char == '\n').count();
 
 			// Add the token
 			let token = Token {
 				token_type: token_type.clone(),
 				value,
-				position: Position { line, column },
+				span: Span { start: position, length },
 			};
 			tokens.push(token);
+			position += length;
 
-			// If it is whitespace, Add to the newlines!
-			if token_type == TokenType::Whitespace || token_type == TokenType::LineComment {
-				line += newline_count;
-			}
-
-			// Update the column and the code so that the code cuts off the bit we just tokenized
-			column = if newline_count > 0 { 1 } else { column + length };
 			code = code.get(length..).unwrap().to_owned();
 		}
 		// Unrecognized token - return an error!
 		else {
-			anyhow::bail!(
-				"{line}:{column}:{severity}:Unrecognized token: {code}",
-				severity = "error",
-				code = code.split('\n').next().unwrap()
-			);
+			anyhow::bail!("");
 		}
 	}
 
