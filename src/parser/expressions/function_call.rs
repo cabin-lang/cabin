@@ -4,9 +4,9 @@ use crate::{
 	api::{builtin::call_builtin_at_compile_time, context::Context, traits::TryAs as _},
 	bail_err,
 	comptime::{memory::VirtualPointer, CompileTime},
-	if_then_some,
+	if_then_else_default,
 	lexer::{Span, Token, TokenType},
-	map_some, mapped_err, parse_list,
+	mapped_err, parse_list,
 	parser::{
 		expressions::{
 			field_access::FieldAccess, function_declaration::FunctionDeclaration, literal::LiteralConvertible, name::Name, run::RuntimeableExpression, Expression, Parse, Spanned,
@@ -20,8 +20,8 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct FunctionCall {
 	function: Box<Expression>,
-	compile_time_arguments: Option<Vec<Expression>>,
-	arguments: Option<Vec<Expression>>,
+	compile_time_arguments: Vec<Expression>,
+	arguments: Vec<Expression>,
 	scope_id: usize,
 	span: Span,
 }
@@ -40,7 +40,7 @@ impl Parse for PostfixOperators {
 		// Postfix function call operators
 		while tokens.next_is_one_of(&[TokenType::LeftParenthesis, TokenType::LeftAngleBracket]) {
 			// Compile-time arguments
-			let compile_time_arguments = if_then_some!(tokens.next_is(TokenType::LeftAngleBracket), {
+			let compile_time_arguments = if_then_else_default!(tokens.next_is(TokenType::LeftAngleBracket), {
 				let mut compile_time_arguments = Vec::new();
 				end = parse_list!(tokens, ListType::AngleBracketed, {
 					compile_time_arguments.push(Expression::parse(tokens, context)?);
@@ -50,7 +50,7 @@ impl Parse for PostfixOperators {
 			});
 
 			// Arguments
-			let arguments = if_then_some!(tokens.next_is(TokenType::LeftParenthesis), {
+			let arguments = if_then_else_default!(tokens.next_is(TokenType::LeftParenthesis), {
 				let mut arguments = Vec::new();
 				end = parse_list!(tokens, ListType::Parenthesized, {
 					arguments.push(Expression::parse(tokens, context)?);
@@ -83,43 +83,47 @@ impl CompileTime for FunctionCall {
 		})?;
 
 		// Compile-time arguments
-		let compile_time_arguments = map_some!(self.compile_time_arguments, |original_compile_time_arguments| {
-			let mut compile_time_arguments = Vec::new();
-			for argument in original_compile_time_arguments {
-				let evaluated = argument.evaluate_at_compile_time(context).map_err(mapped_err! {
+		let compile_time_arguments = {
+			let mut evaluated_compile_time_arguments = Vec::new();
+			for compile_time_argument in self.compile_time_arguments {
+				let evaluated = compile_time_argument.evaluate_at_compile_time(context).map_err(mapped_err! {
 					while = "evaluating a function call's compile-time argument at compile-time",
 					context = context,
 				})?;
-				compile_time_arguments.push(evaluated);
+				evaluated_compile_time_arguments.push(evaluated);
 			}
-			compile_time_arguments
-		});
+			evaluated_compile_time_arguments
+		};
 
 		// Arguments
-		let mut arguments = map_some!(self.arguments, |original_arguments| {
-			let mut arguments = Vec::new();
-			for argument in original_arguments {
+		let mut arguments = {
+			let mut evaluated_arguments = Vec::new();
+			for argument in self.arguments {
 				let evaluated = argument.evaluate_at_compile_time(context).map_err(mapped_err! {
 					while = "evaluating a function call's argument at compile-time",
 					context = context,
 				})?;
-				arguments.push(evaluated);
+				evaluated_arguments.push(evaluated);
 			}
-			arguments
-		});
+			evaluated_arguments
+		};
 
 		// If not all arguments are known at compile-time, we can't call the function at compile time. In this case, we just
 		// return a function call expression, and it'll get transpiled to C and called at runtime.
-		if let Some(argument_list) = &arguments {
-			if !argument_list.iter().all(|argument| argument.is_pointer()) {
-				return Ok(Expression::FunctionCall(FunctionCall {
-					function: Box::new(function),
-					compile_time_arguments,
-					arguments,
-					scope_id: self.scope_id,
-					span: self.span,
-				}));
-			}
+		if arguments
+			.iter()
+			.map(|argument| argument.is_fully_known_at_compile_time(context))
+			.collect::<anyhow::Result<Vec<_>>>()?
+			.iter()
+			.any(|value| !value)
+		{
+			return Ok(Expression::FunctionCall(FunctionCall {
+				function: Box::new(function),
+				compile_time_arguments,
+				arguments,
+				scope_id: self.scope_id,
+				span: self.span,
+			}));
 		}
 
 		// Evaluate function
@@ -138,11 +142,46 @@ impl CompileTime for FunctionCall {
 
 			// Set this object
 			if let Some(this_object) = function_declaration.this_object() {
-				arguments = Some(arguments.unwrap_or(Vec::new()));
 				if let Some((parameter_name, _)) = function_declaration.parameters().first() {
 					if parameter_name.unmangled_name() == "this" {
-						arguments.as_mut().unwrap().insert(0, this_object.clone());
+						arguments.insert(0, this_object.clone());
 					}
+				}
+			}
+
+			// Validate compile-time arguments
+			for (argument, (_parameter_name, parameter_type)) in compile_time_arguments.iter().zip(function_declaration.compile_time_parameters().iter()) {
+				let parameter_type_pointer = parameter_type.try_as_literal_or_name(context)?.address.as_ref().unwrap().to_owned();
+				if !argument.is_assignable_to_type(parameter_type_pointer, context)? {
+					bail_err! {
+						base = format!(
+							"Attempted to pass a argument of type \"{}\" to a compile-time parameter of type \"{}\"",
+							argument.get_type(context)?.virtual_deref(context).name().unmangled_name().bold().cyan(),
+							parameter_type_pointer.virtual_deref(context).name().unmangled_name().bold().cyan(),
+						),
+						while = "validating the arguments in a function call",
+						context = context,
+					};
+				}
+				if !argument.is_fully_known_at_compile_time(context)? {
+					anyhow::bail!("Attempted to pass a value that's not fully known at compile-time to a compile-time parameter.");
+				}
+			}
+
+			// Validate arguments
+			for (argument, (_parameter_name, parameter_type)) in arguments.iter().zip(function_declaration.parameters().iter()) {
+				let parameter_type_pointer = parameter_type.try_as_literal_or_name(context)?.address.as_ref().unwrap().to_owned();
+				if !argument.is_assignable_to_type(parameter_type_pointer, context)? {
+					bail_err! {
+						base = format!(
+							"Attempted to pass a argument of type \"{}\" to a parameter of type \"{}\"",
+							argument.get_type(context)?.virtual_deref(context).name().unmangled_name().bold().cyan(),
+							parameter_type_pointer.virtual_deref(context).name().unmangled_name().bold().cyan(),
+						),
+						while = "validating the arguments in a function call",
+						context = context,
+						at = argument.span(context)
+					};
 				}
 			}
 
@@ -150,45 +189,13 @@ impl CompileTime for FunctionCall {
 			if let Some(body) = function_declaration.body() {
 				if let Expression::Block(block) = body {
 					// Validate and add compile-time arguments
-					if let Some(compile_time_arguments) = &compile_time_arguments {
-						for (argument, (parameter_name, parameter_type)) in compile_time_arguments.iter().zip(function_declaration.compile_time_parameters().iter()) {
-							let parameter_type_pointer = parameter_type.try_as_literal_or_name(context)?.address.as_ref().unwrap().to_owned();
-							if !argument.is_assignable_to_type(parameter_type_pointer, context)? {
-								bail_err! {
-									base = format!(
-										"Attempted to pass a argument of type \"{}\" to a compile-time parameter of type \"{}\"",
-										argument.get_type(context)?.virtual_deref(context).name().unmangled_name().bold().cyan(),
-										parameter_type_pointer.virtual_deref(context).name().unmangled_name().bold().cyan(),
-									),
-									while = "validating the arguments in a function call",
-									context = context,
-								};
-							}
-							if !argument.is_pointer() {
-								anyhow::bail!("Attempted to pass a value that's not fully known at compile-time to a compile-time parameter.");
-							}
-							context.scope_data.reassign_variable_from_id(parameter_name, argument.clone(), block.inner_scope_id)?;
-						}
+					for (argument, (parameter_name, _parameter_type)) in compile_time_arguments.iter().zip(function_declaration.compile_time_parameters().iter()) {
+						context.scope_data.reassign_variable_from_id(parameter_name, argument.clone(), block.inner_scope_id)?;
 					}
 
 					// Validate and add arguments
-					if let Some(arguments) = &arguments {
-						for (argument, (parameter_name, parameter_type)) in arguments.iter().zip(function_declaration.parameters().iter()) {
-							let parameter_type_pointer = parameter_type.try_as_literal_or_name(context)?.address.as_ref().unwrap().to_owned();
-							if !argument.is_assignable_to_type(parameter_type_pointer, context)? {
-								bail_err! {
-									base = format!(
-										"Attempted to pass a argument of type \"{}\" to a parameter of type \"{}\"",
-										argument.get_type(context)?.virtual_deref(context).name().unmangled_name().bold().cyan(),
-										parameter_type_pointer.virtual_deref(context).name().unmangled_name().bold().cyan(),
-									),
-									while = "validating the arguments in a function call",
-									context = context,
-									position = argument.span(context)
-								};
-							}
-							context.scope_data.reassign_variable_from_id(parameter_name, argument.clone(), block.inner_scope_id)?;
-						}
+					for (argument, (parameter_name, _parameter_type)) in arguments.iter().zip(function_declaration.parameters().iter()) {
+						context.scope_data.reassign_variable_from_id(parameter_name, argument.clone(), block.inner_scope_id)?;
 					}
 				}
 
@@ -244,7 +251,7 @@ impl CompileTime for FunctionCall {
 				// Call builtin function
 				if let Some(internal_name) = builtin_name {
 					if !system_side_effects || context.has_side_effects() {
-						return call_builtin_at_compile_time(&internal_name, context, self.scope_id, arguments.unwrap_or(Vec::new())).map_err(mapped_err! {
+						return call_builtin_at_compile_time(&internal_name, context, self.scope_id, arguments, self.span).map_err(mapped_err! {
 							while = format!("calling the built-in function {} at compile-time", internal_name.bold().purple()),
 							context = context,
 						});
@@ -332,8 +339,6 @@ impl TranspileToC for FunctionCall {
 			},
 			argument_declaration = self
 				.arguments
-				.as_ref()
-				.unwrap_or(&Vec::new())
 				.iter()
 				.map(|argument| Ok(format!(
 					"{}* arg0 = {};",
@@ -342,10 +347,7 @@ impl TranspileToC for FunctionCall {
 				)))
 				.collect::<anyhow::Result<Vec<_>>>()?
 				.join(", "),
-			arguments = (0..self.arguments.as_ref().unwrap_or(&Vec::new()).len())
-				.map(|index| format!("arg{index}"))
-				.collect::<Vec<_>>()
-				.join(", "),
+			arguments = (0..self.arguments.len()).map(|index| format!("arg{index}")).collect::<Vec<_>>().join(", "),
 		)))
 	}
 }
@@ -358,24 +360,24 @@ impl RuntimeableExpression for FunctionCall {
 		})?;
 
 		// Compile-time arguments
-		let compile_time_arguments = map_some!(self.compile_time_arguments, |original_compile_time_arguments| {
+		let compile_time_arguments = {
 			let mut compile_time_arguments = Vec::new();
-			for argument in original_compile_time_arguments {
+			for argument in self.compile_time_arguments {
 				let evaluated = argument.evaluate_at_compile_time(context)?;
 				compile_time_arguments.push(evaluated);
 			}
 			compile_time_arguments
-		});
+		};
 
 		// Arguments
-		let arguments = map_some!(self.arguments, |original_arguments| {
+		let arguments = {
 			let mut arguments = Vec::new();
-			for argument in original_arguments {
+			for argument in self.arguments {
 				let evaluated = argument.evaluate_at_compile_time(context)?;
 				arguments.push(evaluated);
 			}
 			arguments
-		});
+		};
 
 		Ok(FunctionCall {
 			function: Box::new(function),
@@ -462,8 +464,8 @@ impl FunctionCall {
 				context.scope_data.unique_id(),
 				start.to(&middle),
 			))),
-			arguments: Some(vec![right]),
-			compile_time_arguments: Some(Vec::new()),
+			arguments: vec![right],
+			compile_time_arguments: Vec::new(),
 			scope_id: context.scope_data.unique_id(),
 			span: start.to(&end),
 		})

@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use try_as::traits::TryAsRef;
 
 use crate::{
-	api::{context::Context, macros::TerminalOutput, traits::TryAs as _},
+	api::{
+		context::Context,
+		traits::{TerminalOutput as _, TryAs as _},
+	},
 	bail_err,
 	comptime::{memory::VirtualPointer, CompileTime},
 	lexer::Span,
@@ -106,7 +109,7 @@ impl LiteralObject {
 					base = "A value that's not fully known at compile-time was used as a type.",
 					while = format!("checking the field \"{}\" of a value at compile-time", field.name.unmangled_name().bold().cyan()),
 					context = context,
-					position = field.name.span(context),
+					at = field.name.span(context),
 					details = expression_formatter::format!(
 						r#"
                         Although Cabin allows arbitrary expressions to be used as types, the expression needs to be able to 
@@ -208,6 +211,10 @@ impl LiteralObject {
 		self.fields.iter()
 	}
 
+	pub fn has_any_fields(&self) -> bool {
+		self.fields.is_empty()
+	}
+
 	pub fn to_c_type(&self, context: &mut Context) -> anyhow::Result<String> {
 		Ok(match self.type_name.unmangled_name().as_str() {
 			"Object" => format!("type_{}_{}", self.name.to_c(context)?, self.address.unwrap()),
@@ -217,12 +224,8 @@ impl LiteralObject {
 		})
 	}
 
+	/// Returns whether a value who's type is this literal, can be assigned to a name who's type is pointed to by the given pointer.
 	pub fn is_type_assignable_to_type(&self, target_type: VirtualPointer, context: &mut Context) -> anyhow::Result<bool> {
-		// Anything is assignable to Anything!
-		if &target_type == context.scope_data.expect_global_variable("Anything").expect_as::<VirtualPointer>()? {
-			return Ok(true);
-		}
-
 		Ok(self.address.unwrap() == target_type)
 	}
 }
@@ -361,14 +364,6 @@ impl TranspileToC for LiteralObject {
 
 				// Create string builder
 				let mut builder = format!("&({}) {{", type_name);
-
-				// Anything fields
-				if self.name != "Anything".into() {
-					let anything = GroupDeclaration::from_literal(&context.scope_data.expect_global_variable("Anything").clone().expect_literal(context)?.clone())?;
-					for field in anything.fields() {
-						builder += &format!("\n\t.{} = {},", field.name.to_c(context)?, field.value.as_ref().unwrap().to_c(context)?);
-					}
-				}
 
 				// Add fields
 				for (field_name, field_pointer) in &self.fields {

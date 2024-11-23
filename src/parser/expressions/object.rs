@@ -56,30 +56,21 @@ impl Fields for Vec<Field> {
 }
 
 impl ObjectConstructor {
-	pub fn get_field(&self, name: &Name) -> Option<&Expression> {
-		self.fields.iter().find_map(|field| if &field.name == name { field.value.as_ref() } else { None })
+	pub fn from_string(string: &str, span: Span) -> ObjectConstructor {
+		ObjectConstructor {
+			type_name: Name::from("Text"),
+			fields: Vec::new(),
+			internal_fields: HashMap::from([("internal_value".to_owned(), InternalFieldValue::String(string.to_owned()))]),
+			scope_id: 0,
+			inner_scope_id: 0,
+			object_type: ObjectType::Normal,
+			name: Name::non_mangled("anonymous_string_literal"),
+			span,
+			tags: TagList::default(),
+		}
 	}
 
-	pub fn from_string(string: &str, context: &mut Context) -> VirtualPointer {
-		LiteralObject::try_from_object_constructor(
-			ObjectConstructor {
-				type_name: Name::from("Text"),
-				fields: Vec::new(),
-				internal_fields: HashMap::from([("internal_value".to_owned(), InternalFieldValue::String(string.to_owned()))]),
-				scope_id: 0,
-				inner_scope_id: 0,
-				object_type: ObjectType::Normal,
-				name: Name::non_mangled("anonymous_string_literal"),
-				span: Span::unknown(),
-				tags: TagList::default(),
-			},
-			context,
-		)
-		.unwrap()
-		.store_in_memory(context)
-	}
-
-	pub fn from_number(number: f64) -> ObjectConstructor {
+	pub fn from_number(number: f64, span: Span) -> ObjectConstructor {
 		ObjectConstructor {
 			type_name: Name::from("Number"),
 			fields: Vec::new(),
@@ -88,13 +79,9 @@ impl ObjectConstructor {
 			inner_scope_id: 0,
 			object_type: ObjectType::Normal,
 			name: "anonymous_number".into(),
-			span: Span::unknown(),
+			span,
 			tags: TagList::default(),
 		}
-	}
-
-	pub fn pop_internal_field(&mut self, name: &str) -> Option<InternalFieldValue> {
-		self.internal_fields.remove(name)
 	}
 
 	pub fn is_literal(&self) -> bool {
@@ -114,10 +101,6 @@ impl ObjectConstructor {
 		}
 
 		true
-	}
-
-	pub fn get_internal_field(&self, name: &str) -> Option<&InternalFieldValue> {
-		self.internal_fields.get(name)
 	}
 }
 
@@ -179,20 +162,6 @@ impl Parse for ObjectConstructor {
 	}
 }
 
-impl ToCabin for ObjectConstructor {
-	fn to_cabin(&self) -> String {
-		if self.type_name == "number".into() {
-			return self.get_internal_field("internal_value").unwrap().expect_as::<f64>().unwrap().to_string();
-		}
-
-		if self.type_name == "Text".into() {
-			return self.get_internal_field("internal_value").unwrap().expect_as::<String>().unwrap().to_owned();
-		}
-
-		todo!()
-	}
-}
-
 impl CompileTime for ObjectConstructor {
 	type Output = Expression;
 
@@ -226,26 +195,6 @@ impl CompileTime for ObjectConstructor {
 				})?,
 			)
 		};
-
-		// Get `Anything`
-		let anything = GroupDeclaration::from_literal(&Name::from("Anything").evaluate_at_compile_time(context)?.try_as_literal_or_name(context).cloned().map_err(
-			mapped_err! {
-				while = format!("interpreting the value of \"{}\" as a literal", "Anything".bold().cyan()),
-				context = context,
-			},
-		)?)
-		.unwrap();
-
-		// Anything fields
-		for field in anything.fields() {
-			if let Some(value) = &field.value {
-				fields.add_field(Field {
-					name: field.name.clone(),
-					value: Some(value.clone()),
-					field_type: None,
-				});
-			}
-		}
 
 		// Default fields
 		if let Some(object_type) = object_type {

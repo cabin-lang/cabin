@@ -153,30 +153,6 @@ impl TranspileToC for GroupDeclaration {
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		let mut builder = "{".to_owned();
 
-		// Anything fields
-		if self.name != "Anything".into() {
-			let anything = GroupDeclaration::from_literal(&context.scope_data.expect_global_variable("Anything").clone().expect_literal(context).cloned().map_err(
-				mapped_err! {
-					while = format!("interpreting the value of the global variable {} as a literal", "Anything".bold().yellow()),
-					context = context,
-				},
-			)?)?;
-			for field in &anything.fields {
-				builder += &format!(
-					"\n\t{}* {};",
-					field
-						.value
-						.as_ref()
-						.unwrap_or(&Expression::Void(()))
-						.get_type(context)?
-						.virtual_deref(context)
-						.clone()
-						.to_c_type(context)?,
-					field.name.to_c(context)?
-				);
-			}
-		}
-
 		for field in &self.fields {
 			builder += &format!(
 				"\n\t{}* {};",

@@ -26,6 +26,11 @@ let Anything = group {
 	to_string = action(this: Anything): Text
 };
 
+let Metadata = represent<T> T as Anything {
+	#[builtin<"Anything.to_string">]
+	to_string = action(this: Anything): Text
+};
+
 let Object = group {};
 
 let Group = group {

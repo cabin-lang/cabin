@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 
 use colored::Colorize as _;
+use statements::declaration::DeclarationType;
 
 use crate::{
 	api::context::Context,
@@ -63,19 +64,30 @@ impl TranspileToC for Program {
 		Ok(self
 			.statements
 			.iter()
-			.filter_map(|statement| {
+			.map(|statement| {
 				if let Statement::Declaration(declaration) = statement {
-					if declaration.value(context).is_pointer() {
-						return None;
+					if declaration.declaration_type() == &DeclarationType::RepresentAs
+						|| declaration
+							.value(context)
+							.map_err(mapped_err! {
+								while = "getting the value of a declaration",
+								context = context,
+							})?
+							.is_pointer()
+					{
+						return Ok(None);
 					}
 				}
-				Some(statement.to_c(context))
+				Ok(Some(statement.to_c(context)?))
 			})
 			.collect::<anyhow::Result<Vec<_>>>()
 			.map_err(mapped_err! {
 				while = "transpiling the program's global statements to C",
 				context = context,
 			})?
+			.into_iter()
+			.flatten()
+			.collect::<Vec<_>>()
 			.join("\n"))
 	}
 }

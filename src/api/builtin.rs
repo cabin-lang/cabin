@@ -8,21 +8,23 @@ use crate::{
 		macros::{number, string},
 		traits::TryAs as _,
 	},
-	comptime::memory::VirtualPointer,
-	err, mapped_err,
-	parser::expressions::{object::ObjectConstructor, Expression, Typed},
+	comptime::{memory::VirtualPointer, CompileTime},
+	err,
+	lexer::Span,
+	mapped_err,
+	parser::expressions::{object::ObjectConstructor, Expression, Spanned, Typed},
 };
 
 pub struct BuiltinFunction {
-	evaluate_at_compile_time: fn(&mut Context, usize, Vec<Expression>) -> anyhow::Result<Expression>,
+	evaluate_at_compile_time: fn(&mut Context, usize, Vec<Expression>, Span) -> anyhow::Result<Expression>,
 	to_c: fn(&mut Context, &[String]) -> anyhow::Result<String>,
 }
 
 static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 	"terminal.print" => BuiltinFunction {
-		evaluate_at_compile_time: |context: &mut Context, caller_scope_id: usize, arguments: Vec<Expression>| {
+		evaluate_at_compile_time: |context, caller_scope_id, arguments, span| {
 			let pointer = VecDeque::from(arguments).pop_front().ok_or_else(|| anyhow::anyhow!("Missing argument to print"))?;
-			let returned_object = call_builtin_at_compile_time("Anything.to_string", context, caller_scope_id, vec![pointer])?;
+			let returned_object = call_builtin_at_compile_time("Anything.to_string", context, caller_scope_id, vec![pointer], span)?;
 			let string_value = returned_object.try_as_literal_or_name(context)?.try_as::<String>()?.to_owned();
 
 			let mut first_print = false;
@@ -59,11 +61,11 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 		}
 	},
 	"terminal.input" => BuiltinFunction {
-		evaluate_at_compile_time: |context: &mut Context, _caller_scope_id: usize, _arguments: Vec<Expression>| {
+		evaluate_at_compile_time: |context, _caller_scope_id, _arguments, span| {
 			let mut line = String::new();
 			std::io::stdin().read_line(&mut line)?;
 			line = line.get(0..line.len() - 1).unwrap().to_owned();
-			Ok(Expression::Pointer(ObjectConstructor::from_string(&line, context)))
+			Ok(Expression::Pointer(*ObjectConstructor::from_string(&line, span).evaluate_at_compile_time(context)?.expect_as::<VirtualPointer>()?))
 		},
 		to_c: |context, parameter_names| {
 			let return_address = parameter_names.first().unwrap();
@@ -72,10 +74,13 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 		}
 	},
 	"Number.plus" => BuiltinFunction {
-		evaluate_at_compile_time: |context: &mut Context, _caller_scope_id: usize, arguments: Vec<Expression>| {
-			let first = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal_or_name(context)?.expect_as::<f64>()?.to_owned();
-			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal_or_name(context)?.expect_as::<f64>()?;
-			Ok(number(first + second, context))
+		evaluate_at_compile_time: |context, _caller_scope_id, arguments, _span| {
+			let first = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?;
+			let first_number = first.try_as_literal_or_name(context)?.expect_as::<f64>()?.to_owned();
+			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?;
+			let second_number = second.try_as_literal_or_name(context)?.expect_as::<f64>()?;
+
+			Ok(number(first_number + second_number, first.span(context).to(&second.span(context)), context))
 		},
 		to_c: |context,parameter_names| {
 			let number_address = context.scope_data.expect_global_variable("Number").expect_as::<VirtualPointer>().unwrap();
@@ -86,17 +91,20 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 		}
 	},
 	"Number.minus" => BuiltinFunction {
-		evaluate_at_compile_time: |context: &mut Context, _caller_scope_id: usize, arguments: Vec<Expression>| {
-			let first = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal_or_name(context)?.expect_as::<f64>()?.to_owned();
-			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal_or_name(context)?.expect_as::<f64>()?;
-			Ok(number(first - second, context))
+		evaluate_at_compile_time: |context, _caller_scope_id, arguments, _span| {
+			let first = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?;
+			let first_number = first.try_as_literal_or_name(context)?.expect_as::<f64>()?.to_owned();
+			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?;
+			let second_number = second.try_as_literal_or_name(context)?.expect_as::<f64>()?;
+
+			Ok(number(first_number - second_number, first.span(context).to(&second.span(context)), context))
 		},
 		to_c: |_context, _parameter_names| {
 			Ok(String::new())
 		}
 	},
 	"Anything.to_string" => BuiltinFunction {
-		evaluate_at_compile_time: |context: &mut Context, _caller_scope_id: usize, arguments: Vec<Expression>| {
+		evaluate_at_compile_time: |context, _caller_scope_id, arguments, span| {
 			let this = arguments
 				.first()
 				.ok_or_else(|| anyhow::anyhow!("Missing argument to {}", format!("{}.{}()", "Anything".yellow(), "to_string".blue()).bold()))?
@@ -108,8 +116,22 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			Ok(string(&match this.type_name().unmangled_name().as_str() {
 				"Number" => this.expect_as::<f64>()?.to_string(),
 				"Text" => this.expect_as::<String>()?.to_owned(),
-				_ => anyhow::bail!("Unsupported expression: {this:?}")
-			}, context))
+				_ => {
+					let mut builder = "{".to_owned();
+
+					for (field_name, field_pointer) in this.fields() {
+						builder += &format!("\n\t{} = {},", field_name.unmangled_name(), field_pointer);
+					}
+
+					if !this.has_any_fields() {
+						builder += "\n";
+					}
+
+					builder += "}";
+
+					builder
+				}
+			}, span, context))
 		},
 		to_c: |context, parameter_names| {
 			let object = parameter_names.first().unwrap();
@@ -145,7 +167,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 		}
 	},
 	"Anything.type" => BuiltinFunction {
-		evaluate_at_compile_time: |context: &mut Context, _caller_scope_id: usize, arguments: Vec<Expression>| {
+		evaluate_at_compile_time: |context, _caller_scope_id, arguments, _span| {
 			let this = arguments.first().unwrap();
 			Ok(Expression::Pointer(this.get_type(context)?))
 		},
@@ -155,7 +177,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 	},
 };
 
-pub fn call_builtin_at_compile_time(name: &str, context: &mut Context, caller_scope_id: usize, arguments: Vec<Expression>) -> anyhow::Result<Expression> {
+pub fn call_builtin_at_compile_time(name: &str, context: &mut Context, caller_scope_id: usize, arguments: Vec<Expression>, span: Span) -> anyhow::Result<Expression> {
 	(BUILTINS
 		.get(name)
 		.ok_or_else(|| {
@@ -164,7 +186,7 @@ pub fn call_builtin_at_compile_time(name: &str, context: &mut Context, caller_sc
 				name.bold().cyan()
 			)
 		})?
-		.evaluate_at_compile_time)(context, caller_scope_id, arguments)
+		.evaluate_at_compile_time)(context, caller_scope_id, arguments, span)
 	.map_err(mapped_err! {
 		while = format!("calling the built-in function \"{}\" at compile-time", name.bold().cyan()).dimmed(),
 		context = context,

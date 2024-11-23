@@ -1,3 +1,4 @@
+use crate::parser::expressions::try_as_traits::TryAsMut;
 use colored::Colorize as _;
 use run::{RunExpression, RuntimeableExpression};
 use try_as::traits as try_as_traits;
@@ -32,10 +33,11 @@ pub mod name;
 pub mod object;
 pub mod oneof;
 pub mod operators;
+pub mod represent_as;
 pub mod run;
 pub mod sugar;
 
-#[derive(Debug, Clone, try_as::macros::From, try_as::macros::TryInto, try_as::macros::TryAsRef)]
+#[derive(Debug, Clone, try_as::macros::From, try_as::macros::TryInto, try_as::macros::TryAsRef, try_as::macros::TryAsMut)]
 pub enum Expression {
 	Block(Block),
 	FieldAccess(FieldAccess),
@@ -116,6 +118,21 @@ impl Expression {
 				base = format!("A value that's not fully known at compile-time was used as a type; It can only be evaluated into a {} at compile-time.", self.kind_name().bold().yellow()),
 				context = context,
 			},
+		})
+	}
+
+	pub fn is_fully_known_at_compile_time(&self, context: &mut Context) -> anyhow::Result<bool> {
+		Ok(match self {
+			Self::Pointer(_) => true,
+			Self::Name(name) => name
+				.clone()
+				.evaluate_at_compile_time(context)
+				.map_err(mapped_err! {
+					while = format!("evaluating the name \"{}\" at compile-time", name.unmangled_name().bold().cyan()),
+					context = context,
+				})?
+				.is_fully_known_at_compile_time(context)?,
+			_ => false,
 		})
 	}
 
@@ -224,8 +241,9 @@ impl Expression {
 	///
 	/// whether this expression can be assigned to the given type.
 	pub fn is_assignable_to_type(&self, target_type: VirtualPointer, context: &mut Context) -> anyhow::Result<bool> {
-		let value_type = self.get_type(context)?.virtual_deref(context).clone();
-		value_type.is_type_assignable_to_type(target_type, context)
+		let this_type = self.get_type(context)?.virtual_deref(context).clone();
+		for (name, represent_as) in context.scope_data.get_represent_as_declarations() {}
+		this_type.is_type_assignable_to_type(target_type, context)
 	}
 }
 

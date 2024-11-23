@@ -1,26 +1,42 @@
 use crate::{
-	api::context::Context,
-	comptime::CompileTime,
+	api::{context::Context, traits::TryAsRefMut},
+	comptime::{memory::VirtualPointer, CompileTime},
+	err,
 	lexer::TokenType,
 	mapped_err,
 	parser::{
-		expressions::{name::Name, Expression},
+		expressions::{name::Name, represent_as::RepresentAs, Expression},
 		statements::tag::TagList,
 		Parse, TokenQueue, TokenQueueFunctionality as _,
 	},
 	transpiler::TranspileToC,
 };
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeclarationType {
+	Normal,
+	RepresentAs,
+}
+
 #[derive(Debug, Clone)]
 pub struct Declaration {
 	name: Name,
 	scope_id: usize,
-	initial_value: Expression,
+	declaration_type: DeclarationType,
 }
 
 impl Declaration {
-	pub fn value<'a>(&'a self, context: &'a Context) -> &'a Expression {
-		context.scope_data.get_variable_from_id(self.name.clone(), self.scope_id).unwrap()
+	pub fn value<'a>(&'a self, context: &'a Context) -> anyhow::Result<&'a Expression> {
+		context.scope_data.get_variable_from_id(self.name.clone(), self.scope_id).ok_or_else(|| {
+			err! {
+				base = format!("Attempted to get the value for the declaration of \"{}\", but it has no value stored.", self.name.unmangled_name().bold().cyan()),
+				context = context,
+			}
+		})
+	}
+
+	pub fn declaration_type(&self) -> &DeclarationType {
+		&self.declaration_type
 	}
 }
 
@@ -42,8 +58,19 @@ impl Parse for Declaration {
 
 		// Value
 		tokens.pop(TokenType::Equal)?;
+
+		// Represent-As declarations
+		if tokens.next_is(TokenType::KeywordRepresent) {
+			let represent_as = RepresentAs::parse(tokens, context)?;
+			context.scope_data.add_represent_as_declaration(name.clone(), represent_as);
+			return Ok(Declaration {
+				name,
+				scope_id: context.scope_data.unique_id(),
+				declaration_type: DeclarationType::RepresentAs,
+			});
+		}
+
 		let mut value = Expression::parse(tokens, context)?;
-		let initial_value = value.clone();
 
 		// Tags
 		if let Some(tags) = tags.clone() {
@@ -51,8 +78,8 @@ impl Parse for Declaration {
 		}
 
 		// Set name
-		if let Some(expression_name) = value.name_mut() {
-			*expression_name = name.clone();
+		if let Ok(literal) = value.try_as_ref_mut::<VirtualPointer>().map(|pointer| pointer.virtual_deref_mut(context)) {
+			literal.name = name.clone();
 		}
 
 		// Add the name declaration to the scope
@@ -65,7 +92,7 @@ impl Parse for Declaration {
 		Ok(Declaration {
 			name,
 			scope_id: context.scope_data.unique_id(),
-			initial_value,
+			declaration_type: DeclarationType::Normal,
 		})
 	}
 }
@@ -74,15 +101,26 @@ impl CompileTime for Declaration {
 	type Output = Declaration;
 
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
-		let evaluated = self.value(context).clone().evaluate_at_compile_time(context)?;
+		// Represent as
+		if self.declaration_type == DeclarationType::RepresentAs {
+			let represent = context.scope_data.get_represent_from_id(self.name.clone(), self.scope_id).unwrap().clone();
+			let evaluated = represent.evaluate_at_compile_time(context)?;
+			context.scope_data.reassign_represent_from_id(&self.name, evaluated, self.scope_id)?;
+			return Ok(self);
+		}
+
+		let evaluated = self
+			.value(context)
+			.map_err(mapped_err! {
+				while = format!("getting the value of the declaration of \"{}\"", self.name.unmangled_name().bold().cyan()),
+				context = context,
+			})?
+			.clone()
+			.evaluate_at_compile_time(context)?;
 		context.scope_data.reassign_variable_from_id(&self.name, evaluated, self.scope_id)?;
 
 		// Return the declaration
-		Ok(Declaration {
-			name: self.name,
-			scope_id: self.scope_id,
-			initial_value: self.initial_value,
-		})
+		Ok(self)
 	}
 }
 
@@ -91,7 +129,7 @@ impl TranspileToC for Declaration {
 		Ok(format!(
 			"void* {} = {};",
 			self.name.to_c(context)?,
-			self.value(context).clone().to_c(context).map_err(mapped_err! {
+			self.value(context)?.clone().to_c(context).map_err(mapped_err! {
 				while = format!("transpiling the value of the initial declaration for the variable \"{}\" to C", self.name.unmangled_name()),
 				context = context,
 			})?

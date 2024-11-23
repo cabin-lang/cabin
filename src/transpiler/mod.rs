@@ -112,29 +112,6 @@ pub fn transpile_types(context: &mut Context) -> anyhow::Result<String> {
 			"Object" => {
 				let mut builder = format!("struct type_{}_{} {{", value.name.to_c(context)?, address);
 
-				// Anything fields
-				if value.name != "Anything".into() {
-					let anything = GroupDeclaration::from_literal(context.scope_data.expect_global_variable("Anything").clone().expect_literal(context)?)?;
-					for field in anything.fields() {
-						builder += &format!(
-							"\n\t{}* {};",
-							if let Some(field_type) = &field.field_type {
-								field_type.expect_as::<VirtualPointer>()?.virtual_deref(context).clone().to_c_type(context)?
-							} else {
-								field
-									.value
-									.as_ref()
-									.unwrap_or(&Expression::Void(()))
-									.get_type(context)?
-									.virtual_deref(context)
-									.clone()
-									.to_c_type(context)?
-							},
-							field.name.to_c(context)?
-						);
-					}
-				}
-
 				// Add object fields
 				for (field_name, field_value) in value.fields() {
 					builder += &format!(
@@ -188,12 +165,6 @@ pub fn transpile_functions(context: &mut Context) -> anyhow::Result<String> {
 pub fn transpile_literals(context: &mut Context) -> anyhow::Result<String> {
 	let mut visited = Vec::new();
 	let mut builder = "int main(int argc, char** argv) {".to_owned();
-
-	// Anything
-	// let anything_pointer = context.scope_data.expect_global_variable("Anything").try_as::<VirtualPointer>()?.to_owned();
-	// let anything = anything_pointer.virtual_deref(context).clone();
-	// let mut current_tree = Vec::new();
-	// builder += &transpile_literal(context, &anything, anything_pointer, &mut visited, &mut current_tree)?;
 
 	// Virtual memory
 	for (address, value) in context.virtual_memory.entries() {

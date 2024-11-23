@@ -1,1 +1,2 @@
-run terminal.print("Hello world!");
+let value = 5:Metadata.to_string();
+terminal.print(value:Metadata);

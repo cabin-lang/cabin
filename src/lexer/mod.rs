@@ -93,6 +93,9 @@ pub enum TokenType {
 	/// identifier, which will cause issues when parsing. Please be careful when moving around this keyword or the `Identifier` token type!
 	KeywordOtherwise,
 
+	KeywordRepresent,
+	KeywordAs,
+
 	/// The `if` keyword token type. This is used similar to how it is in other languages: It runs a block of code if some condition is true.
 	///
 	/// Unlike many other keywords in Cabin, this is the same as it is in almost all other languages. Generally we swap out common keywords with things
@@ -352,6 +355,8 @@ impl TokenType {
 			Self::KeywordForEach => regex_macro::regex!(r"^foreach\b"),
 			Self::KeywordIn => regex_macro::regex!(r"^in\b"),
 			Self::KeywordWhile => regex_macro::regex!(r"^while\b"),
+			Self::KeywordRepresent => regex_macro::regex!(r"^represent\b"),
+			Self::KeywordAs => regex_macro::regex!(r"^as\b"),
 
 			// Left opening groupings
 			Self::LeftAngleBracket => regex_macro::regex!("^<"),

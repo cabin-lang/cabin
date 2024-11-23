@@ -24,6 +24,8 @@ use crate::{
 	},
 };
 
+use super::literal::LiteralObject;
+
 /// A binary operation. More specifically, this represents not one operation, but a group of operations that share the same precedence.
 /// For example, the `+` and `-` operators share the same precedence, so they are grouped together in the `ADDITIVE` constant.
 ///
@@ -148,13 +150,25 @@ impl Parse for PrimaryExpression {
 
 			// Parse string literal into a string object
 			TokenType::String => {
-				let with_quotes = tokens.pop(TokenType::String)?.value;
+				let token = tokens.pop(TokenType::String)?;
+				let with_quotes = token.value;
 				let without_quotes = with_quotes.get(1..with_quotes.len() - 1).unwrap().to_owned();
-				Expression::Pointer(ObjectConstructor::from_string(&without_quotes, context))
+				Expression::Pointer(
+					LiteralObject::try_from_object_constructor(ObjectConstructor::from_string(&without_quotes, token.span), context)
+						.unwrap()
+						.store_in_memory(context),
+				)
 			},
 
 			// Parse number literal into a number object
-			TokenType::Number => Expression::ObjectConstructor(ObjectConstructor::from_number(tokens.pop(TokenType::Number).unwrap().value.parse().unwrap())),
+			TokenType::Number => {
+				let number_token = tokens.pop(TokenType::Number).unwrap();
+				Expression::Pointer(
+					LiteralObject::try_from_object_constructor(ObjectConstructor::from_number(number_token.value.parse().unwrap(), number_token.span), context)
+						.unwrap()
+						.store_in_memory(context),
+				)
+			},
 
 			// bad :<
 			_ => anyhow::bail!("Expected primary expression but found {}", tokens.peek_type()?),

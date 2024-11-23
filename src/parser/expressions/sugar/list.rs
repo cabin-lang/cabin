@@ -1,9 +1,14 @@
 use crate::{
 	api::context::Context,
-	list, parse_list,
+	parse_list,
 	parser::{
-		expressions::{object::ObjectConstructor, Expression},
-		ListType, Parse, TokenQueue,
+		expressions::{
+			name::Name,
+			object::{InternalFieldValue, ObjectConstructor, ObjectType},
+			Expression,
+		},
+		statements::tag::TagList,
+		ListType, Parse, TokenQueue, TokenQueueFunctionality,
 	},
 };
 
@@ -14,8 +19,21 @@ impl Parse for List {
 
 	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
 		let mut list = Vec::new();
-		parse_list!(tokens, ListType::Bracketed, { list.push(Expression::parse(tokens, context)?) });
-		let list = list!(context, context.scope_data.unique_id(), list);
-		Ok(list)
+		let start = tokens.current_position().unwrap();
+		let end = parse_list!(tokens, ListType::Bracketed, { list.push(Expression::parse(tokens, context)?) }).span;
+
+		let constructor = ObjectConstructor {
+			type_name: Name::from("List"),
+			fields: Vec::new(),
+			internal_fields: std::collections::HashMap::from([("elements".to_owned(), InternalFieldValue::ExpressionList(list))]),
+			scope_id: context.scope_data.unique_id(),
+			inner_scope_id: context.scope_data.unique_id(),
+			object_type: ObjectType::Normal,
+			name: "anonymous_runtime_list".into(),
+			span: start.to(&end),
+			tags: TagList::default(),
+		};
+
+		Ok(Expression::ObjectConstructor(constructor))
 	}
 }

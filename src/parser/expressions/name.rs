@@ -36,12 +36,12 @@ impl Parse for Name {
 	type Output = Self;
 
 	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
-		let position = tokens.current_position();
+		let span = tokens.current_position().unwrap();
 
 		let token = tokens.pop(TokenType::Identifier).map_err(mapped_err! {
 			while = "attempting to parse a variable name",
 			context = context,
-			position = position.unwrap_or_else(Span::unknown),
+			at = span,
 		})?;
 
 		Ok(Name {
@@ -63,7 +63,7 @@ impl CompileTime for Name {
 			.map_err(mapped_err! {
 				while = format!("attempting to get the original value of the name \"{}\" to evaluate it at compile-time", self.unmangled_name().bold().cyan()),
 				context = context,
-				position = self.span(context),
+				at = self.span(context),
 				details = unindent::unindent(&format!(
 					"
 					Here you reference a variable called \"{name}\", but no variable called \"{name}\" exists at this

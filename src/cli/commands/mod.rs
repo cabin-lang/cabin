@@ -29,7 +29,7 @@ macro_rules! step {
 	) => {{
 		use colored::Colorize as _;
 		use std::io::Write as _;
-		use $crate::api::macros::TerminalOutput as _;
+		use $crate::api::traits::TerminalOutput as _;
 
 		fn move_cursor_up_and_over(up: usize, right: usize) {
 			print!("\x1b[{}A", up);
