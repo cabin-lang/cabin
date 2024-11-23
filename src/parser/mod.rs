@@ -184,6 +184,8 @@ impl TokenQueueFunctionality for std::collections::VecDeque<Token> {
 /// Parses a comma-separated list of things. This takes a block of code as one of its parameters. The block is run once at the beginning,
 /// and then while the next token is a comma, a comma is consumed and the block is run again. This is used for many comma-separated lists
 /// in the language like function parameters, function arguments, group fields, group instantiation, etc.
+///
+/// This will return the last token that was parsed, so that expressions that end in a list can generate their spans.
 #[macro_export]
 macro_rules! parse_list {
 	(

@@ -159,11 +159,12 @@ macro_rules! list {
 			let constructor = ObjectConstructor {
 				type_name: $crate::parser::expressions::name::Name::from("List"),
 				fields: Vec::new(),
-				internal_fields: std::collections::HashMap::from([("elements".to_owned(), $crate::parser::expressions::object::InternalFieldValue::List($elements))]),
+				internal_fields: std::collections::HashMap::from([("elements".to_owned(), $crate::parser::expressions::object::InternalFieldValue::ExpressionList($elements))]),
 				scope_id: $scope_id,
 				object_type: $crate::parser::expressions::object::ObjectType::Normal,
 				name: "anonymous_list".into(),
 				span: $crate::lexer::Span::zero(),
+				tags: $crate::parser::statements::tag::TagList::default(),
 			};
 
 			Expression::Pointer(
@@ -177,11 +178,12 @@ macro_rules! list {
 			let constructor = ObjectConstructor {
 				type_name: $crate::parser::expressions::name::Name::from("List"),
 				fields: Vec::new(),
-				internal_fields: std::collections::HashMap::from([("elements".to_owned(), $crate::parser::expressions::object::InternalFieldValue::List($elements))]),
+				internal_fields: std::collections::HashMap::from([("elements".to_owned(), $crate::parser::expressions::object::InternalFieldValue::ExpressionList($elements))]),
 				scope_id: $scope_id,
 				object_type: $crate::parser::expressions::object::ObjectType::Normal,
 				name: "anonymous_runtime_list".into(),
 				span: $crate::lexer::Span::zero(),
+				tags: $crate::parser::statements::tag::TagList::default(),
 			};
 			Expression::ObjectConstructor(constructor)
 		}
@@ -196,7 +198,7 @@ macro_rules! literal_list {
 		let constructor = ObjectConstructor {
 			type_name: Name::from("List"),
 			fields: Vec::new(),
-			internal_fields: HashMap::from([("elements".to_owned(), $crate::parser::expressions::object::InternalFieldValue::List($elements))]),
+			internal_fields: HashMap::from([("elements".to_owned(), $crate::parser::expressions::object::InternalFieldValue::ExpressionList($elements))]),
 			scope_id: $scope_id,
 			object_type: ObjectType::Normal,
 			name: "anonymous_list".into(),
@@ -258,7 +260,7 @@ pub fn string(value: &str, context: &mut Context) -> Expression {
 	Expression::Pointer(ObjectConstructor::from_string(value, context))
 }
 
-pub fn cabin_true(context: &Context) -> Expression {
+pub fn cabin_true(context: &Context) -> anyhow::Result<Expression> {
 	context.scope_data.expect_global_variable("true").expect_clone_pointer(context)
 }
 

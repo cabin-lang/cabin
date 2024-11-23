@@ -92,7 +92,7 @@ macro_rules! step {
 					if $context.config.quiet {
 						format!("{}", error).lines().next().unwrap().to_owned()
 					} else {
-						format!("{}", error)
+						format!("{}\n", error)
 					}
 				);
 
@@ -103,7 +103,7 @@ macro_rules! step {
 					let (error_line, _column) = $context.line_column(error_position);
 
 					eprintln!(
-						"\nIn {}{}:",
+						"In {}{}:",
 						format!("{}", $context.running_context.entry_point().display()).bold().cyan(),
 						format!(" on {}", format!("line {error_line}").bold().cyan())
 					);

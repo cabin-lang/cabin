@@ -1,18 +1,16 @@
 use std::collections::{HashMap, VecDeque};
 
-use colored::Colorize as _;
-
 use crate::{
-	api::{context::Context, macros::string, scope::ScopeType, traits::TryAs as _},
-	comptime::CompileTime,
-	err,
+	api::{context::Context, scope::ScopeType},
+	bail_err,
+	comptime::{memory::VirtualPointer, CompileTime},
 	lexer::{Span, Token, TokenType},
-	literal, literal_list, mapped_err, parse_list,
+	mapped_err, parse_list,
 	parser::{
 		expressions::{
 			literal::{LiteralConvertible, LiteralObject},
 			name::Name,
-			object::{Field, ObjectConstructor, ObjectType},
+			object::{Field, ObjectType},
 			Expression, Parse,
 		},
 		statements::tag::TagList,
@@ -21,7 +19,7 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
-use super::{Spanned, Typed};
+use super::{object::InternalFieldValue, Spanned, Typed};
 
 #[derive(Debug, Clone)]
 pub struct GroupDeclaration {
@@ -32,7 +30,7 @@ pub struct GroupDeclaration {
 }
 
 impl Parse for GroupDeclaration {
-	type Output = Expression;
+	type Output = VirtualPointer;
 
 	fn parse(tokens: &mut VecDeque<Token>, context: &mut Context) -> anyhow::Result<Self::Output> {
 		let start = tokens.pop(TokenType::KeywordGroup)?.span;
@@ -69,10 +67,8 @@ impl Parse for GroupDeclaration {
 				let mut value = Expression::parse(tokens, context)?;
 
 				// Set tags
-				if let Some(expression_tags) = value.tags_mut() {
-					if let Some(declaration_tags) = &tags {
-						*expression_tags = declaration_tags.clone();
-					}
+				if let Some(tags) = tags.clone() {
+					value.set_tags(tags, context);
 				}
 
 				Some(value)
@@ -86,17 +82,19 @@ impl Parse for GroupDeclaration {
 		.span;
 		context.scope_data.exit_scope()?;
 
-		Ok(Expression::Group(GroupDeclaration {
+		Ok(GroupDeclaration {
 			fields,
 			scope_id: inner_scope_id,
 			name: "anonymous_group".into(),
 			span: start.to(&end),
-		}))
+		}
+		.to_literal()
+		.store_in_memory(context))
 	}
 }
 
 impl CompileTime for GroupDeclaration {
-	type Output = Expression;
+	type Output = GroupDeclaration;
 
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
 		let previous = context.scope_data.set_current_scope(self.scope_id);
@@ -111,10 +109,11 @@ impl CompileTime for GroupDeclaration {
 				})?;
 
 				if !evaluated.is_pointer() {
-					anyhow::bail!(
-						"Attempted to assign a default value to a group field that's not known at compile-time\n\t{}",
-						format!("while checking the default value of the field \"{}\"", field.name.unmangled_name().bold().cyan()).dimmed()
-					);
+					bail_err! {
+						base = "Attempted to assign a default value to a group field that's not known at compile-time",
+						while = format!("while checking the default value of the field \"{}\"", field.name.unmangled_name().bold().cyan()),
+						context = context,
+					};
 				}
 
 				Some(evaluated)
@@ -145,16 +144,12 @@ impl CompileTime for GroupDeclaration {
 
 		// Store in memory and return a pointer
 		context.scope_data.set_current_scope(previous);
-		Ok(Expression::Pointer(
-			GroupDeclaration {
-				fields,
-				scope_id: self.scope_id,
-				name: self.name,
-				span: self.span,
-			}
-			.to_literal(context)?
-			.store_in_memory(context),
-		))
+		Ok(GroupDeclaration {
+			fields,
+			scope_id: self.scope_id,
+			name: self.name,
+			span: self.span,
+		})
 	}
 }
 
@@ -164,7 +159,12 @@ impl TranspileToC for GroupDeclaration {
 
 		// Anything fields
 		if self.name != "Anything".into() {
-			let anything = GroupDeclaration::from_literal(context.scope_data.expect_global_variable("Anything").expect_literal(context)?, context)?;
+			let anything = GroupDeclaration::from_literal(&context.scope_data.expect_global_variable("Anything").clone().expect_literal(context).cloned().map_err(
+				mapped_err! {
+					while = format!("interpreting the value of the global variable {} as a literal", "Anything".bold().yellow()),
+					context = context,
+				},
+			)?)?;
 			for field in &anything.fields {
 				builder += &format!(
 					"\n\t{}* {};",
@@ -184,14 +184,18 @@ impl TranspileToC for GroupDeclaration {
 		for field in &self.fields {
 			builder += &format!(
 				"\n\t{}* {};",
-				field
-					.value
-					.as_ref()
-					.unwrap_or(&Expression::Void(()))
-					.get_type(context)?
-					.virtual_deref(context)
-					.clone()
-					.to_c_type(context)?,
+				if let Some(field_type) = &field.field_type {
+					field_type.try_as_literal_or_name(context)?.clone().to_c_type(context)?
+				} else {
+					field
+						.value
+						.as_ref()
+						.unwrap_or(&Expression::Void(()))
+						.get_type(context)?
+						.virtual_deref(context)
+						.clone()
+						.to_c_type(context)?
+				},
 				field.name.to_c(context)?
 			);
 		}
@@ -210,70 +214,26 @@ impl TranspileToC for GroupDeclaration {
 }
 
 impl LiteralConvertible for GroupDeclaration {
-	fn to_literal(self, context: &mut Context) -> anyhow::Result<LiteralObject> {
-		let fields = self
-			.fields
-			.into_iter()
-			.map(|field| {
-				let value = if let Some(value) = field.value { value } else { context.nothing() };
-				literal! {
-					name = format!("{}_{}", self.name.unmangled_name(), field.name.unmangled_name()).into(),
-					context = context,
-					Field {
-						name = string(&field.name.unmangled_name(), context),
-						value = value
-					},
-					self.scope_id
-				}
-			})
-			.collect();
-
-		let constructor = ObjectConstructor {
-			fields: vec![Field {
-				name: "fields".into(),
-				value: Some(literal_list!(context, self.scope_id, fields)),
-				field_type: None,
-			}],
+	fn to_literal(self) -> LiteralObject {
+		LiteralObject {
+			address: None,
+			fields: HashMap::from([]),
+			internal_fields: HashMap::from([("fields".to_owned(), InternalFieldValue::FieldList(self.fields))]),
 			name: self.name,
-			scope_id: self.scope_id,
-			internal_fields: HashMap::new(),
-			type_name: "Group".into(),
 			object_type: ObjectType::Group,
+			scope_id: self.scope_id,
 			span: self.span,
-		};
-
-		LiteralObject::try_from_object_constructor(constructor, context)
+			type_name: "Group".into(),
+			tags: TagList::default(),
+		}
 	}
 
-	fn from_literal(literal: &LiteralObject, context: &Context) -> anyhow::Result<Self> {
-		let fields = literal
-			.get_field_literal("fields", context)
-			.ok_or_else(|| {
-				err! {
-					base = format!("Attempted to get the field \"{}\" on a group literal, but no field with that name exists on the literal.", "fields".bold().cyan()),
-					while = "deserializing a literal object into a group declaration",
-					context = context,
-				}
-			})?
-			.expect_as::<Vec<Expression>>()?
-			.iter()
-			.map(|field_object| {
-				let name = field_object
-					.expect_literal(context)?
-					.get_field_literal("name", context)
-					.unwrap()
-					.expect_as::<String>()?
-					.into();
-				let value = field_object.expect_literal(context)?.get_field("value");
-				Ok(Field { name, value, field_type: None })
-			})
-			.collect::<anyhow::Result<Vec<_>>>()?;
-
+	fn from_literal(literal: &LiteralObject) -> anyhow::Result<Self> {
 		Ok(GroupDeclaration {
-			fields,
+			fields: literal.get_internal_field::<Vec<Field>>("fields")?.to_owned(),
 			scope_id: literal.declared_scope_id(),
 			name: literal.name.clone(),
-			span: literal.span(context),
+			span: literal.span.clone(),
 		})
 	}
 }

@@ -7,6 +7,8 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
+use super::CompileTime;
+
 /// A pointer to a `LiteralObject` in `VirtualMemory`.
 ///
 /// `VirtualPointers` are hygienic; You can only get a pointer by storing something in `VirtualMemory` and storing the
@@ -43,6 +45,20 @@ impl VirtualPointer {
 	/// A reference to the `LiteralObject` that this `VirtualPointer` points to.
 	pub fn virtual_deref<'a>(&self, context: &'a Context) -> &'a LiteralObject {
 		context.virtual_memory.get(self)
+	}
+
+	pub fn virtual_deref_mut<'a>(&self, context: &'a mut Context) -> &'a mut LiteralObject {
+		context.virtual_memory.memory.get_mut(&self.0).unwrap()
+	}
+}
+
+impl CompileTime for VirtualPointer {
+	type Output = VirtualPointer;
+
+	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
+		let evaluated = self.virtual_deref(context).clone().evaluate_at_compile_time(context)?;
+		context.virtual_memory.memory.insert(self.0, evaluated);
+		Ok(self)
 	}
 }
 
@@ -135,6 +151,10 @@ impl VirtualMemory {
 	/// - `address` - A `VirtualPointer` to the location to get the `LiteralObject` from in virtual memory.
 	pub fn get(&self, address: &VirtualPointer) -> &LiteralObject {
 		self.memory.get(&address.0).unwrap()
+	}
+
+	pub fn replace(&mut self, address: VirtualPointer, value: LiteralObject) {
+		self.memory.insert(address.0, value);
 	}
 
 	/// Returns the first unused virtual address. When storing an object in memory, this is used to determine what address to give it.

@@ -9,13 +9,13 @@ use crate::{
 		traits::TryAs as _,
 	},
 	comptime::memory::VirtualPointer,
-	mapped_err,
+	err, mapped_err,
 	parser::expressions::{object::ObjectConstructor, Expression, Typed},
 };
 
 pub struct BuiltinFunction {
 	evaluate_at_compile_time: fn(&mut Context, usize, Vec<Expression>) -> anyhow::Result<Expression>,
-	to_c: fn(&mut Context, &[String]) -> String,
+	to_c: fn(&mut Context, &[String]) -> anyhow::Result<String>,
 }
 
 static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
@@ -23,7 +23,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 		evaluate_at_compile_time: |context: &mut Context, caller_scope_id: usize, arguments: Vec<Expression>| {
 			let pointer = VecDeque::from(arguments).pop_front().ok_or_else(|| anyhow::anyhow!("Missing argument to print"))?;
 			let returned_object = call_builtin_at_compile_time("Anything.to_string", context, caller_scope_id, vec![pointer])?;
-			let string_value = returned_object.try_as_literal(context)?.try_as::<String>()?;
+			let string_value = returned_object.try_as_literal_or_name(context)?.try_as::<String>()?.to_owned();
 
 			let mut first_print = false;
 			if context.lines_printed == 0 {
@@ -49,13 +49,13 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			let text_address = context.scope_data.expect_global_variable("Text").expect_as::<VirtualPointer>().unwrap();
 			let anything_address = context.scope_data.expect_global_variable("Anything").expect_as::<VirtualPointer>().unwrap();
 			let object = parameter_names.first().unwrap();
-			unindent::unindent(&format!(
+			Ok(unindent::unindent(&format!(
 				"
 				group_u_Text_{text_address}* return_address;
 				(((void (*)(group_u_Anything_{anything_address}*, group_u_Text_{text_address}*))({object}->u_to_string->call))({object}, return_address));
 				printf(\"%s\\n\", return_address->internal_value);
 				"
-			))
+			)))
 		}
 	},
 	"terminal.input" => BuiltinFunction {
@@ -68,13 +68,13 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 		to_c: |context, parameter_names| {
 			let return_address = parameter_names.first().unwrap();
 			let text_address = context.scope_data.expect_global_variable("Text").expect_as::<VirtualPointer>().unwrap();
-			format!("char* buffer = malloc(sizeof(char) * 256);\nfgets(buffer, 256, stdin);\n*{return_address} = (group_u_Text_{text_address}) {{ .internal_value = buffer }};")
+			Ok(format!("char* buffer = malloc(sizeof(char) * 256);\nfgets(buffer, 256, stdin);\n*{return_address} = (group_u_Text_{text_address}) {{ .internal_value = buffer }};"))
 		}
 	},
 	"Number.plus" => BuiltinFunction {
 		evaluate_at_compile_time: |context: &mut Context, _caller_scope_id: usize, arguments: Vec<Expression>| {
-			let first = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.expect_as::<f64>()?;
-			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.expect_as::<f64>()?;
+			let first = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal_or_name(context)?.expect_as::<f64>()?.to_owned();
+			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal_or_name(context)?.expect_as::<f64>()?;
 			Ok(number(first + second, context))
 		},
 		to_c: |context,parameter_names| {
@@ -82,25 +82,29 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			let first = parameter_names.first().unwrap();
 			let second = parameter_names.get(1).unwrap();
 			let number_type = format!("group_u_Number_{number_address}");
-			format!("*return_address = ({number_type}) {{ .internal_value = {first}->internal_value + {second}->internal_value }};")
+			Ok(format!("*return_address = ({number_type}) {{ .internal_value = {first}->internal_value + {second}->internal_value }};"))
 		}
 	},
 	"Number.minus" => BuiltinFunction {
 		evaluate_at_compile_time: |context: &mut Context, _caller_scope_id: usize, arguments: Vec<Expression>| {
-			let first = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.expect_as::<f64>()?;
-			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal(context)?.expect_as::<f64>()?;
+			let first = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal_or_name(context)?.expect_as::<f64>()?.to_owned();
+			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?.try_as_literal_or_name(context)?.expect_as::<f64>()?;
 			Ok(number(first - second, context))
 		},
 		to_c: |_context, _parameter_names| {
-			String::new()
+			Ok(String::new())
 		}
 	},
 	"Anything.to_string" => BuiltinFunction {
 		evaluate_at_compile_time: |context: &mut Context, _caller_scope_id: usize, arguments: Vec<Expression>| {
-			let this = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Anything.to_string"))?.try_as_literal(context).map_err(mapped_err! {
-				while = format!("Interpreting the first argument to {} as a literal", "Anything.to_string".bold().cyan()),
-				context = context,
-			})?;
+			let this = arguments
+				.first()
+				.ok_or_else(|| anyhow::anyhow!("Missing argument to {}", format!("{}.{}()", "Anything".yellow(), "to_string".blue()).bold()))?
+				.try_as_literal_or_name(context).cloned().map_err(mapped_err! {
+					while = format!("Interpreting the first argument to {} as a literal", format!("{}.{}()", "Anything".yellow(), "to_string".blue()).bold()),
+					context = context,
+				})?;
+
 			Ok(string(&match this.type_name().unmangled_name().as_str() {
 				"Number" => this.expect_as::<f64>()?.to_string(),
 				"Text" => this.expect_as::<String>()?.to_owned(),
@@ -109,11 +113,16 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 		},
 		to_c: |context, parameter_names| {
 			let object = parameter_names.first().unwrap();
-			let return_address = parameter_names.get(1).unwrap();
+			let return_address = parameter_names.get(1).ok_or_else(|| err! {
+				base = format!("Missing first argument to {}", format!("{}.{}()", "Anything".yellow(), "to_string".blue()).bold()),
+				while = format!("getting the first argument to {}", format!("{}.{}()", "Anything".yellow(), "to_string".blue()).bold()),
+				context = context,
+			})?;
+
 			let group_address = context.scope_data.expect_global_variable("Group").expect_as::<VirtualPointer>().unwrap();
 			let text_address = context.scope_data.expect_global_variable("Text").expect_as::<VirtualPointer>().unwrap();
 			let anything_address = context.scope_data.expect_global_variable("Anything").expect_as::<VirtualPointer>().unwrap();
-			unindent::unindent(&format!(
+			Ok(unindent::unindent(&format!(
 				r#"
 				// Get the type metadata of the value
 				group_u_Group_{group_address} type;
@@ -132,7 +141,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 				push_to_dynamic_string(&result, " }}");
 				*{return_address} = (group_u_Text_{text_address}) {{ .internal_value = result.value }};
 				"#
-			))
+			)))
 		}
 	},
 	"Anything.type" => BuiltinFunction {
@@ -141,7 +150,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			Ok(Expression::Pointer(this.get_type(context)?))
 		},
 		to_c: |_context, _parameter_names| {
-			String::new()
+			Ok(String::new())
 		}
 	},
 };
@@ -163,7 +172,7 @@ pub fn call_builtin_at_compile_time(name: &str, context: &mut Context, caller_sc
 }
 
 pub fn transpile_builtin_to_c(name: &str, context: &mut Context, parameters: &[String]) -> anyhow::Result<String> {
-	Ok((BUILTINS
+	(BUILTINS
 		.get(name)
 		.ok_or_else(|| {
 			anyhow::anyhow!(
@@ -171,5 +180,5 @@ pub fn transpile_builtin_to_c(name: &str, context: &mut Context, parameters: &[S
 				name.bold().cyan()
 			)
 		})?
-		.to_c)(context, parameters))
+		.to_c)(context, parameters)
 }

@@ -5,18 +5,21 @@ use try_as::traits::TryAsRef;
 use crate::{
 	api::{context::Context, macros::TerminalOutput, traits::TryAs as _},
 	bail_err,
-	comptime::memory::VirtualPointer,
+	comptime::{memory::VirtualPointer, CompileTime},
 	lexer::Span,
-	parser::expressions::{
-		group::GroupDeclaration,
-		name::Name,
-		object::{InternalFieldValue, ObjectConstructor, ObjectType},
-		Expression, Typed,
+	parser::{
+		expressions::{
+			group::GroupDeclaration,
+			name::Name,
+			object::{InternalFieldValue, ObjectConstructor, ObjectType},
+			Expression, Typed,
+		},
+		statements::tag::TagList,
 	},
 	transpiler::TranspileToC,
 };
 
-use super::Spanned;
+use super::{either::Either, function_declaration::FunctionDeclaration, oneof::OneOf, Spanned};
 
 /// A "literal object". Literal objects can be thought of as simple associative arrays, similar to a JSON object or similar.
 /// Specifically, a literal object is a collection of fields where each field's value is another literal object.
@@ -37,20 +40,20 @@ use super::Spanned;
 pub struct LiteralObject {
 	/// The type name of this `LiteralObject`. This is the name that the object would be constructed with in an object constructor, such as `Text`,
 	/// `Number`, `Object`, etc.
-	type_name: Name,
+	pub type_name: Name,
 
 	/// The fields on this `LiteralObject`, as a map between field names and pointers to `LiteralObjects` as field values. This should be immutable
 	/// after the object's creation; The whole point of being a literal is that it's known entirely at compile-time and won't change.
-	fields: HashMap<Name, VirtualPointer>,
+	pub fields: HashMap<Name, VirtualPointer>,
 
 	/// The "internal" fields of this `LiteralObject`. These are special values that special types or objects need to store. These aren't accessible
 	/// from within Cabin. For example, the `Text` group stores a `String` internally here, representing it's actual string value; `Number` behaves
 	/// similarly.
-	internal_fields: HashMap<String, InternalFieldValue>,
+	pub internal_fields: HashMap<String, InternalFieldValue>,
 
-	object_type: ObjectType,
+	pub object_type: ObjectType,
 
-	scope_id: usize,
+	pub scope_id: usize,
 
 	pub name: Name,
 
@@ -65,9 +68,24 @@ pub struct LiteralObject {
 	pub address: Option<VirtualPointer>,
 
 	pub span: Span,
+	pub tags: TagList,
 }
 
 impl LiteralObject {
+	pub fn empty() -> Self {
+		Self {
+			type_name: "Object".into(),
+			fields: HashMap::new(),
+			internal_fields: HashMap::new(),
+			object_type: ObjectType::Normal,
+			scope_id: 0,
+			address: None,
+			span: Span::zero(),
+			name: "anonymous_object".into(),
+			tags: TagList::default(),
+		}
+	}
+
 	/// Attempts to convert an `ObjectConstructor` expression into a literal value. This is possible if and only if all
 	/// fields of the object constructor are themselves either literals or other `ObjectConstructors` that are capable of
 	/// being converted into a literal value.
@@ -116,6 +134,7 @@ impl LiteralObject {
 			name: object.name,
 			address: None,
 			span: object.span,
+			tags: object.tags,
 		})
 	}
 
@@ -235,6 +254,23 @@ impl Typed for LiteralObject {
 	}
 }
 
+impl CompileTime for LiteralObject {
+	type Output = LiteralObject;
+
+	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
+		let address = self.address;
+		let mut literal = match self.object_type {
+			ObjectType::Function => FunctionDeclaration::from_literal(&self)?.evaluate_at_compile_time(context)?.to_literal(),
+			ObjectType::Group => GroupDeclaration::from_literal(&self)?.evaluate_at_compile_time(context)?.to_literal(),
+			ObjectType::Either => Either::from_literal(&self)?.evaluate_at_compile_time(context)?.to_literal(),
+			ObjectType::OneOf => OneOf::from_literal(&self)?.evaluate_at_compile_time(context)?.to_literal(),
+			ObjectType::Normal => self,
+		};
+		literal.address = address;
+		Ok(literal)
+	}
+}
+
 pub trait LiteralConvertible: Sized {
 	/// Attempts to serialize `self` into a literal object.
 	///
@@ -265,7 +301,7 @@ pub trait LiteralConvertible: Sized {
 	/// The literal object that this was converted to, or an error if there was an error while attempting to convert this
 	/// to a literal object. This could be, for example, that a value that should be a literal isn't; Such as the case of a
 	/// user using an expression as a type when that expression can't be fully evaluated at compile-time.
-	fn to_literal(self, context: &mut Context) -> anyhow::Result<LiteralObject>;
+	fn to_literal(self) -> LiteralObject;
 
 	/// Attempts to deserialize a literal object into `Self`.
 	///
@@ -293,7 +329,7 @@ pub trait LiteralConvertible: Sized {
 	/// # Returns
 	///
 	/// The instance of `Self` that the literal object was
-	fn from_literal(literal: &LiteralObject, context: &Context) -> anyhow::Result<Self>;
+	fn from_literal(literal: &LiteralObject) -> anyhow::Result<Self>;
 }
 
 impl TranspileToC for LiteralObject {
@@ -325,7 +361,7 @@ impl TranspileToC for LiteralObject {
 
 				// Anything fields
 				if self.name != "Anything".into() {
-					let anything = GroupDeclaration::from_literal(context.scope_data.expect_global_variable("Anything").expect_literal(context)?, context)?;
+					let anything = GroupDeclaration::from_literal(&context.scope_data.expect_global_variable("Anything").clone().expect_literal(context)?.clone())?;
 					for field in &anything.fields {
 						builder += &format!("\n\t.{} = {},", field.name.to_c(context)?, field.value.as_ref().unwrap().to_c(context)?);
 					}

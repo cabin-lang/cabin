@@ -176,7 +176,7 @@ impl CompileTime for FieldAccess {
 		let left_evaluated = self.left.evaluate_at_compile_time(context)?;
 
 		// Resolvable at compile-time
-		if let Ok(pointer) = left_evaluated.try_as::<VirtualPointer>() {
+		if let Ok(pointer) = left_evaluated.try_as_literal_or_name(context).map(|value| value.address.unwrap()) {
 			let literal = pointer.virtual_deref(context);
 			Ok(match literal.object_type() {
 				// Object fields
@@ -188,9 +188,17 @@ impl CompileTime for FieldAccess {
 						)
 					})?;
 
-					if let Ok(Ok(mut function_declaration)) = field.try_as_literal(context).map(|field| FunctionDeclaration::from_literal(field, context)) {
-						function_declaration.this_object = Some(Box::new(left_evaluated));
-						Expression::Pointer(function_declaration.to_literal(context).unwrap().store_in_memory(context))
+					let pointer = field.try_as::<VirtualPointer>();
+					if let Ok(pointer) = pointer {
+						let literal = pointer.virtual_deref(context).clone();
+						if literal.object_type() == &ObjectType::Function {
+							let mut function_declaration = FunctionDeclaration::from_literal(&literal).unwrap();
+							function_declaration.this_object = Some(left_evaluated);
+							context.virtual_memory.replace(pointer.to_owned(), function_declaration.to_literal());
+							Expression::Pointer(pointer.to_owned())
+						} else {
+							field
+						}
 					} else {
 						field
 					}
@@ -198,22 +206,10 @@ impl CompileTime for FieldAccess {
 
 				// Either fields
 				ObjectType::Either => {
-					let field = literal.get_field("variants").unwrap();
-					let elements = field.expect_literal(context)?.expect_as::<Vec<Expression>>()?;
-					elements
+					let variants = literal.get_internal_field::<Vec<(Name, VirtualPointer)>>("variants").unwrap();
+					variants
 						.iter()
-						.map(|element| {
-							let variant_object = element.expect_literal(context)?;
-							let name = variant_object.get_field_literal("name", context).unwrap().expect_as::<String>()?;
-							Ok(if name == &self.right.unmangled_name() {
-								Some(variant_object.get_field("value").unwrap())
-							} else {
-								None
-							})
-						})
-						.collect::<anyhow::Result<Vec<_>>>()?
-						.into_iter()
-						.find_map(|element| element)
+						.find_map(|(name, value)| (name == &self.right).then_some(Expression::Pointer(value.to_owned())))
 						.ok_or_else(|| {
 							anyhow::anyhow!(
 								"Attempted to access a variant called \"{}\" on an either, but the either has no variant with that name.",
@@ -222,7 +218,7 @@ impl CompileTime for FieldAccess {
 						})?
 						.clone()
 				},
-				value => todo!("{value:?}"),
+				_value => todo!("{literal:?} {}", self.right.unmangled_name()),
 			})
 		}
 		// Not resolvable at compile-time - return the original expression
@@ -243,7 +239,7 @@ impl TranspileToC for FieldAccess {
 			format!(
 				"{}_{}",
 				self.left.to_c(context)?,
-				name.clone().evaluate_at_compile_time(context)?.try_as_literal(context)?.address.unwrap()
+				name.clone().evaluate_at_compile_time(context)?.try_as_literal_or_name(context)?.address.unwrap()
 			)
 		} else {
 			self.left.to_c(context)?
@@ -266,16 +262,16 @@ impl Parse for PrimaryExpression {
 				expression
 			},
 			TokenType::Number => Expression::ObjectConstructor(ObjectConstructor::from_number(tokens.pop(TokenType::Number).unwrap().value.parse().unwrap())),
-			TokenType::KeywordAction => Expression::FunctionDeclaration(FunctionDeclaration::parse(tokens, context)?),
+			TokenType::KeywordAction => Expression::Pointer(FunctionDeclaration::parse(tokens, context)?),
 			TokenType::LeftBrace => Expression::Block(Block::parse(tokens, context)?),
 			TokenType::Identifier => Expression::Name(Name::parse(tokens, context)?),
 			TokenType::KeywordNew => Expression::ObjectConstructor(ObjectConstructor::parse(tokens, context).map_err(mapped_err! {
 				while = "attempting to parse an object constructor",
 				context = context,
 			})?),
-			TokenType::KeywordGroup => GroupDeclaration::parse(tokens, context)?,
-			TokenType::KeywordOneOf => Expression::OneOf(OneOf::parse(tokens, context)?),
-			TokenType::KeywordEither => Expression::Either(Either::parse(tokens, context)?),
+			TokenType::KeywordGroup => Expression::Pointer(GroupDeclaration::parse(tokens, context)?),
+			TokenType::KeywordOneOf => Expression::Pointer(OneOf::parse(tokens, context)?),
+			TokenType::KeywordEither => Expression::Pointer(Either::parse(tokens, context)?),
 			TokenType::KeywordIf => Expression::If(IfExpression::parse(tokens, context)?),
 			TokenType::KeywordForEach => Expression::ForEachLoop(ForEachLoop::parse(tokens, context)?),
 			TokenType::LeftBracket => List::parse(tokens, context)?,

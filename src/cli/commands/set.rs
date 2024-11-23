@@ -50,7 +50,7 @@ impl CompilerOption {
 		Ok(match self.variant {
 			CompilerOptionType::Boolean => value.parse::<bool>()?.into(),
 			CompilerOptionType::String => {
-				if !self.choices.contains(&value) {
+				if !self.choices.is_empty() && !self.choices.contains(&value) {
 					anyhow::bail!(
 						"Invalid value passed to option \"{}\": \"{}\". Valid values for this option are {}.",
 						self.name.bold().yellow(),

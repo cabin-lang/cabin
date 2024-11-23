@@ -1,5 +1,5 @@
 use crate::{
-	api::context::Context,
+	api::{context::Context, traits::TryAs},
 	comptime::memory::VirtualPointer,
 	mapped_err,
 	parser::{
@@ -51,12 +51,12 @@ pub fn transpile(program: &Program, context: &mut Context) -> anyhow::Result<Str
 
 	// Transpile virtual memory
 	builder += &transpile_types(context).map_err(mapped_err! {
-		while = "transpiling the program's functions and groups to C",
+		while = "transpiling the program's groups to C",
 		context = context,
 	})?;
 
 	builder += &transpile_functions(context).map_err(mapped_err! {
-		while = "transpiling the program's functions and groups to C",
+		while = "transpiling the program's functions to C",
 		context = context,
 	})?;
 
@@ -85,14 +85,28 @@ pub fn transpile_program(program: &Program, context: &mut Context) -> anyhow::Re
 
 pub fn transpile_types(context: &mut Context) -> anyhow::Result<String> {
 	let mut builder = String::new();
+
 	for (address, value) in context.virtual_memory.entries() {
 		builder += &match value.type_name().unmangled_name().as_str() {
 			"Group" => {
-				let group = GroupDeclaration::from_literal(&value, context)?;
-				format!("struct {} {};\n\n", value.to_c_type(context)?, group.to_c(context)?,)
+				let group = GroupDeclaration::from_literal(&value).map_err(mapped_err! {
+					while = "deserializing a literal in memory to a group",
+					context = context,
+				})?;
+				format!(
+					"struct {} {};\n\n",
+					value.to_c_type(context).map_err(mapped_err! {
+						while = "transpiling the group into its type name",
+						context = context,
+					})?,
+					group.to_c(context).map_err(mapped_err! {
+						while = "transpiling a group declaration's value to C",
+						context = context,
+					})?,
+				)
 			},
 			"Either" => {
-				let either = Either::from_literal(&value, context)?;
+				let either = Either::from_literal(&value)?;
 				format!("enum {} {};\n\n", value.name.to_c(context)?, either.to_c(context)?,)
 			},
 			"Object" => {
@@ -100,18 +114,22 @@ pub fn transpile_types(context: &mut Context) -> anyhow::Result<String> {
 
 				// Anything fields
 				if value.name != "Anything".into() {
-					let anything = GroupDeclaration::from_literal(context.scope_data.expect_global_variable("Anything").expect_literal(context)?, context)?;
+					let anything = GroupDeclaration::from_literal(context.scope_data.expect_global_variable("Anything").clone().expect_literal(context)?)?;
 					for field in &anything.fields {
 						builder += &format!(
 							"\n\t{}* {};",
-							field
-								.value
-								.as_ref()
-								.unwrap_or(&Expression::Void(()))
-								.get_type(context)?
-								.virtual_deref(context)
-								.clone()
-								.to_c_type(context)?,
+							if let Some(field_type) = &field.field_type {
+								field_type.expect_as::<VirtualPointer>()?.virtual_deref(context).clone().to_c_type(context)?
+							} else {
+								field
+									.value
+									.as_ref()
+									.unwrap_or(&Expression::Void(()))
+									.get_type(context)?
+									.virtual_deref(context)
+									.clone()
+									.to_c_type(context)?
+							},
 							field.name.to_c(context)?
 						);
 					}
@@ -147,11 +165,14 @@ pub fn transpile_functions(context: &mut Context) -> anyhow::Result<String> {
 	for (address, value) in context.virtual_memory.entries() {
 		builder += &match value.type_name().unmangled_name().as_str() {
 			"Function" => {
-				let function = FunctionDeclaration::from_literal(&value, context).map_err(mapped_err! {
+				let function = FunctionDeclaration::from_literal(&value).map_err(mapped_err! {
 					while = "deserializing a function declaration literal into a function declaration",
 					context = context,
 				})?;
-				let value = function.to_c(context)?;
+				let value = function.to_c(context).map_err(mapped_err! {
+					while = "transpiling a function declaration expression to C",
+					context = context,
+				})?;
 				if value.is_empty() {
 					String::new()
 				} else {
@@ -167,6 +188,12 @@ pub fn transpile_functions(context: &mut Context) -> anyhow::Result<String> {
 pub fn transpile_main(context: &mut Context) -> anyhow::Result<String> {
 	let mut visited = Vec::new();
 	let mut builder = "int main(int argc, char** argv) {".to_owned();
+
+	// Anything
+	// let anything_pointer = context.scope_data.expect_global_variable("Anything").try_as::<VirtualPointer>()?.to_owned();
+	// let anything = anything_pointer.virtual_deref(context).clone();
+	// let mut current_tree = Vec::new();
+	// builder += &transpile_literal(context, &anything, anything_pointer, &mut visited, &mut current_tree)?;
 
 	// Virtual memory
 	for (address, value) in context.virtual_memory.entries() {
@@ -193,7 +220,7 @@ pub fn transpile_literal(
 	}
 
 	if value.type_name() == &"Function".into() {
-		let function = FunctionDeclaration::from_literal(value, context)?;
+		let function = FunctionDeclaration::from_literal(value)?;
 		if !function.compile_time_parameters.is_empty() {
 			return Ok(String::new());
 		}

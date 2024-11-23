@@ -11,6 +11,7 @@ use crate::{
 	},
 	comptime::memory::VirtualMemory,
 	lexer::Span,
+	mapped_err,
 	parser::expressions::{name::Name, Expression},
 };
 
@@ -71,8 +72,20 @@ impl Context {
 		self.side_effects_stack.last().cloned().unwrap_or(true)
 	}
 
-	pub fn nothing(&self) -> Expression {
-		self.scope_data.expect_global_variable("nothing").expect_clone_pointer(self)
+	pub fn nothing(&mut self) -> anyhow::Result<Expression> {
+		Ok(Expression::Pointer(
+			self.scope_data
+				.expect_global_variable("nothing")
+				.clone()
+				.try_as_literal_or_name(self)
+				.cloned()
+				.map_err(mapped_err! {
+					while = format!("interpreting the value of the global variable {} as a literal", "nothing".bold().yellow()),
+					context = self,
+				})?
+				.address
+				.unwrap(),
+		))
 	}
 
 	pub fn set_error_position(&self, position: &Span) {

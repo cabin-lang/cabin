@@ -11,16 +11,12 @@ use crate::{
 	parser::{
 		expressions::{
 			block::Block,
-			either::Either,
 			foreach::ForEachLoop,
 			function_call::FunctionCall,
-			function_declaration::FunctionDeclaration,
-			group::GroupDeclaration,
 			if_expression::IfExpression,
 			literal::LiteralObject,
 			name::Name,
 			object::ObjectConstructor,
-			oneof::OneOf,
 			operators::{BinaryExpression, FieldAccess},
 		},
 		statements::tag::TagList,
@@ -47,29 +43,14 @@ pub mod sugar;
 #[derive(Debug, Clone, try_as::macros::From, try_as::macros::TryInto, try_as::macros::TryAsRef)]
 pub enum Expression {
 	Block(Block),
-
-	/// This type of expression only exists reliably before compile-time evaluation; During compile-time evaluation all `eithers` will be converted
-	/// into objects and stored in virtual memory.
-	Either(Either),
 	FieldAccess(FieldAccess),
 	FunctionCall(FunctionCall),
-	Group(GroupDeclaration),
-
-	/// This type of expression only exists reliably before compile-time evaluation; During compile-time evaluation all function declarations will be converted
-	/// into objects and stored in virtual memory.
-	FunctionDeclaration(FunctionDeclaration),
 	If(IfExpression),
 	Name(Name),
 	ObjectConstructor(ObjectConstructor),
 	ForEachLoop(ForEachLoop),
-
-	/// This type of expression only exists reliably before compile-time evaluation; During compile-time evaluation all `oneofs` will be converted
-	/// into objects and stored in virtual memory.
-	OneOf(OneOf),
-
 	Pointer(VirtualPointer),
 	Run(RunExpression),
-
 	Void(()),
 }
 
@@ -89,12 +70,6 @@ impl CompileTime for Expression {
 			Self::Block(block) => block
 				.evaluate_at_compile_time(context)
 				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a block at compile-time".dimmed()))?,
-			Self::Either(either) => either
-				.evaluate_at_compile_time(context)
-				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating an either at compile-time".dimmed()))?,
-			Self::FunctionDeclaration(function_declaration) => function_declaration
-				.evaluate_at_compile_time(context)
-				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a function declaration at compile-time".dimmed()))?,
 			Self::FieldAccess(field_access) => field_access
 				.evaluate_at_compile_time(context)
 				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a field access at compile-time".dimmed()))?,
@@ -104,18 +79,14 @@ impl CompileTime for Expression {
 			Self::If(if_expression) => if_expression
 				.evaluate_at_compile_time(context)
 				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating an if expression at compile-time".dimmed()))?,
-			Self::Name(name) => name
-				.evaluate_at_compile_time(context)
-				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a name expression at compile-time".dimmed()))?,
-			Self::ObjectConstructor(object_constructor) => object_constructor
-				.evaluate_at_compile_time(context)
-				.map_err(mapped_err! { while = "evaluating an object constructor at compile-time", context = context, })?,
-			Self::Group(group) => group
-				.evaluate_at_compile_time(context)
-				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a group declaration at compile-time".dimmed()))?,
-			Self::OneOf(oneof) => oneof
-				.evaluate_at_compile_time(context)
-				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a one-of declaration at compile-time".dimmed()))?,
+			Self::Name(name) => name.clone().evaluate_at_compile_time(context).map_err(mapped_err! {
+				while = format!("evaluating the name \"{}\" at compile-time", name.unmangled_name().bold().cyan()),
+				context = context,
+			})?,
+			Self::ObjectConstructor(constructor) => constructor.evaluate_at_compile_time(context).map_err(mapped_err! {
+				while = "evaluating a object constructor expression at compile-time",
+				context = context,
+			})?,
 			Self::ForEachLoop(for_loop) => for_loop
 				.evaluate_at_compile_time(context)
 				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a for-each loop at compile-time".dimmed()))?,
@@ -124,25 +95,37 @@ impl CompileTime for Expression {
 					.evaluate_at_compile_time(context)
 					.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a for-each loop at compile-time".dimmed()))?,
 			),
-			Self::Void(_) | Self::Pointer(_) => self,
+			Self::Pointer(pointer) => Expression::Pointer(
+				pointer
+					.evaluate_at_compile_time(context)
+					.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a pointer compile-time".dimmed()))?,
+			),
+			Self::Void(_) => self,
 		})
 	}
 }
 
 impl Expression {
-	pub fn try_as_literal<'a>(&'a self, context: &'a Context) -> anyhow::Result<&'a LiteralObject> {
-		if let Self::Pointer(pointer) = self {
-			return Ok(pointer.virtual_deref(context));
-		}
-
-		bail_err! {
-			base = "A value that's not fully known at compile-time was used as a type",
-			context = context,
-		};
+	pub fn try_as_literal_or_name<'a>(&self, context: &'a mut Context) -> anyhow::Result<&'a LiteralObject> {
+		Ok(match self {
+			Self::Pointer(pointer) => pointer.virtual_deref(context),
+			Self::Name(name) => name
+				.clone()
+				.evaluate_at_compile_time(context)
+				.map_err(mapped_err! {
+					while = format!("evaluating the name \"{}\" at compile-time", name.unmangled_name().bold().cyan()),
+					context = context,
+				})?
+				.try_as_literal_or_name(context)?,
+			_ => bail_err! {
+				base = format!("A value that's not fully known at compile-time was used as a type; It can only be evaluated into a {} at compile-time.", self.kind_name().bold().yellow()),
+				context = context,
+			},
+		})
 	}
 
-	pub fn expect_literal<'a>(&'a self, context: &'a Context) -> anyhow::Result<&'a LiteralObject> {
-		self.try_as_literal(context)
+	pub fn expect_literal<'a>(&'a self, context: &'a mut Context) -> anyhow::Result<&'a LiteralObject> {
+		self.try_as_literal_or_name(context)
 	}
 
 	pub fn is_pointer(&self) -> bool {
@@ -161,14 +144,10 @@ impl Expression {
 	pub const fn kind_name(&self) -> &'static str {
 		match self {
 			Self::Block(_) => "block",
-			Self::Either(_) => "either",
 			Self::FieldAccess(_) => "field access",
 			Self::FunctionCall(_) => "function call",
-			Self::FunctionDeclaration(_) => "function declaration",
-			Self::Group(_) => "group declaration",
 			Self::Name(_) => "name",
 			Self::ObjectConstructor(_) => "object constructor",
-			Self::OneOf(_) => "one-of",
 			Self::Void(_) => "non-existent value",
 			Self::Pointer(_) => "pointer",
 			Self::If(_) => "if expression",
@@ -200,14 +179,13 @@ impl Expression {
 		}
 
 		bail_err! {
-			base = "A value that's not fully known at compile-time was used as a type.",
+			base = format!("A value that's not fully known at compile-time was used as a type; It can only be evaluated into a {}", self.kind_name().bold().yellow()),
 			context = context,
 		};
 	}
 
-	pub fn expect_clone_pointer(&self, context: &Context) -> Expression {
+	pub fn expect_clone_pointer(&self, context: &Context) -> anyhow::Result<Expression> {
 		self.try_clone_pointer(context)
-			.expect("Attempted to clone a pointer, but the expression to clone wasn't a pointer.")
 	}
 
 	pub fn is_true(&self, context: &Context) -> bool {
@@ -220,33 +198,20 @@ impl Expression {
 		literal_address == true_address
 	}
 
-	/// Returns a mutable reference to the tags on this expression value. If the type of this
-	/// expression doesn't support tags, `None` is returned.
-	///
-	/// For example, literal numbers can't have tags, whereas function declarations can.
-	///
-	/// This is used, for example in `Declaration::parse` to set the tags on a value after parsing
-	// them before the declaration name.
-	///
-	/// This function should only be called during parse-time.
-	///
-	/// # Returns
-	///
-	/// A mutable reference to the tags on this expression, or `None` if this expression doesn't
-	/// support tags.
-	pub fn tags_mut(&mut self) -> Option<&mut TagList> {
+	pub fn set_tags(&mut self, tags: TagList, context: &mut Context) {
 		match self {
-			Self::FunctionDeclaration(function) => Some(&mut function.tags),
-			_ => None,
-		}
+			Self::ObjectConstructor(constructor) => constructor.tags = tags,
+			Self::Pointer(pointer) => pointer.virtual_deref_mut(context).tags = tags,
+			_ => {},
+		};
 	}
 
 	/// This function should only be called during parse-time.
 	pub fn name_mut(&mut self) -> Option<&mut Name> {
 		match self {
-			Self::FunctionDeclaration(function) => Some(&mut function.name),
-			Self::Group(group) => Some(&mut group.name),
-			Self::Either(either) => Some(&mut either.name),
+			// Self::FunctionDeclaration(function) => Some(&mut function.name),
+			// Self::Group(group) => Some(&mut group.name),
+			// Self::Either(either) => Some(&mut either.name),
 			Self::ObjectConstructor(object) => Some(&mut object.name),
 			_ => None,
 		}
@@ -282,7 +247,6 @@ impl TranspileToC for Expression {
 			Self::ObjectConstructor(object_constructor) => object_constructor.to_c(context)?,
 			Self::Run(run_expression) => run_expression.to_c(context)?,
 			Self::Void(_) => "void".to_owned(),
-			Self::Either(_) | Self::FunctionDeclaration(_) | Self::Group(_) | Self::OneOf(_) => anyhow::bail!("Attempted to transpile a literal to C as an expression"),
 		})
 	}
 }
@@ -293,6 +257,11 @@ impl Typed for Expression {
 			Expression::Pointer(pointer) => pointer.virtual_deref(context).clone().get_type(context)?,
 			Expression::FunctionCall(function_call) => function_call.get_type(context)?,
 			Expression::Run(run_expression) => run_expression.get_type(context)?,
+			Expression::Void(()) => bail_err! {
+				base = "Attempted to get the type of a non-existent value",
+				while = "getting the type of a generic expression",
+				context = context,
+			},
 			value => {
 				dbg!(value);
 				todo!()
@@ -307,15 +276,11 @@ impl Spanned for Expression {
 			Expression::Name(name) => name.span(context),
 			Expression::Run(run_expression) => run_expression.span(context),
 			Expression::Block(block) => block.span(context),
-			Expression::Either(either) => either.span(context),
 			Expression::ObjectConstructor(object_constructor) => object_constructor.span(context),
 			Expression::Pointer(virtual_pointer) => virtual_pointer.span(context),
-			Expression::Group(group_declaration) => group_declaration.span(context),
-			Expression::FunctionDeclaration(function_declaration) => function_declaration.span(context),
 			Expression::FunctionCall(function_call) => function_call.span(context),
 			Expression::If(if_expression) => if_expression.span(context),
 			Expression::FieldAccess(field_access) => field_access.span(context),
-			Expression::OneOf(one_of) => one_of.span(context),
 			Expression::ForEachLoop(for_each_loop) => for_each_loop.span(context),
 			Expression::Void(_) => panic!(),
 		}

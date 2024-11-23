@@ -31,6 +31,7 @@ pub struct ObjectConstructor {
 	pub object_type: ObjectType,
 	pub name: Name,
 	pub span: Span,
+	pub tags: TagList,
 }
 
 #[derive(Debug, Clone)]
@@ -40,7 +41,7 @@ pub struct Field {
 	pub value: Option<Expression>,
 }
 
-trait Fields {
+pub trait Fields {
 	fn add_field(&mut self, field: Field);
 }
 
@@ -68,6 +69,7 @@ impl ObjectConstructor {
 				object_type: ObjectType::Normal,
 				name: Name::non_mangled("anonymous_string_literal"),
 				span: Span::zero(),
+				tags: TagList::default(),
 			},
 			context,
 		)
@@ -84,6 +86,7 @@ impl ObjectConstructor {
 			object_type: ObjectType::Normal,
 			name: "anonymous_number".into(),
 			span: Span::zero(),
+			tags: TagList::default(),
 		}
 	}
 
@@ -145,10 +148,8 @@ impl Parse for ObjectConstructor {
 			let mut value = Expression::parse(tokens, context)?;
 
 			// Set tags
-			if let Some(expression_tags) = value.tags_mut() {
-				if let Some(declaration_tags) = &tags {
-					*expression_tags = declaration_tags.clone();
-				}
+			if let Some(tags) = tags.clone() {
+				value.set_tags(tags, context);
 			}
 
 			// Add field
@@ -169,6 +170,7 @@ impl Parse for ObjectConstructor {
 			object_type: ObjectType::Normal,
 			name: Name::non_mangled("anonymous_object"),
 			span: start.to(&end),
+			tags: TagList::default(),
 		})
 	}
 }
@@ -194,34 +196,40 @@ impl CompileTime for ObjectConstructor {
 		let mut fields = Vec::new();
 
 		// Get object type
-		let object_type = GroupDeclaration::from_literal(
-			self.type_name
-				.clone()
-				.evaluate_at_compile_time(context)
+		let object_type = if self.type_name == "Group".into() {
+			None
+		} else {
+			Some(
+				GroupDeclaration::from_literal(
+					&self
+						.type_name
+						.clone()
+						.evaluate_at_compile_time(context)
+						.map_err(mapped_err! {
+							while = format!("evaluating the type of an object constructor at compile time"),
+							context = context,
+						})?
+						.try_as_literal_or_name(context)
+						.cloned()
+						.map_err(mapped_err! {
+							while = format!("interpreting an object constructor's type (\"{}\") as a literal", self.type_name.unmangled_name().bold().cyan()),
+							context = context,
+						})?,
+				)
 				.map_err(mapped_err! {
-					while = format!("evaluating the type of an object constructor at compile time"),
-					context = context,
-				})?
-				.try_as_literal(context)
-				.map_err(mapped_err! {
-					while = "interpreting an object constructor's type as a literal",
+					while = "converting an object constructor's type from a literal to a group declaration",
 					context = context,
 				})?,
-			context,
-		)
-		.map_err(mapped_err! {
-			while = "converting an object constructor's type from a literal to a group declaration",
-			context = context,
-		})?;
+			)
+		};
 
 		// Get `Anything`
-		let anything = GroupDeclaration::from_literal(
-			Name::from("Anything").evaluate_at_compile_time(context)?.expect_literal(context).map_err(mapped_err! {
+		let anything = GroupDeclaration::from_literal(&Name::from("Anything").evaluate_at_compile_time(context)?.try_as_literal_or_name(context).cloned().map_err(
+			mapped_err! {
 				while = format!("interpreting the value of \"{}\" as a literal", "Anything".bold().cyan()),
 				context = context,
-			})?,
-			context,
-		)
+			},
+		)?)
 		.unwrap();
 
 		// Anything fields
@@ -236,13 +244,15 @@ impl CompileTime for ObjectConstructor {
 		}
 
 		// Default fields
-		for field in object_type.fields {
-			if let Some(value) = field.value {
-				fields.add_field(Field {
-					name: field.name,
-					value: Some(value),
-					field_type: None,
-				});
+		if let Some(object_type) = object_type {
+			for field in object_type.fields {
+				if let Some(value) = field.value {
+					fields.add_field(Field {
+						name: field.name,
+						value: Some(value),
+						field_type: None,
+					});
+				}
 			}
 		}
 
@@ -272,6 +282,7 @@ impl CompileTime for ObjectConstructor {
 			object_type: self.object_type,
 			name: self.name,
 			span: self.span,
+			tags: TagList::default(),
 		};
 
 		if constructor.is_literal() {
@@ -298,9 +309,13 @@ pub enum InternalFieldValue {
 	Number(f64),
 	String(String),
 	Boolean(bool),
-	List(Vec<Expression>),
+	ExpressionList(Vec<Expression>),
 	Expression(Expression),
 	OptionalExpression(Option<Expression>),
+	FieldList(Vec<Field>),
+	NameList(Vec<Name>),
+	LiteralMap(Vec<(Name, VirtualPointer)>),
+	ParameterList(Vec<(Name, Expression)>),
 }
 
 impl TranspileToC for ObjectConstructor {

@@ -27,6 +27,21 @@ pub enum ScopeType {
 	Block,
 }
 
+#[derive(Debug, Clone)]
+pub struct VariableValue {
+	pub value: Expression,
+	pub has_been_compile_time_evaluated: bool,
+}
+
+impl VariableValue {
+	fn new(value: Expression) -> VariableValue {
+		VariableValue {
+			value,
+			has_been_compile_time_evaluated: false,
+		}
+	}
+}
+
 /// A scope in the language. This is a node in the overall scope tree that's stored in `ScopeData`. Scopes represent a section of code in curly braces
 /// that has variables declared in it which are not accessible outside of it. They are, however, accessible to any child scopes declared within it,
 /// meaning that this scope also inherits variables from its parent. One important thing to note is that Cabin doesn't support any kind of shadowing -
@@ -53,7 +68,7 @@ pub struct Scope {
 	/// The variables declared in this scope. Note that this only holds the variables declared in this exact specific scope, and does not count the
 	/// variables declared in any parent scope, even though those are accessible in the language from this one. To get a variable from anywhere up
 	/// the parent tree, use `scope.get_variable`, which will traverse up the scope tree and check all parents.
-	variables: HashMap<Name, Expression>,
+	variables: HashMap<Name, VariableValue>,
 
 	/// The index of this scope. This is represented as an index into a `ScopeData`'s `scopes` vector, because trying to create a tree data structure
 	/// in Rust with regular semantics can get *really* tricky - You need to either resort to lots of unsafe code with raw pointers (and probably pinning),
@@ -81,6 +96,11 @@ impl Scope {
 	/// and `Some` is returned, the returned reference will have the same lifetime as this `Scope` object.
 	#[must_use]
 	pub fn get_variable_direct(&self, name: &Name) -> Option<&Expression> {
+		self.variables.get(name).map(|value| &value.value)
+	}
+
+	#[must_use]
+	pub fn get_variable_info_direct(&self, name: &Name) -> Option<&VariableValue> {
 		self.variables.get(name)
 	}
 
@@ -101,7 +121,15 @@ impl Scope {
 	pub fn get_variable<'scopes>(&'scopes self, name: impl Into<Name> + Clone, scopes: &'scopes [Self]) -> Option<&Expression> {
 		self.variables
 			.get(&name.clone().into())
+			.map(|value| &value.value)
 			.or_else(|| self.parent.and_then(|parent| scopes.get(parent).unwrap().get_variable(name, scopes)))
+	}
+
+	#[must_use]
+	pub fn get_variable_info<'scopes>(&'scopes self, name: impl Into<Name> + Clone, scopes: &'scopes [Self]) -> Option<&VariableValue> {
+		self.variables
+			.get(&name.clone().into())
+			.or_else(|| self.parent.and_then(|parent| scopes.get(parent).unwrap().get_variable_info(name, scopes)))
 	}
 
 	/// Returns all variables that are available in this scope, including variables declared in ancestor scopes.
@@ -117,7 +145,7 @@ impl Scope {
 	/// All variables that exist in this scope, including those declared in ancestor scopes.
 	#[must_use]
 	pub fn get_variables<'scopes>(&'scopes self, scopes: &'scopes [Self]) -> Vec<(&'scopes Name, &'scopes Expression)> {
-		let mut variables = self.variables.iter().collect::<Vec<_>>();
+		let mut variables = self.variables.iter().map(|(name, value)| (name, &value.value)).collect::<Vec<_>>();
 		if let Some(parent) = self.parent {
 			for variable in scopes.get(parent).unwrap().get_variables(scopes) {
 				variables.push(variable);
@@ -128,7 +156,7 @@ impl Scope {
 	}
 
 	/// Reassigns a variable in this scope. This will NOT traverse up the scope tree through the current scope's parents to find the declaration for the given
-	/// variable name; it will only reassign a variable declared in this scope. This is only to be used to reassign an existing variable. To add a new variable, l
+	/// variable name; it will only reassign a variable declared in this scope. This is only to be used to reassign an existing variable. To add a new variable,
 	/// use `declare_new_variable_direct()`. If no variable with the given name is found, an error is returned.
 	///
 	/// # Parameters
@@ -139,19 +167,20 @@ impl Scope {
 	/// An `Err` if no variable with the given name exists in the current scope.
 	fn reassign_variable_direct(&mut self, name: &Name, value: Expression) -> Result<(), Expression> {
 		if let Some(variable) = self.variables.get_mut(name) {
-			*variable = value;
+			*variable = VariableValue::new(value);
 			Ok(())
 		} else {
 			Err(value)
 		}
 	}
 
-	fn pop_variable_direct(&mut self, name: &Name) -> anyhow::Result<Expression> {
-		if let Some(variable) = self.variables.remove(name) {
-			return Ok(variable);
+	fn set_evaluated_direct(&mut self, name: &Name) -> anyhow::Result<()> {
+		if let Some(variable) = self.variables.get_mut(name) {
+			variable.has_been_compile_time_evaluated = true;
+			Ok(())
+		} else {
+			anyhow::bail!("Variable not found");
 		}
-
-		anyhow::bail!("Cannot find variable to pop");
 	}
 
 	/// Converts this scope to a debug string representation. This requires the `Scope` slice because it needs to print information about it's children,
@@ -276,8 +305,9 @@ impl ScopeData {
 		self.current().get_variable(name, &self.scopes)
 	}
 
-	pub fn pop_variable(&mut self, name: &Name) -> anyhow::Result<(Expression, usize)> {
-		self.pop_variable_from_id(name, self.current_scope)
+	#[must_use]
+	pub fn get_variable_info(&self, name: impl Into<Name> + Clone) -> Option<&VariableValue> {
+		self.current().get_variable_info(name, &self.scopes)
 	}
 
 	/// Returns the declaration information about a variable that exists in the scope with the given id. The variable may be declared in this scope, or any one
@@ -394,7 +424,7 @@ impl ScopeData {
 			current = self.scopes.get(current_index).unwrap().parent;
 		}
 
-		self.scopes.get_mut(id).unwrap().variables.insert(name.clone(), value);
+		self.scopes.get_mut(id).unwrap().variables.insert(name.clone(), VariableValue::new(value));
 		Ok(())
 	}
 
@@ -457,23 +487,20 @@ impl ScopeData {
 		);
 	}
 
-	pub fn pop_variable_from_id(&mut self, name: &Name, id: usize) -> anyhow::Result<(Expression, usize)> {
+	pub fn set_evaluated_from_id(&mut self, name: &Name, id: usize) -> anyhow::Result<()> {
 		// Traverse up the parent tree looking for the declaration and reassign it
 		let mut current = Some(id);
-
 		while let Some(current_index) = current {
-			// If we find it, we're done (return Ok), if not, we continue
-			if let Ok(value) = self.scopes.get_mut(current_index).unwrap().pop_variable_direct(name) {
-				return Ok((value, current_index));
+			if let Ok(()) = self.scopes.get_mut(current_index).unwrap().set_evaluated_direct(name) {
+				return Ok(());
 			}
-
 			current = self.scopes.get(current_index).unwrap().parent;
 		}
 
 		// No variable found
 		anyhow::bail!(
-			"You refer to a variable called \"{name}\", but no variable with the name \"{name}\" exists where you reference it",
-			name = name.unmangled_name().bold().cyan()
+			"Attempted to reassign the variable \"{name}\", but no variable with the name \"{name}\" exists in this scope",
+			name = name.unmangled_name()
 		);
 	}
 
@@ -530,6 +557,10 @@ impl ScopeData {
 		} else {
 			all_variables.get(0..max).unwrap().to_vec()
 		}
+	}
+
+	pub fn set_evaluated(&mut self, name: &Name) -> anyhow::Result<()> {
+		self.set_evaluated_from_id(name, self.current_scope)
 	}
 
 	/// Returns the declaration information of a global variable. This is exactly equivalent to `get_variable_from_id(name, 0)`, because

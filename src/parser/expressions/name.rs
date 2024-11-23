@@ -1,5 +1,7 @@
 use std::hash::Hash;
 
+use colored::Colorize;
+
 use crate::{
 	api::context::Context,
 	comptime::CompileTime,
@@ -76,38 +78,36 @@ impl CompileTime for Name {
 	type Output = Expression;
 
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
-		let (value, scope_id) = context.scope_data.pop_variable(&self).map_err(mapped_err! {
-			while = format!("attempting to get the original value of the name \"{}\" to evaluate it at compile-time", self.unmangled_name().bold().cyan()),
-			context = context,
-			position = self.span(context),
-			details = unindent::unindent(&format!(
-				"
-				Here you reference a variable called \"{name}\", but no variable called \"{name}\" exists at this
-				part of the program. If this is a typo and you don't expect a variable with this name to exist, you
-				may be trying to refer to one of these variables, which are the ones with the closest names that are
-				present here:
+		let value = context
+			.scope_data
+			.get_variable(self.clone())
+			.ok_or_else(|| anyhow::anyhow!("No variable found with the name {}", self.unmangled_name().bold().cyan()))
+			.map_err(mapped_err! {
+				while = format!("attempting to get the original value of the name \"{}\" to evaluate it at compile-time", self.unmangled_name().bold().cyan()),
+				context = context,
+				position = self.span(context),
+				details = unindent::unindent(&format!(
+					"
+					Here you reference a variable called \"{name}\", but no variable called \"{name}\" exists at this
+					part of the program. If this is a typo and you don't expect a variable with this name to exist, you
+					may be trying to refer to one of these variables, which are the ones with the closest names that are
+					present here:
 
-				{closest}
-				", 
-				name = self.unmangled_name().bold().red(),
-				closest = context
-					.scope_data
-					.get_closest_variables(&self, 3)
-					.iter()
-					.map(|(name, _)| format!("    - {}", name.unmangled_name().bold().green()))
-					.collect::<Vec<_>>()
-					.join("\n")
-					.trim_start()
-			))
-		})?;
+					{closest}
+					", 
+					name = self.unmangled_name().bold().red(),
+					closest = context
+						.scope_data
+						.get_closest_variables(&self, 3)
+						.iter()
+						.map(|(name, _)| format!("    - {}", name.unmangled_name().bold().green()))
+						.collect::<Vec<_>>()
+						.join("\n")
+						.trim_start()
+				))
+			})?;
 
-		let evaluated = value.evaluate_at_compile_time(context).map_err(mapped_err! {
-			while = format!("evaluating the value of the name \"{}\" at compile-time", self.unmangled_name().bold().cyan()),
-			context = context,
-		})?;
-		let result = evaluated.try_clone_pointer(context).unwrap_or(Expression::Name(self.clone()));
-		context.scope_data.declare_new_variable_from_id(self.clone(), evaluated, scope_id)?;
-		Ok(result)
+		Ok(value.try_clone_pointer(context).unwrap_or(Expression::Name(self.clone())))
 	}
 }
 

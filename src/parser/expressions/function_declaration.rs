@@ -1,18 +1,17 @@
 use std::collections::HashMap;
 
-use colored::Colorize as _;
-
 use crate::{
-	api::{builtin::transpile_builtin_to_c, context::Context, macros::string, scope::ScopeType, traits::TryAs as _},
-	comptime::CompileTime,
+	api::{builtin::transpile_builtin_to_c, context::Context, scope::ScopeType, traits::TryAs as _},
+	bail_err,
+	comptime::{memory::VirtualPointer, CompileTime},
 	lexer::{Span, TokenType},
-	literal, literal_list, mapped_err, parse_list,
+	mapped_err, parse_list,
 	parser::{
 		expressions::{
 			block::Block,
 			literal::{LiteralConvertible, LiteralObject},
 			name::Name,
-			object::{Field, InternalFieldValue, ObjectConstructor, ObjectType},
+			object::ObjectType,
 			Expression, Parse,
 		},
 		statements::tag::TagList,
@@ -21,23 +20,23 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
-use super::Spanned;
+use super::{object::InternalFieldValue, Spanned};
 
 #[derive(Debug, Clone)]
 pub struct FunctionDeclaration {
-	pub return_type: Option<Box<Expression>>,
+	pub return_type: Option<Expression>,
 	pub compile_time_parameters: Vec<(Name, Expression)>,
 	pub parameters: Vec<(Name, Expression)>,
-	pub body: Option<Box<Expression>>,
+	pub body: Option<Expression>,
 	pub scope_id: usize,
 	pub tags: TagList,
-	pub this_object: Option<Box<Expression>>,
+	pub this_object: Option<Expression>,
 	pub name: Name,
 	pub span: Span,
 }
 
 impl Parse for FunctionDeclaration {
-	type Output = FunctionDeclaration;
+	type Output = VirtualPointer;
 
 	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
 		// "function" keyword
@@ -79,7 +78,7 @@ impl Parse for FunctionDeclaration {
 			tokens.pop(TokenType::Colon)?;
 			let expression = Expression::parse(tokens, context)?;
 			end = expression.span(context);
-			Some(Box::new(expression))
+			Some(expression)
 		} else {
 			None
 		};
@@ -93,7 +92,7 @@ impl Parse for FunctionDeclaration {
 					.declare_new_variable_from_id(parameter_name.clone(), Expression::Void(()), block.inner_scope_id)?;
 			}
 			end = block.span(context);
-			Some(Box::new(Expression::Block(block)))
+			Some(Expression::Block(block))
 		} else {
 			None
 		};
@@ -109,12 +108,14 @@ impl Parse for FunctionDeclaration {
 			this_object: None,
 			name: Name::non_mangled("anonymous_function"),
 			span: start.to(&end),
-		})
+		}
+		.to_literal()
+		.store_in_memory(context))
 	}
 }
 
 impl CompileTime for FunctionDeclaration {
-	type Output = Expression;
+	type Output = FunctionDeclaration;
 
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
 		// Compile-time parameters
@@ -139,9 +140,10 @@ impl CompileTime for FunctionDeclaration {
 					context = context,
 				})?;
 				if !parameter_type.is_pointer() {
-					anyhow::bail!(
-						"A value that's not fully known at compile-time was used as a function parameter type\n\t{}",
-						format!("while checking the type of the parameter \"{}\"", parameter_name.unmangled_name().bold().cyan()).dimmed()
+					bail_err!(
+						base = "A value that's not fully known at compile-time was used as a function parameter type",
+						while = format!("checking the type of the parameter \"{}\"", parameter_name.unmangled_name().bold().cyan()),
+						context = context,
 					);
 				}
 				compile_time_parameters.push((parameter_name, parameter_type));
@@ -150,22 +152,15 @@ impl CompileTime for FunctionDeclaration {
 		};
 
 		// Return type
-		let return_type = self
-			.return_type
-			.map(|return_type| anyhow::Ok(Box::new(return_type.evaluate_at_compile_time(context)?)))
-			.transpose()?;
+		let return_type = self.return_type.map(|return_type| anyhow::Ok(return_type.evaluate_at_compile_time(context)?)).transpose()?;
 
 		// Body
-		let body = self
-			.body
-			.map(|body| anyhow::Ok(Box::new(body.evaluate_at_compile_time(context)?)))
-			.transpose()
-			.map_err(mapped_err! {
-				while = "evaluating the body of a function declaration at compile-time",
-				context = context,
-			})?;
+		let body = self.body.map(|body| anyhow::Ok(body.evaluate_at_compile_time(context)?)).transpose().map_err(mapped_err! {
+			while = "evaluating the body of a function declaration at compile-time",
+			context = context,
+		})?;
 
-		let this_object = self.this_object.map(|this| anyhow::Ok(Box::new(this.evaluate_at_compile_time(context)?))).transpose()?;
+		let this_object = self.this_object.map(|this| anyhow::Ok(this.evaluate_at_compile_time(context)?)).transpose()?;
 
 		// Return
 		let function = FunctionDeclaration {
@@ -181,15 +176,7 @@ impl CompileTime for FunctionDeclaration {
 		};
 
 		// Return as a pointer
-		Ok(Expression::Pointer(
-			function
-				.to_literal(context)
-				.map_err(mapped_err! {
-					while = "converting a function declaration into an object at compile-time",
-					context = context,
-				})?
-				.store_in_memory(context),
-		))
+		Ok(function)
 	}
 }
 
@@ -199,16 +186,19 @@ impl TranspileToC for FunctionDeclaration {
 			return Ok(String::new());
 		}
 
-		let mut body = None;
+		let mut builtin_body = None;
 
 		// Get builtin and side effect tags
 		for tag in &self.tags.values {
-			if let Ok(object) = tag.try_as_literal(context) {
+			if let Ok(object) = tag.try_as_literal_or_name(context).cloned() {
 				if object.type_name() == &Name::from("BuiltinTag") {
 					let builtin_name = object.get_field_literal("internal_name", context).unwrap().expect_as::<String>()?.to_owned();
 					let mut parameters = self.parameters.iter().map(|(parameter_name, _)| parameter_name.to_c(context).unwrap()).collect::<Vec<_>>();
 					parameters.push("return_address".to_string());
-					body = Some(transpile_builtin_to_c(&builtin_name, context, &parameters)?);
+					builtin_body = Some(transpile_builtin_to_c(&builtin_name, context, &parameters).map_err(mapped_err! {
+						while = format!("transpiling the body of the built-in function {}()", builtin_name.bold().blue()),
+						context = context,
+					})?);
 				}
 			}
 		}
@@ -217,7 +207,7 @@ impl TranspileToC for FunctionDeclaration {
 			format!(
 				"{}{}* return_address",
 				if self.parameters.is_empty() { "" } else { ", " },
-				return_type.try_as_literal(context)?.clone().to_c_type(context)?
+				return_type.try_as_literal_or_name(context)?.clone().to_c_type(context)?
 			)
 		} else {
 			String::new()
@@ -227,12 +217,16 @@ impl TranspileToC for FunctionDeclaration {
 			"({}{}) {{\n{}\n}}",
 			self.parameters
 				.iter()
-				.map(|(name, parameter_type)| Ok(format!("{}* {}", parameter_type.try_as_literal(context)?.clone().to_c_type(context)?, name.to_c(context)?)))
+				.map(|(name, parameter_type)| Ok(format!(
+					"{}* {}",
+					parameter_type.try_as_literal_or_name(context)?.clone().to_c_type(context)?,
+					name.to_c(context)?
+				)))
 				.collect::<anyhow::Result<Vec<_>>>()?
 				.join(", "),
 			return_type_c,
-			if let Some(body) = body {
-				body
+			if let Some(builtin_body) = builtin_body {
+				builtin_body
 			} else {
 				let body = self.body.as_ref().unwrap().to_c(context)?;
 				let body = body.strip_prefix("({").unwrap().strip_suffix("})").unwrap().to_owned();
@@ -247,164 +241,37 @@ impl TranspileToC for FunctionDeclaration {
 }
 
 impl LiteralConvertible for FunctionDeclaration {
-	fn to_literal(self, context: &mut Context) -> anyhow::Result<LiteralObject> {
-		// Compile-time parameters
-		let compile_time_parameters = self
-			.compile_time_parameters
-			.into_iter()
-			.map(|(parameter_name, parameter_type)| {
-				literal! {
-					name = format!("{}_{}", self.name.unmangled_name(), parameter_name.unmangled_name()).into(),
-					context = context,
-					Parameter {
-						name = string(&parameter_name.unmangled_name(), context),
-						type = parameter_type
-					},
-					self.scope_id
-				}
-			})
-			.collect();
-
-		// Parameters
-		let parameters = self
-			.parameters
-			.into_iter()
-			.map(|(parameter_name, parameter_type)| {
-				literal! {
-					name = format!("{}_{}", self.name.unmangled_name(), parameter_name.unmangled_name()).into(),
-					context = context,
-					Parameter {
-						name = string(&parameter_name.unmangled_name(), context),
-						type = parameter_type
-					},
-					self.scope_id
-				}
-			})
-			.collect();
-
-		// Create the object
-		let constructor = ObjectConstructor {
+	fn to_literal(self) -> LiteralObject {
+		LiteralObject {
+			address: None,
+			fields: HashMap::from([]),
+			internal_fields: HashMap::from([
+				("compile_time_parameters".to_owned(), InternalFieldValue::ParameterList(self.compile_time_parameters)),
+				("parameters".to_owned(), InternalFieldValue::ParameterList(self.parameters)),
+				("body".to_owned(), InternalFieldValue::OptionalExpression(self.body)),
+				("return_type".to_owned(), InternalFieldValue::OptionalExpression(self.return_type)),
+				("this_object".to_owned(), InternalFieldValue::OptionalExpression(self.this_object)),
+			]),
 			name: self.name,
-			fields: vec![
-				Field {
-					name: "return_type".into(),
-					value: Some(match self.return_type {
-						Some(return_type) => *return_type,
-						None => context.nothing(),
-					}),
-					field_type: None,
-				},
-				Field {
-					name: "compile_time_parameters".into(),
-					value: Some(literal_list!(context, self.scope_id, compile_time_parameters)),
-					field_type: None,
-				},
-				Field {
-					name: "parameters".into(),
-					value: Some(literal_list!(context, self.scope_id, parameters)),
-					field_type: None,
-				},
-				Field {
-					name: "tags".into(),
-					value: Some(literal_list!(context, self.scope_id, self.tags.values)),
-					field_type: None,
-				},
-				Field {
-					name: "this_object".into(),
-					value: Some(match self.this_object {
-						Some(this_object) => *this_object,
-						None => context.nothing(),
-					}),
-					field_type: None,
-				},
-			],
-			scope_id: self.scope_id,
-			internal_fields: HashMap::from([("body".to_owned(), InternalFieldValue::OptionalExpression(self.body.map(|body| *body)))]),
-			type_name: "Function".into(),
 			object_type: ObjectType::Function,
+			scope_id: self.scope_id,
 			span: self.span,
-		};
-
-		// Convert to literal
-		LiteralObject::try_from_object_constructor(constructor, context)
+			type_name: "Function".into(),
+			tags: self.tags,
+		}
 	}
 
-	fn from_literal(literal: &LiteralObject, context: &Context) -> anyhow::Result<Self> {
-		// Check if it's a function
-		if literal.object_type() != &ObjectType::Function {
-			anyhow::bail!("Attempted to convert a non-function literal into a function");
-		}
-
-		// Tags
-		let tags_field = literal.get_field("tags").unwrap();
-		let tag_refs = tags_field.expect_literal(context)?.expect_as::<Vec<Expression>>()?;
-		let tags = tag_refs
-			.iter()
-			.map(|element| {
-				element.try_clone_pointer(context).map_err(mapped_err! {
-					while = format!("attempting to interpret a {} tag expression as a literal", element.kind_name().bold().cyan()),
-					context = context,
-				})
-			})
-			.collect::<anyhow::Result<Vec<_>>>()
-			.map_err(mapped_err! {
-				while = "interpreting the function declaration's tags as literals",
-				context = context,
-			})?;
-
-		// Compile-time parameters
-		let compile_time_parameters = literal.get_field_literal("compile_time_parameters", context).unwrap().try_as::<Vec<Expression>>()?;
-		let compile_time_parameters = compile_time_parameters
-			.iter()
-			.map(|element| {
-				let parameter_object = element.expect_literal(context)?;
-				let name = parameter_object.get_field_literal("name", context).unwrap().expect_as::<String>()?;
-				anyhow::Ok((Name::from(name), parameter_object.get_field("type").unwrap()))
-			})
-			.collect::<anyhow::Result<Vec<_>>>()?;
-
-		// Parameters
-		let parameters = literal.get_field_literal("parameters", context).unwrap().try_as::<Vec<Expression>>()?;
-		let parameters = parameters
-			.iter()
-			.map(|element| {
-				let parameter_object = element.try_as_literal(context).unwrap();
-				let name = parameter_object.get_field_literal("name", context).unwrap().expect_as::<String>()?;
-				Ok((Name::from(name), parameter_object.get_field("type").unwrap()))
-			})
-			.collect::<anyhow::Result<Vec<_>>>()?;
-
-		// Return type
-		let return_type_optional = literal.get_field("return_type").unwrap().try_into().unwrap();
-		let nothing = context.nothing().try_into().unwrap();
-		let return_type = if return_type_optional == nothing {
-			None
-		} else {
-			Some(Box::new(Expression::Pointer(return_type_optional)))
-		};
-
-		// Body
-		let body = literal.get_internal_field::<Option<Expression>>("body").cloned().unwrap().map(Box::new);
-
-		// This object
-		let this_object_optional = literal.get_field("this_object").unwrap().try_into().unwrap();
-		let this_object = if this_object_optional == nothing {
-			None
-		} else {
-			Some(Box::new(Expression::Pointer(this_object_optional)))
-		};
-
-		// Return the value
+	fn from_literal(literal: &LiteralObject) -> anyhow::Result<Self> {
 		Ok(FunctionDeclaration {
-			compile_time_parameters,
-			parameters,
-			body,
-			return_type,
+			compile_time_parameters: literal.get_internal_field::<Vec<(Name, Expression)>>("compile_time_parameters")?.to_owned(),
+			parameters: literal.get_internal_field::<Vec<(Name, Expression)>>("parameters")?.to_owned(),
+			body: literal.get_internal_field::<Option<Expression>>("body")?.to_owned(),
+			return_type: literal.get_internal_field::<Option<Expression>>("return_type")?.to_owned(),
+			this_object: literal.get_internal_field::<Option<Expression>>("this_object")?.to_owned(),
+			tags: literal.tags.clone(),
 			scope_id: literal.declared_scope_id(),
-			tags: tags.into(),
-			this_object,
 			name: literal.name.clone(),
-			span: literal.span(context),
+			span: literal.span.to_owned(),
 		})
 	}
 }

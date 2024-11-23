@@ -88,7 +88,10 @@ impl CompileTime for FunctionCall {
 		let compile_time_arguments = if let Some(original_compile_time_arguments) = self.compile_time_arguments {
 			let mut compile_time_arguments = Vec::new();
 			for argument in original_compile_time_arguments {
-				let evaluated = argument.evaluate_at_compile_time(context)?;
+				let evaluated = argument.evaluate_at_compile_time(context).map_err(mapped_err! {
+					while = "evaluating a function call's compile-time argument at compile-time",
+					context = context,
+				})?;
 				compile_time_arguments.push(evaluated);
 			}
 			Some(compile_time_arguments)
@@ -100,7 +103,10 @@ impl CompileTime for FunctionCall {
 		let mut arguments = if let Some(original_arguments) = self.arguments {
 			let mut arguments = Vec::new();
 			for argument in original_arguments {
-				let evaluated = argument.evaluate_at_compile_time(context)?;
+				let evaluated = argument.evaluate_at_compile_time(context).map_err(mapped_err! {
+					while = "evaluating a function call's argument at compile-time",
+					context = context,
+				})?;
 				arguments.push(evaluated);
 			}
 			Some(arguments)
@@ -123,9 +129,9 @@ impl CompileTime for FunctionCall {
 		}
 
 		// Evaluate function
-		let literal = function.try_as_literal(context);
+		let literal = function.try_as_literal_or_name(context);
 		if let Ok(function_declaration) = literal {
-			let function_declaration = match FunctionDeclaration::from_literal(function_declaration, context) {
+			let function_declaration = match FunctionDeclaration::from_literal(function_declaration) {
 				Ok(function_declaration) => function_declaration,
 				Err(error) => {
 					bail_err! {
@@ -141,18 +147,18 @@ impl CompileTime for FunctionCall {
 				arguments = Some(arguments.unwrap_or(Vec::new()));
 				if let Some((parameter_name, _)) = function_declaration.parameters.first() {
 					if parameter_name.unmangled_name() == "this" {
-						arguments.as_mut().unwrap().insert(0, *this_object);
+						arguments.as_mut().unwrap().insert(0, this_object);
 					}
 				}
 			}
 
 			// Non-builtin
 			if let Some(body) = &function_declaration.body {
-				if let Expression::Block(block) = body.as_ref() {
+				if let Expression::Block(block) = body {
 					// Validate and add compile-time arguments
 					if let Some(compile_time_arguments) = &compile_time_arguments {
 						for (argument, (parameter_name, parameter_type)) in compile_time_arguments.iter().zip(function_declaration.compile_time_parameters.iter()) {
-							let parameter_type_pointer = parameter_type.expect_as::<VirtualPointer>()?.to_owned();
+							let parameter_type_pointer = parameter_type.try_as_literal_or_name(context)?.address.as_ref().unwrap().to_owned();
 							if !argument.is_assignable_to_type(parameter_type_pointer, context)? {
 								bail_err! {
 									base = format!(
@@ -174,7 +180,7 @@ impl CompileTime for FunctionCall {
 					// Validate and add arguments
 					if let Some(arguments) = &arguments {
 						for (argument, (parameter_name, parameter_type)) in arguments.iter().zip(function_declaration.parameters.iter()) {
-							let parameter_type_pointer = parameter_type.expect_as::<VirtualPointer>()?.to_owned();
+							let parameter_type_pointer = parameter_type.try_as_literal_or_name(context)?.address.as_ref().unwrap().to_owned();
 							if !argument.is_assignable_to_type(parameter_type_pointer, context)? {
 								bail_err! {
 									base = format!(
@@ -198,7 +204,7 @@ impl CompileTime for FunctionCall {
 					context = context,
 				})?;
 
-				if return_value.try_as_literal(context).is_ok() {
+				if return_value.try_as_literal_or_name(context).is_ok() {
 					return Ok(return_value);
 				}
 			}
@@ -208,7 +214,7 @@ impl CompileTime for FunctionCall {
 				let mut system_side_effects = false;
 
 				// Get the address of system_side_effects
-				let system_side_effects_address = context
+				let system_side_effects_address = *context
 					.scope_data
 					.expect_global_variable("system_side_effects")
 					.expect_as::<VirtualPointer>()
@@ -219,7 +225,7 @@ impl CompileTime for FunctionCall {
 
 				// Get builtin and side effect tags
 				for tag in &function_declaration.tags.values {
-					if let Ok(object) = tag.try_as_literal(context) {
+					if let Ok(object) = tag.try_as_literal_or_name(context).cloned() {
 						if object.type_name() == &Name::from("BuiltinTag") {
 							builtin_name = Some(
 								object
@@ -235,7 +241,7 @@ impl CompileTime for FunctionCall {
 							continue;
 						}
 
-						if tag.expect_as::<VirtualPointer>()? == system_side_effects_address {
+						if tag.expect_as::<VirtualPointer>().unwrap() == &system_side_effects_address {
 							system_side_effects = true;
 						}
 					}
@@ -244,7 +250,10 @@ impl CompileTime for FunctionCall {
 				// Call builtin function
 				if let Some(internal_name) = builtin_name {
 					if !system_side_effects || context.has_side_effects() {
-						return call_builtin_at_compile_time(&internal_name, context, self.scope_id, arguments.unwrap_or(Vec::new()));
+						return call_builtin_at_compile_time(&internal_name, context, self.scope_id, arguments.unwrap_or(Vec::new())).map_err(mapped_err! {
+							while = format!("calling the built-in function {} at compile-time", internal_name.bold().purple()),
+							context = context,
+						});
 					} else {
 						return Ok(Expression::Void(()));
 					}
@@ -272,7 +281,6 @@ impl TranspileToC for FunctionCall {
 				.evaluate_at_compile_time(context)?
 				.expect_as::<VirtualPointer>()?
 				.virtual_deref(context),
-			context,
 		)?;
 
 		let return_type = if let Some(return_type) = function.return_type.as_ref() {
@@ -391,9 +399,9 @@ impl ParentExpression for FunctionCall {
 
 impl Typed for FunctionCall {
 	fn get_type(&self, context: &mut Context) -> anyhow::Result<VirtualPointer> {
-		let function = FunctionDeclaration::from_literal(self.function.expect_literal(context)?, context)?;
+		let function = FunctionDeclaration::from_literal(self.function.expect_literal(context)?)?;
 		if let Some(return_type) = function.return_type {
-			return_type.as_ref().expect_as::<VirtualPointer>().cloned()
+			return_type.expect_as::<VirtualPointer>().cloned()
 		} else {
 			context.scope_data.expect_global_variable("Nothing").expect_as::<VirtualPointer>().cloned()
 		}

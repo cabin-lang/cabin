@@ -3,6 +3,7 @@ use std::path::Path;
 use colored::Colorize;
 
 use crate::cli::commands::CabinCommand;
+use expression_formatter::{format, println};
 
 #[derive(clap::Parser)]
 pub struct NewCommand {
@@ -12,17 +13,23 @@ pub struct NewCommand {
 impl CabinCommand for NewCommand {
 	fn execute(self) -> anyhow::Result<()> {
 		let root_dir = Path::new(&self.project_name);
-		println!("{} a new Cabin project at {}", "Creating".bold().green(), format!("{}", root_dir.display()).bold().cyan());
+		println!(r#"{"Creating".bold().green()} a new Cabin project at {format!("{root_dir.display()}").bold().cyan()}"#);
 		std::fs::create_dir_all(root_dir)?;
 		let root_dir = root_dir.canonicalize()?;
 
 		// Config
 		std::fs::write(
 			root_dir.join("cabin.toml"),
-			format!(
-				"[information]\nname = \"{}\"\n\n[options]",
-				root_dir.components().last().unwrap().as_os_str().to_str().unwrap()
-			),
+			unindent::unindent(&format!(
+				r#"
+				[information]
+				name = "{root_dir.components().last().unwrap().as_os_str().to_str().unwrap()}"
+				description = "An example cabin project generated with cabin new"
+				license = "All rights reserved"
+				
+				[options]
+				"#
+			)),
 		)?;
 
 		// Source

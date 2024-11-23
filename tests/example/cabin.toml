@@ -1,6 +1,8 @@
 [information]
 name = "example"
+description = "An example cabin project generated with cabin new"
+license = "All rights reserved"
 
 [options]
 developer-mode = true
-quiet = false
+emit-c = "../output.c"

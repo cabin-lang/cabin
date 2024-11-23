@@ -1,22 +1,23 @@
 use std::collections::HashMap;
 
 use crate::{
-	api::{context::Context, macros::string, scope::ScopeType, traits::TryAs as _},
-	comptime::CompileTime,
+	api::{context::Context, scope::ScopeType},
+	comptime::{memory::VirtualPointer, CompileTime},
 	lexer::{Span, TokenType},
-	literal_list, parse_list,
+	parse_list,
 	parser::{
 		expressions::{
 			literal::{LiteralConvertible, LiteralObject},
 			name::Name,
-			object::{Field, ObjectConstructor, ObjectType},
+			object::ObjectType,
 			Expression,
 		},
+		statements::tag::TagList,
 		ListType, Parse, TokenQueue, TokenQueueFunctionality,
 	},
 };
 
-use super::Spanned;
+use super::{object::InternalFieldValue, Spanned};
 
 #[derive(Debug, Clone)]
 pub struct OneOf {
@@ -24,10 +25,11 @@ pub struct OneOf {
 	choices: Vec<Expression>,
 	scope_id: usize,
 	span: Span,
+	name: Name,
 }
 
 impl Parse for OneOf {
-	type Output = OneOf;
+	type Output = VirtualPointer;
 
 	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
 		let start = tokens.pop(TokenType::KeywordOneOf)?.span;
@@ -61,12 +63,15 @@ impl Parse for OneOf {
 			compile_time_parameters,
 			scope_id: context.scope_data.unique_id(),
 			span: start.to(&end),
-		})
+			name: "anonymous_one_of".into(),
+		}
+		.to_literal()
+		.store_in_memory(context))
 	}
 }
 
 impl CompileTime for OneOf {
-	type Output = Expression;
+	type Output = OneOf;
 
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
 		let mut choices = Vec::new();
@@ -82,72 +87,41 @@ impl CompileTime for OneOf {
 			choices.push(choice_value);
 		}
 
-		Ok(Expression::Pointer(
-			OneOf {
-				choices,
-				scope_id: self.scope_id,
-				compile_time_parameters: self.compile_time_parameters,
-				span: self.span,
-			}
-			.to_literal(context)
-			.unwrap()
-			.store_in_memory(context),
-		))
+		Ok(OneOf {
+			choices,
+			scope_id: self.scope_id,
+			compile_time_parameters: self.compile_time_parameters,
+			span: self.span,
+			name: self.name,
+		})
 	}
 }
 
 impl LiteralConvertible for OneOf {
-	fn to_literal(self, context: &mut Context) -> anyhow::Result<LiteralObject> {
-		let constructor = ObjectConstructor {
-			fields: vec![
-				Field {
-					name: "variants".into(),
-					value: Some(literal_list!(context, self.scope_id, self.choices)),
-					field_type: None,
-				},
-				Field {
-					name: "compile_time_parameters".into(),
-					value: Some(literal_list!(
-						context,
-						self.scope_id,
-						self.compile_time_parameters.iter().map(|name| string(&name.unmangled_name(), context)).collect()
-					)),
-					field_type: None,
-				},
-			],
-			name: "anonymous_one_of".into(),
-			scope_id: self.scope_id,
-			internal_fields: HashMap::new(),
-			type_name: "OneOf".into(),
+	fn to_literal(self) -> LiteralObject {
+		LiteralObject {
+			address: None,
+			fields: HashMap::from([]),
+			internal_fields: HashMap::from([
+				("choices".to_owned(), InternalFieldValue::ExpressionList(self.choices)),
+				("compile_time_parameters".to_owned(), InternalFieldValue::NameList(self.compile_time_parameters)),
+			]),
+			name: self.name,
 			object_type: ObjectType::OneOf,
+			scope_id: self.scope_id,
 			span: self.span,
-		};
-
-		LiteralObject::try_from_object_constructor(constructor, context)
+			type_name: "OneOf".into(),
+			tags: TagList::default(),
+		}
 	}
 
-	fn from_literal(literal: &LiteralObject, context: &Context) -> anyhow::Result<Self> {
-		if literal.object_type() != &ObjectType::OneOf {
-			anyhow::bail!("Attempted to convert a non-oneof object into a oneof");
-		}
-
-		let compile_time_parameters = literal
-			.expect_field_literal_as::<Vec<Expression>>("compile_time_parameters", context)
-			.iter()
-			.map(|name_string| anyhow::Ok(Name::from(name_string.expect_literal(context)?.expect_as::<String>()?)))
-			.collect::<anyhow::Result<Vec<_>>>()?;
-
-		let choices = literal
-			.expect_field_literal_as::<Vec<Expression>>("variants", context)
-			.iter()
-			.map(|choice| choice.try_clone_pointer(context).unwrap())
-			.collect();
-
+	fn from_literal(literal: &LiteralObject) -> anyhow::Result<Self> {
 		Ok(OneOf {
-			compile_time_parameters,
-			choices,
+			choices: literal.get_internal_field::<Vec<Expression>>("choices")?.to_owned(),
+			compile_time_parameters: literal.get_internal_field::<Vec<Name>>("compile_time_parameters")?.to_owned(),
 			scope_id: literal.declared_scope_id(),
-			span: literal.span(context),
+			span: literal.span.clone(),
+			name: literal.name().to_owned(),
 		})
 	}
 }
