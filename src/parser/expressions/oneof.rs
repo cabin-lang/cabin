@@ -3,27 +3,27 @@ use std::collections::HashMap;
 use crate::{
 	api::{context::Context, scope::ScopeType},
 	comptime::{memory::VirtualPointer, CompileTime},
+	if_then_else_default,
 	lexer::{Span, TokenType},
 	parse_list,
 	parser::{
 		expressions::{
 			literal::{LiteralConvertible, LiteralObject},
 			name::Name,
-			object::ObjectType,
-			Expression,
+			object::{InternalFieldValue, ObjectType},
+			Expression, Spanned,
 		},
 		statements::tag::TagList,
 		ListType, Parse, TokenQueue, TokenQueueFunctionality,
 	},
 };
 
-use super::{object::InternalFieldValue, Spanned};
-
 #[derive(Debug, Clone)]
 pub struct OneOf {
 	compile_time_parameters: Vec<Name>,
 	choices: Vec<Expression>,
-	scope_id: usize,
+	outer_scope_id: usize,
+	inner_scope_id: usize,
 	span: Span,
 	name: Name,
 }
@@ -33,10 +33,13 @@ impl Parse for OneOf {
 
 	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
 		let start = tokens.pop(TokenType::KeywordOneOf)?.span;
+
+		// Enter inner scope
 		context.scope_data.enter_new_unlabeled_scope(ScopeType::OneOf);
+		let inner_scope_id = context.scope_data.unique_id();
 
 		// Compile-time parameters
-		let compile_time_parameters = if tokens.next_is(TokenType::LeftAngleBracket) {
+		let compile_time_parameters = if_then_else_default!(tokens.next_is(TokenType::LeftAngleBracket), {
 			let mut compile_time_parameters = Vec::new();
 			parse_list!(tokens, ListType::AngleBracketed, {
 				let name = Name::parse(tokens, context)?;
@@ -44,9 +47,7 @@ impl Parse for OneOf {
 				compile_time_parameters.push(name);
 			});
 			compile_time_parameters
-		} else {
-			Vec::new()
-		};
+		});
 
 		// Choices
 		let mut choices = Vec::new();
@@ -55,13 +56,15 @@ impl Parse for OneOf {
 		})
 		.span;
 
+		// Exit the scope
 		context.scope_data.exit_scope()?;
 
 		// Return
 		Ok(OneOf {
 			choices,
 			compile_time_parameters,
-			scope_id: context.scope_data.unique_id(),
+			outer_scope_id: context.scope_data.unique_id(),
+			inner_scope_id,
 			span: start.to(&end),
 			name: "anonymous_one_of".into(),
 		}
@@ -89,7 +92,8 @@ impl CompileTime for OneOf {
 
 		Ok(OneOf {
 			choices,
-			scope_id: self.scope_id,
+			outer_scope_id: self.outer_scope_id,
+			inner_scope_id: self.inner_scope_id,
 			compile_time_parameters: self.compile_time_parameters,
 			span: self.span,
 			name: self.name,
@@ -108,7 +112,8 @@ impl LiteralConvertible for OneOf {
 			]),
 			name: self.name,
 			object_type: ObjectType::OneOf,
-			scope_id: self.scope_id,
+			outer_scope_id: self.outer_scope_id,
+			inner_scope_id: self.inner_scope_id,
 			span: self.span,
 			type_name: "OneOf".into(),
 			tags: TagList::default(),
@@ -119,7 +124,8 @@ impl LiteralConvertible for OneOf {
 		Ok(OneOf {
 			choices: literal.get_internal_field::<Vec<Expression>>("choices")?.to_owned(),
 			compile_time_parameters: literal.get_internal_field::<Vec<Name>>("compile_time_parameters")?.to_owned(),
-			scope_id: literal.declared_scope_id(),
+			outer_scope_id: literal.outer_scope_id(),
+			inner_scope_id: literal.inner_scope_id,
 			span: literal.span.clone(),
 			name: literal.name().to_owned(),
 		})

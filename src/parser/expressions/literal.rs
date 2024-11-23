@@ -53,7 +53,8 @@ pub struct LiteralObject {
 
 	pub object_type: ObjectType,
 
-	pub scope_id: usize,
+	pub outer_scope_id: usize,
+	pub inner_scope_id: usize,
 
 	pub name: Name,
 
@@ -72,15 +73,16 @@ pub struct LiteralObject {
 }
 
 impl LiteralObject {
-	pub fn empty() -> Self {
+	pub fn empty(span: Span) -> Self {
 		Self {
 			type_name: "Object".into(),
 			fields: HashMap::new(),
 			internal_fields: HashMap::new(),
 			object_type: ObjectType::Normal,
-			scope_id: 0,
+			outer_scope_id: 0,
+			inner_scope_id: 0,
 			address: None,
-			span: Span::zero(),
+			span,
 			name: "anonymous_object".into(),
 			tags: TagList::default(),
 		}
@@ -130,7 +132,8 @@ impl LiteralObject {
 			fields,
 			internal_fields: object.internal_fields,
 			object_type: object.object_type,
-			scope_id: object.scope_id,
+			outer_scope_id: object.scope_id,
+			inner_scope_id: object.inner_scope_id,
 			name: object.name,
 			address: None,
 			span: object.span,
@@ -193,8 +196,8 @@ impl LiteralObject {
 		context.virtual_memory.store(self)
 	}
 
-	pub fn declared_scope_id(&self) -> usize {
-		self.scope_id
+	pub fn outer_scope_id(&self) -> usize {
+		self.outer_scope_id
 	}
 
 	pub fn dependencies(&self) -> Vec<VirtualPointer> {
@@ -245,7 +248,7 @@ impl Typed for LiteralObject {
 	fn get_type(&self, context: &mut Context) -> anyhow::Result<VirtualPointer> {
 		let result = context
 			.scope_data
-			.get_variable_from_id(self.type_name.clone(), self.declared_scope_id())
+			.get_variable_from_id(self.type_name.clone(), self.outer_scope_id())
 			.unwrap()
 			.expect_as::<VirtualPointer>()?
 			.to_owned();
@@ -362,7 +365,7 @@ impl TranspileToC for LiteralObject {
 				// Anything fields
 				if self.name != "Anything".into() {
 					let anything = GroupDeclaration::from_literal(&context.scope_data.expect_global_variable("Anything").clone().expect_literal(context)?.clone())?;
-					for field in &anything.fields {
+					for field in anything.fields() {
 						builder += &format!("\n\t.{} = {},", field.name.to_c(context)?, field.value.as_ref().unwrap().to_c(context)?);
 					}
 				}

@@ -14,9 +14,9 @@ use super::Spanned;
 
 #[derive(Debug, Clone)]
 pub struct IfExpression {
-	pub condition: Box<Expression>,
-	pub body: Box<Expression>,
-	pub else_body: Option<Box<Expression>>,
+	condition: Box<Expression>,
+	body: Box<Expression>,
+	else_body: Option<Box<Expression>>,
 	span: Span,
 }
 

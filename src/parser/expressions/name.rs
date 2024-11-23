@@ -15,43 +15,21 @@ use super::Spanned;
 
 #[derive(Debug, Clone, Eq)]
 pub struct Name {
+	/// The internal string value of this name. This is the value as it appears in the Cabin source code; In other words,
+	/// it's unmangled.
 	name: String,
+
+	/// The span of this name. See `Spanned::span()` for more information.
 	span: Span,
+
+	/// Whether or not this name should be "mangled" when transpiling it to C.
+	///
+	/// When transpiling to C, all names are changed to a new "mangled" name to avoid conflicts with internal names and
+	/// values inserted by the compiler.
+	///
+	/// For regular identifiers in the language, this is always `true`; But some special exceptions are made when the
+	/// compiler needs to insert names into the program.
 	should_mangle: bool,
-}
-
-impl PartialEq for Name {
-	fn eq(&self, other: &Self) -> bool {
-		self.name == other.name
-	}
-}
-
-impl Hash for Name {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-		self.name.hash(state);
-	}
-}
-
-impl Name {
-	pub fn non_mangled<T: AsRef<str>>(name: T) -> Name {
-		Name {
-			name: name.as_ref().to_owned(),
-			span: Span::zero(),
-			should_mangle: false,
-		}
-	}
-
-	pub fn unmangled_name(&self) -> String {
-		self.name.clone()
-	}
-
-	pub fn mangled_name(&self) -> String {
-		if self.should_mangle {
-			format!("u_{}", self.name)
-		} else {
-			self.unmangled_name()
-		}
-	}
 }
 
 impl Parse for Name {
@@ -63,7 +41,7 @@ impl Parse for Name {
 		let token = tokens.pop(TokenType::Identifier).map_err(mapped_err! {
 			while = "attempting to parse a variable name",
 			context = context,
-			position = position.unwrap_or_else(Span::zero),
+			position = position.unwrap_or_else(Span::unknown),
 		})?;
 
 		Ok(Name {
@@ -117,11 +95,17 @@ impl TranspileToC for Name {
 	}
 }
 
+impl ToCabin for Name {
+	fn to_cabin(&self) -> String {
+		self.unmangled_name()
+	}
+}
+
 impl<T: AsRef<str>> From<T> for Name {
 	fn from(value: T) -> Self {
 		Name {
 			name: value.as_ref().to_owned(),
-			span: Span::zero(),
+			span: Span::unknown(),
 			should_mangle: true,
 		}
 	}
@@ -133,14 +117,42 @@ impl AsRef<Name> for Name {
 	}
 }
 
-impl ToCabin for Name {
-	fn to_cabin(&self) -> String {
-		self.unmangled_name()
-	}
-}
-
 impl Spanned for Name {
 	fn span(&self, _context: &Context) -> Span {
 		self.span.clone()
+	}
+}
+
+impl PartialEq for Name {
+	fn eq(&self, other: &Self) -> bool {
+		self.name == other.name
+	}
+}
+
+impl Hash for Name {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		self.name.hash(state);
+	}
+}
+
+impl Name {
+	pub fn non_mangled<T: AsRef<str>>(name: T) -> Name {
+		Name {
+			name: name.as_ref().to_owned(),
+			span: Span::unknown(),
+			should_mangle: false,
+		}
+	}
+
+	pub fn unmangled_name(&self) -> String {
+		self.name.clone()
+	}
+
+	pub fn mangled_name(&self) -> String {
+		if self.should_mangle {
+			format!("u_{}", self.name)
+		} else {
+			self.unmangled_name()
+		}
 	}
 }

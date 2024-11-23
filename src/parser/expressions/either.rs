@@ -9,7 +9,9 @@ use crate::{
 		expressions::{
 			literal::{LiteralConvertible, LiteralObject},
 			name::Name,
+			object::InternalFieldValue,
 			object::ObjectType,
+			Spanned,
 		},
 		statements::tag::TagList,
 		ListType, Parse, TokenQueue, TokenQueueFunctionality,
@@ -17,13 +19,12 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
-use super::{object::InternalFieldValue, Spanned};
-
 #[derive(Debug, Clone)]
 pub struct Either {
 	variants: Vec<(Name, VirtualPointer)>,
 	scope_id: usize,
-	pub name: Name,
+	inner_scope_id: usize,
+	name: Name,
 	span: Span,
 }
 
@@ -34,13 +35,16 @@ impl Parse for Either {
 		let start = tokens.pop(TokenType::KeywordEither)?.span;
 		let mut variants = Vec::new();
 		let end = parse_list!(tokens, ListType::Braced, {
-			variants.push((Name::parse(tokens, context)?, LiteralObject::empty().store_in_memory(context)));
+			let name = Name::parse(tokens, context)?;
+			let span = name.span(context);
+			variants.push((name, LiteralObject::empty(span).store_in_memory(context)));
 		})
 		.span;
 
 		Ok(Either {
 			variants,
 			scope_id: context.scope_data.unique_id(),
+			inner_scope_id: context.scope_data.unique_id(),
 			name: "anonymous_either".into(),
 			span: start.to(&end),
 		}
@@ -65,7 +69,8 @@ impl LiteralConvertible for Either {
 			internal_fields: HashMap::from([("variants".to_owned(), InternalFieldValue::LiteralMap(self.variants))]),
 			name: self.name,
 			object_type: ObjectType::Either,
-			scope_id: self.scope_id,
+			outer_scope_id: self.scope_id,
+			inner_scope_id: self.inner_scope_id,
 			span: self.span,
 			type_name: "Either".into(),
 			tags: TagList::default(),
@@ -75,7 +80,8 @@ impl LiteralConvertible for Either {
 	fn from_literal(literal: &LiteralObject) -> anyhow::Result<Self> {
 		Ok(Either {
 			variants: literal.get_internal_field::<Vec<(Name, VirtualPointer)>>("variants")?.to_owned(),
-			scope_id: literal.declared_scope_id(),
+			scope_id: literal.outer_scope_id(),
+			inner_scope_id: literal.inner_scope_id,
 			name: literal.name.clone(),
 			span: literal.span.clone(),
 		})

@@ -4,14 +4,16 @@ use crate::{
 	api::{context::Context, scope::ScopeType},
 	bail_err,
 	comptime::{memory::VirtualPointer, CompileTime},
+	if_then_some,
 	lexer::{Span, Token, TokenType},
 	mapped_err, parse_list,
 	parser::{
 		expressions::{
 			literal::{LiteralConvertible, LiteralObject},
 			name::Name,
+			object::InternalFieldValue,
 			object::{Field, ObjectType},
-			Expression, Parse,
+			Expression, Parse, Spanned, Typed,
 		},
 		statements::tag::TagList,
 		ListType, TokenQueueFunctionality,
@@ -19,14 +21,13 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
-use super::{object::InternalFieldValue, Spanned, Typed};
-
 #[derive(Debug, Clone)]
 pub struct GroupDeclaration {
-	pub fields: Vec<Field>,
-	pub scope_id: usize,
-	pub name: Name,
-	pub span: Span,
+	fields: Vec<Field>,
+	inner_scope_id: usize,
+	outer_scope_id: usize,
+	name: Name,
+	span: Span,
 }
 
 impl Parse for GroupDeclaration {
@@ -34,35 +35,30 @@ impl Parse for GroupDeclaration {
 
 	fn parse(tokens: &mut VecDeque<Token>, context: &mut Context) -> anyhow::Result<Self::Output> {
 		let start = tokens.pop(TokenType::KeywordGroup)?.span;
+		let outer_scope_id = context.scope_data.unique_id();
 		context.scope_data.enter_new_unlabeled_scope(ScopeType::Group);
 		let inner_scope_id = context.scope_data.unique_id();
 
 		// Fields
 		let mut fields = Vec::new();
 		let end = parse_list!(tokens, ListType::Braced, {
-			// Parse tags
-			let tags = if tokens.next_is(TokenType::TagOpening) {
-				Some(TagList::parse(tokens, context)?)
-			} else {
-				None
-			};
+			//  Group field tags
+			let tags = if_then_some!(tokens.next_is(TokenType::TagOpening), TagList::parse(tokens, context)?);
 
-			// Name
+			// Group field name
 			let name = Name::parse(tokens, context).map_err(mapped_err! {
 				while = "attempting to parse an the type name of object constructor",
 				context = context,
 			})?;
 
-			// Type
-			let field_type = if tokens.next_is(TokenType::Colon) {
+			// Group field type
+			let field_type = if_then_some!(tokens.next_is(TokenType::Colon), {
 				tokens.pop(TokenType::Colon)?;
-				Some(Expression::parse(tokens, context)?)
-			} else {
-				None
-			};
+				Expression::parse(tokens, context)?
+			});
 
-			// Value
-			let value = if tokens.next_is(TokenType::Equal) {
+			// Group field value
+			let value = if_then_some!(tokens.next_is(TokenType::Equal), {
 				tokens.pop(TokenType::Equal)?;
 				let mut value = Expression::parse(tokens, context)?;
 
@@ -71,10 +67,8 @@ impl Parse for GroupDeclaration {
 					value.set_tags(tags, context);
 				}
 
-				Some(value)
-			} else {
-				None
-			};
+				value
+			});
 
 			// Add field
 			fields.push(Field { name, value, field_type });
@@ -84,7 +78,8 @@ impl Parse for GroupDeclaration {
 
 		Ok(GroupDeclaration {
 			fields,
-			scope_id: inner_scope_id,
+			inner_scope_id,
+			outer_scope_id,
 			name: "anonymous_group".into(),
 			span: start.to(&end),
 		}
@@ -97,7 +92,7 @@ impl CompileTime for GroupDeclaration {
 	type Output = GroupDeclaration;
 
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
-		let previous = context.scope_data.set_current_scope(self.scope_id);
+		let previous = context.scope_data.set_current_scope(self.inner_scope_id);
 		let mut fields = Vec::new();
 
 		for field in self.fields {
@@ -146,7 +141,8 @@ impl CompileTime for GroupDeclaration {
 		context.scope_data.set_current_scope(previous);
 		Ok(GroupDeclaration {
 			fields,
-			scope_id: self.scope_id,
+			inner_scope_id: self.inner_scope_id,
+			outer_scope_id: self.outer_scope_id,
 			name: self.name,
 			span: self.span,
 		})
@@ -221,7 +217,8 @@ impl LiteralConvertible for GroupDeclaration {
 			internal_fields: HashMap::from([("fields".to_owned(), InternalFieldValue::FieldList(self.fields))]),
 			name: self.name,
 			object_type: ObjectType::Group,
-			scope_id: self.scope_id,
+			outer_scope_id: self.outer_scope_id,
+			inner_scope_id: self.inner_scope_id,
 			span: self.span,
 			type_name: "Group".into(),
 			tags: TagList::default(),
@@ -231,7 +228,8 @@ impl LiteralConvertible for GroupDeclaration {
 	fn from_literal(literal: &LiteralObject) -> anyhow::Result<Self> {
 		Ok(GroupDeclaration {
 			fields: literal.get_internal_field::<Vec<Field>>("fields")?.to_owned(),
-			scope_id: literal.declared_scope_id(),
+			outer_scope_id: literal.outer_scope_id(),
+			inner_scope_id: literal.inner_scope_id,
 			name: literal.name.clone(),
 			span: literal.span.clone(),
 		})
@@ -241,5 +239,11 @@ impl LiteralConvertible for GroupDeclaration {
 impl Spanned for GroupDeclaration {
 	fn span(&self, _context: &Context) -> crate::lexer::Span {
 		self.span.clone()
+	}
+}
+
+impl GroupDeclaration {
+	pub fn fields(&self) -> &[Field] {
+		&self.fields
 	}
 }

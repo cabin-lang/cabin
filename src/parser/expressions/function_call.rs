@@ -4,24 +4,26 @@ use crate::{
 	api::{builtin::call_builtin_at_compile_time, context::Context, traits::TryAs as _},
 	bail_err,
 	comptime::{memory::VirtualPointer, CompileTime},
+	if_then_some,
 	lexer::{Span, Token, TokenType},
-	mapped_err, parse_list,
+	map_some, mapped_err, parse_list,
 	parser::{
-		expressions::{function_declaration::FunctionDeclaration, literal::LiteralConvertible, name::Name, operators::FieldAccess, Expression, Parse},
+		expressions::{
+			field_access::FieldAccess, function_declaration::FunctionDeclaration, literal::LiteralConvertible, name::Name, run::RuntimeableExpression, Expression, Parse, Spanned,
+			Typed,
+		},
 		ListType, TokenQueueFunctionality,
 	},
 	transpiler::TranspileToC,
 };
 
-use super::{run::ParentExpression, Spanned, Typed};
-
 #[derive(Debug, Clone)]
 pub struct FunctionCall {
-	pub function: Box<Expression>,
-	pub compile_time_arguments: Option<Vec<Expression>>,
-	pub arguments: Option<Vec<Expression>>,
-	pub scope_id: usize,
-	pub span: Span,
+	function: Box<Expression>,
+	compile_time_arguments: Option<Vec<Expression>>,
+	arguments: Option<Vec<Expression>>,
+	scope_id: usize,
+	span: Span,
 }
 
 pub struct PostfixOperators;
@@ -38,28 +40,24 @@ impl Parse for PostfixOperators {
 		// Postfix function call operators
 		while tokens.next_is_one_of(&[TokenType::LeftParenthesis, TokenType::LeftAngleBracket]) {
 			// Compile-time arguments
-			let compile_time_arguments = if tokens.next_is(TokenType::LeftAngleBracket) {
+			let compile_time_arguments = if_then_some!(tokens.next_is(TokenType::LeftAngleBracket), {
 				let mut compile_time_arguments = Vec::new();
 				end = parse_list!(tokens, ListType::AngleBracketed, {
 					compile_time_arguments.push(Expression::parse(tokens, context)?);
 				})
 				.span;
-				Some(compile_time_arguments)
-			} else {
-				None
-			};
+				compile_time_arguments
+			});
 
 			// Arguments
-			let arguments = if tokens.next_is(TokenType::LeftParenthesis) {
+			let arguments = if_then_some!(tokens.next_is(TokenType::LeftParenthesis), {
 				let mut arguments = Vec::new();
 				end = parse_list!(tokens, ListType::Parenthesized, {
 					arguments.push(Expression::parse(tokens, context)?);
 				})
 				.span;
-				Some(arguments)
-			} else {
-				None
-			};
+				arguments
+			});
 
 			// Reassign base expression
 			expression = Expression::FunctionCall(FunctionCall {
@@ -85,7 +83,7 @@ impl CompileTime for FunctionCall {
 		})?;
 
 		// Compile-time arguments
-		let compile_time_arguments = if let Some(original_compile_time_arguments) = self.compile_time_arguments {
+		let compile_time_arguments = map_some!(self.compile_time_arguments, |original_compile_time_arguments| {
 			let mut compile_time_arguments = Vec::new();
 			for argument in original_compile_time_arguments {
 				let evaluated = argument.evaluate_at_compile_time(context).map_err(mapped_err! {
@@ -94,13 +92,11 @@ impl CompileTime for FunctionCall {
 				})?;
 				compile_time_arguments.push(evaluated);
 			}
-			Some(compile_time_arguments)
-		} else {
-			None
-		};
+			compile_time_arguments
+		});
 
 		// Arguments
-		let mut arguments = if let Some(original_arguments) = self.arguments {
+		let mut arguments = map_some!(self.arguments, |original_arguments| {
 			let mut arguments = Vec::new();
 			for argument in original_arguments {
 				let evaluated = argument.evaluate_at_compile_time(context).map_err(mapped_err! {
@@ -109,10 +105,8 @@ impl CompileTime for FunctionCall {
 				})?;
 				arguments.push(evaluated);
 			}
-			Some(arguments)
-		} else {
-			None
-		};
+			arguments
+		});
 
 		// If not all arguments are known at compile-time, we can't call the function at compile time. In this case, we just
 		// return a function call expression, and it'll get transpiled to C and called at runtime.
@@ -143,21 +137,21 @@ impl CompileTime for FunctionCall {
 			};
 
 			// Set this object
-			if let Some(this_object) = function_declaration.this_object {
+			if let Some(this_object) = function_declaration.this_object() {
 				arguments = Some(arguments.unwrap_or(Vec::new()));
-				if let Some((parameter_name, _)) = function_declaration.parameters.first() {
+				if let Some((parameter_name, _)) = function_declaration.parameters().first() {
 					if parameter_name.unmangled_name() == "this" {
-						arguments.as_mut().unwrap().insert(0, this_object);
+						arguments.as_mut().unwrap().insert(0, this_object.clone());
 					}
 				}
 			}
 
 			// Non-builtin
-			if let Some(body) = &function_declaration.body {
+			if let Some(body) = function_declaration.body() {
 				if let Expression::Block(block) = body {
 					// Validate and add compile-time arguments
 					if let Some(compile_time_arguments) = &compile_time_arguments {
-						for (argument, (parameter_name, parameter_type)) in compile_time_arguments.iter().zip(function_declaration.compile_time_parameters.iter()) {
+						for (argument, (parameter_name, parameter_type)) in compile_time_arguments.iter().zip(function_declaration.compile_time_parameters().iter()) {
 							let parameter_type_pointer = parameter_type.try_as_literal_or_name(context)?.address.as_ref().unwrap().to_owned();
 							if !argument.is_assignable_to_type(parameter_type_pointer, context)? {
 								bail_err! {
@@ -179,7 +173,7 @@ impl CompileTime for FunctionCall {
 
 					// Validate and add arguments
 					if let Some(arguments) = &arguments {
-						for (argument, (parameter_name, parameter_type)) in arguments.iter().zip(function_declaration.parameters.iter()) {
+						for (argument, (parameter_name, parameter_type)) in arguments.iter().zip(function_declaration.parameters().iter()) {
 							let parameter_type_pointer = parameter_type.try_as_literal_or_name(context)?.address.as_ref().unwrap().to_owned();
 							if !argument.is_assignable_to_type(parameter_type_pointer, context)? {
 								bail_err! {
@@ -224,7 +218,7 @@ impl CompileTime for FunctionCall {
 					})?;
 
 				// Get builtin and side effect tags
-				for tag in &function_declaration.tags.values {
+				for tag in &function_declaration.tags().values {
 					if let Ok(object) = tag.try_as_literal_or_name(context).cloned() {
 						if object.type_name() == &Name::from("BuiltinTag") {
 							builtin_name = Some(
@@ -283,20 +277,20 @@ impl TranspileToC for FunctionCall {
 				.virtual_deref(context),
 		)?;
 
-		let return_type = if let Some(return_type) = function.return_type.as_ref() {
+		let return_type = if let Some(return_type) = function.return_type() {
 			format!("{}* return_address;", return_type.expect_literal(context)?.clone().to_c_type(context)?)
 		} else {
 			String::new()
 		};
 
-		let ending_return_address = if let Some(_return_type) = function.return_type.as_ref() {
+		let ending_return_address = if let Some(_return_type) = function.return_type() {
 			"return_address;".to_owned()
 		} else {
 			String::new()
 		};
 
-		let maybe_return_address = if let Some(_return_type) = function.return_type.as_ref() {
-			let maybe_comma = if function.parameters.is_empty() { "" } else { ", " };
+		let maybe_return_address = if let Some(_return_type) = function.return_type() {
+			let maybe_comma = if function.parameters().is_empty() { "" } else { ", " };
 			format!("{maybe_comma}return_address")
 		} else {
 			String::new()
@@ -313,12 +307,12 @@ impl TranspileToC for FunctionCall {
 			",
 			parameter_types = {
 				let mut parameters = function
-					.parameters
+					.parameters()
 					.iter()
 					.map(|parameter| Ok(format!("{}*", parameter.1.expect_literal(context)?.clone().to_c_type(context)?)))
 					.collect::<anyhow::Result<Vec<_>>>()?
 					.join(", ");
-				if let Some(return_type) = function.return_type.as_ref() {
+				if let Some(return_type) = function.return_type().as_ref() {
 					if !parameters.is_empty() {
 						parameters += ", ";
 					}
@@ -327,8 +321,8 @@ impl TranspileToC for FunctionCall {
 				parameters
 			},
 			function_to_call = self.function.to_c(context)?,
-			this_object = if let Some(object) = function.this_object {
-				if function.parameters.first().is_some_and(|param| param.0 == "this".into()) {
+			this_object = if let Some(object) = function.this_object() {
+				if function.parameters().first().is_some_and(|param| param.0 == "this".into()) {
 					format!("{}, ", object.to_c(context)?)
 				} else {
 					String::new()
@@ -356,7 +350,7 @@ impl TranspileToC for FunctionCall {
 	}
 }
 
-impl ParentExpression for FunctionCall {
+impl RuntimeableExpression for FunctionCall {
 	fn evaluate_subexpressions_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self> {
 		let function = self.function.evaluate_at_compile_time(context).map_err(mapped_err! {
 			while = "evaluating the function to call on a function-call expression at compile-time",
@@ -364,28 +358,24 @@ impl ParentExpression for FunctionCall {
 		})?;
 
 		// Compile-time arguments
-		let compile_time_arguments = if let Some(original_compile_time_arguments) = self.compile_time_arguments {
+		let compile_time_arguments = map_some!(self.compile_time_arguments, |original_compile_time_arguments| {
 			let mut compile_time_arguments = Vec::new();
 			for argument in original_compile_time_arguments {
 				let evaluated = argument.evaluate_at_compile_time(context)?;
 				compile_time_arguments.push(evaluated);
 			}
-			Some(compile_time_arguments)
-		} else {
-			None
-		};
+			compile_time_arguments
+		});
 
 		// Arguments
-		let arguments = if let Some(original_arguments) = self.arguments {
+		let arguments = map_some!(self.arguments, |original_arguments| {
 			let mut arguments = Vec::new();
 			for argument in original_arguments {
 				let evaluated = argument.evaluate_at_compile_time(context)?;
 				arguments.push(evaluated);
 			}
-			Some(arguments)
-		} else {
-			None
-		};
+			arguments
+		});
 
 		Ok(FunctionCall {
 			function: Box::new(function),
@@ -400,7 +390,7 @@ impl ParentExpression for FunctionCall {
 impl Typed for FunctionCall {
 	fn get_type(&self, context: &mut Context) -> anyhow::Result<VirtualPointer> {
 		let function = FunctionDeclaration::from_literal(self.function.expect_literal(context)?)?;
-		if let Some(return_type) = function.return_type {
+		if let Some(return_type) = function.return_type() {
 			return_type.expect_as::<VirtualPointer>().cloned()
 		} else {
 			context.scope_data.expect_global_variable("Nothing").expect_as::<VirtualPointer>().cloned()
@@ -411,5 +401,71 @@ impl Typed for FunctionCall {
 impl Spanned for FunctionCall {
 	fn span(&self, _context: &Context) -> Span {
 		self.span.clone()
+	}
+}
+
+impl FunctionCall {
+	/// Converts a binary operation expression into a function call. In Cabin, binary operations are just function calls, so the expression:
+	///
+	/// ```
+	/// first + second
+	/// ```
+	///
+	/// is equivalent to:
+	///
+	/// ```
+	/// first.plus(second)
+	/// ```
+	///
+	/// So, this function converts from the first form of that into the second. This is used by `operators::parse_binary_expression()` at
+	/// parse-time to convert parsed binary expressions into function calls.
+	///
+	/// # Parameters
+	///
+	/// - `left` - The expression on the left of the binary expression
+	/// - `right` - The expression on the right of the binary expression
+	/// - `operation` - The token of the operation symbol
+	/// - `context` - Global data about the compiler's state
+	///
+	/// # Returns
+	///
+	/// The function call object created from the binary expression.
+	///
+	/// # Errors
+	///
+	/// Only if the given token does not represent a valid binary operation. The given token must have a type of
+	/// `TokenType::Plus`, `TokenType::Minus`, etc.
+	pub fn from_binary_operation(left: Expression, right: Expression, operation: Token, context: &Context) -> anyhow::Result<FunctionCall> {
+		let function_name = match operation.token_type {
+			TokenType::Asterisk => "times",
+			TokenType::DoubleEquals => "equals",
+			TokenType::ForwardSlash => "divided_by",
+			TokenType::LessThan => "is_less_than",
+			TokenType::GreaterThan => "is_greater_than",
+			TokenType::Minus => "minus",
+			TokenType::Plus => "plus",
+			_ => bail_err! {
+				base = format!("Attempted to convert a binary operation into a function call, but no function name exists for the operation \"{}\"", format!("{}", operation.token_type).bold().cyan()),
+				while = "getting the function name for a binary operation",
+				context = context,
+			},
+		};
+
+		let start = left.span(context);
+		let middle = operation.span;
+		let end = right.span(context);
+
+		Ok(FunctionCall {
+			function: Box::new(Expression::FieldAccess(FieldAccess::new(
+				left,
+				Name::from(function_name),
+				context.scope_data.unique_id(),
+				start.to(&middle),
+			))),
+			arguments: Some(vec![right]),
+			compile_time_arguments: Some(Vec::new()),
+			scope_id: context.scope_data.unique_id(),
+			span: start.to(&end),
+		})
 	}
 }

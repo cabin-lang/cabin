@@ -59,9 +59,14 @@ let Function = group {
 // outside of the standard library.
 let cabin_only = new Object {};
 
+/// Indicates that an action's return value can be ignored. By default, not using the return value of an action results in a warning;
+/// This indicates to the compiler that such warning is unnecessary as the return value can be ignored.
+///
+/// This cannot be applied to actions that have no return value, nor actions that have no side effects.
+let discardable = new Object {};
+
 #[cabin_only]
 let system_side_effects = new Object {};
-
 
 let Field = group {
 	name: Text,

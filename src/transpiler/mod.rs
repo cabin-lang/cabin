@@ -60,7 +60,7 @@ pub fn transpile(program: &Program, context: &mut Context) -> anyhow::Result<Str
 		context = context,
 	})?;
 
-	builder += &transpile_main(context).map_err(mapped_err! {
+	builder += &transpile_literals(context).map_err(mapped_err! {
 		while = "transpiling the program's constants to C",
 		context = context,
 	})?;
@@ -115,7 +115,7 @@ pub fn transpile_types(context: &mut Context) -> anyhow::Result<String> {
 				// Anything fields
 				if value.name != "Anything".into() {
 					let anything = GroupDeclaration::from_literal(context.scope_data.expect_global_variable("Anything").clone().expect_literal(context)?)?;
-					for field in &anything.fields {
+					for field in anything.fields() {
 						builder += &format!(
 							"\n\t{}* {};",
 							if let Some(field_type) = &field.field_type {
@@ -176,7 +176,7 @@ pub fn transpile_functions(context: &mut Context) -> anyhow::Result<String> {
 				if value.is_empty() {
 					String::new()
 				} else {
-					format!("void call_{}_{address}{}\n\n", function.name.to_c(context)?, value)
+					format!("void call_{}_{address}{}\n\n", function.name().to_c(context)?, value)
 				}
 			},
 			_ => String::new(),
@@ -185,7 +185,7 @@ pub fn transpile_functions(context: &mut Context) -> anyhow::Result<String> {
 	Ok(builder)
 }
 
-pub fn transpile_main(context: &mut Context) -> anyhow::Result<String> {
+pub fn transpile_literals(context: &mut Context) -> anyhow::Result<String> {
 	let mut visited = Vec::new();
 	let mut builder = "int main(int argc, char** argv) {".to_owned();
 
@@ -221,7 +221,9 @@ pub fn transpile_literal(
 
 	if value.type_name() == &"Function".into() {
 		let function = FunctionDeclaration::from_literal(value)?;
-		if !function.compile_time_parameters.is_empty() {
+
+		// TODO: rah
+		if !function.compile_time_parameters().is_empty() {
 			return Ok(String::new());
 		}
 	}

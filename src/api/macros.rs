@@ -83,6 +83,10 @@ macro_rules! mapped_err {
 	};
 }
 
+/// Returns the fully qualified path to the current function, similar to how `file!()` from `std` works, but for function names.
+///
+/// This is used by the compiler to log stack traces for printing developer information upon errors.
+///
 /// modified from https://stackoverflow.com/a/40234666
 #[macro_export]
 macro_rules! function {
@@ -163,8 +167,9 @@ macro_rules! list {
 				scope_id: $scope_id,
 				object_type: $crate::parser::expressions::object::ObjectType::Normal,
 				name: "anonymous_list".into(),
-				span: $crate::lexer::Span::zero(),
+				span: $crate::lexer::Span::unknown(),
 				tags: $crate::parser::statements::tag::TagList::default(),
+				inner_scope_id: $scope_id,
 			};
 
 			Expression::Pointer(
@@ -180,9 +185,10 @@ macro_rules! list {
 				fields: Vec::new(),
 				internal_fields: std::collections::HashMap::from([("elements".to_owned(), $crate::parser::expressions::object::InternalFieldValue::ExpressionList($elements))]),
 				scope_id: $scope_id,
+				inner_scope_id: $scope_id,
 				object_type: $crate::parser::expressions::object::ObjectType::Normal,
 				name: "anonymous_runtime_list".into(),
-				span: $crate::lexer::Span::zero(),
+				span: $crate::lexer::Span::unknown(),
 				tags: $crate::parser::statements::tag::TagList::default(),
 			};
 			Expression::ObjectConstructor(constructor)
@@ -270,4 +276,53 @@ pub fn number(number: f64, context: &mut Context) -> Expression {
 		panic!("Internal error: Number literal isn't a pointer");
 	}
 	number
+}
+
+/// Returns the `None` if the first value is `None`. If the first value is `Some`, maps the inner value wrapped in the `Option`
+/// using the given mapping expression, and returns the result wrapped in `Some()`.
+///
+/// This is equivalent to `Option::map`, but doesn't create a closure, meaning return statements and the question mark operator
+/// can be used in reference to the surrounding function.
+#[macro_export]
+macro_rules! map_some {
+	(
+		$value: expr, |$name: ident| $body: expr
+	) => {
+		if let Some($name) = $value {
+			Some($body)
+		} else {
+			None
+		}
+	};
+}
+
+/// Returns the second value provided wrapped in `Some()` if the first value is true; Otherwise, returns `None`.
+///
+/// This is equivalent to `boolean::then`, but doesn't create a closure, meaning return statements and the question mark operator
+/// can be used in reference to the surrounding function.
+#[macro_export]
+macro_rules! if_then_some {
+	(
+		$value: expr, $body: expr
+	) => {
+		if $value {
+			Some($body)
+		} else {
+			None
+		}
+	};
+}
+
+/// Returns the second value provided if the first provided value is `true`, otherwise, returns `Default::default()`.
+#[macro_export]
+macro_rules! if_then_else_default {
+	(
+		$value: expr, $body: expr
+	) => {
+		if $value {
+			$body
+		} else {
+			Default::default()
+		}
+	};
 }

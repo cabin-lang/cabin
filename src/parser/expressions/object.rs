@@ -28,6 +28,7 @@ pub struct ObjectConstructor {
 	pub fields: Vec<Field>,
 	pub internal_fields: HashMap<String, InternalFieldValue>,
 	pub scope_id: usize,
+	pub inner_scope_id: usize,
 	pub object_type: ObjectType,
 	pub name: Name,
 	pub span: Span,
@@ -66,9 +67,10 @@ impl ObjectConstructor {
 				fields: Vec::new(),
 				internal_fields: HashMap::from([("internal_value".to_owned(), InternalFieldValue::String(string.to_owned()))]),
 				scope_id: 0,
+				inner_scope_id: 0,
 				object_type: ObjectType::Normal,
 				name: Name::non_mangled("anonymous_string_literal"),
-				span: Span::zero(),
+				span: Span::unknown(),
 				tags: TagList::default(),
 			},
 			context,
@@ -83,9 +85,10 @@ impl ObjectConstructor {
 			fields: Vec::new(),
 			internal_fields: HashMap::from([("internal_value".to_owned(), InternalFieldValue::Number(number))]),
 			scope_id: 0,
+			inner_scope_id: 0,
 			object_type: ObjectType::Normal,
 			name: "anonymous_number".into(),
-			span: Span::zero(),
+			span: Span::unknown(),
 			tags: TagList::default(),
 		}
 	}
@@ -166,6 +169,7 @@ impl Parse for ObjectConstructor {
 			type_name: name,
 			fields,
 			scope_id: context.scope_data.unique_id(),
+			inner_scope_id: context.scope_data.unique_id(),
 			internal_fields: HashMap::new(),
 			object_type: ObjectType::Normal,
 			name: Name::non_mangled("anonymous_object"),
@@ -233,11 +237,11 @@ impl CompileTime for ObjectConstructor {
 		.unwrap();
 
 		// Anything fields
-		for field in anything.fields {
-			if let Some(value) = field.value {
+		for field in anything.fields() {
+			if let Some(value) = &field.value {
 				fields.add_field(Field {
-					name: field.name,
-					value: Some(value),
+					name: field.name.clone(),
+					value: Some(value.clone()),
 					field_type: None,
 				});
 			}
@@ -245,11 +249,11 @@ impl CompileTime for ObjectConstructor {
 
 		// Default fields
 		if let Some(object_type) = object_type {
-			for field in object_type.fields {
-				if let Some(value) = field.value {
+			for field in object_type.fields() {
+				if let Some(value) = &field.value {
 					fields.add_field(Field {
-						name: field.name,
-						value: Some(value),
+						name: field.name.clone(),
+						value: Some(value.clone()),
 						field_type: None,
 					});
 				}
@@ -278,6 +282,7 @@ impl CompileTime for ObjectConstructor {
 			type_name: self.type_name,
 			fields,
 			scope_id: self.scope_id,
+			inner_scope_id: self.inner_scope_id,
 			internal_fields: self.internal_fields,
 			object_type: self.object_type,
 			name: self.name,

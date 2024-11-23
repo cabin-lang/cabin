@@ -1,5 +1,5 @@
 use colored::Colorize as _;
-use run::{ParentExpression, RunExpression};
+use run::{RunExpression, RuntimeableExpression};
 use try_as::traits as try_as_traits;
 
 use crate::{
@@ -10,14 +10,8 @@ use crate::{
 	mapped_err,
 	parser::{
 		expressions::{
-			block::Block,
-			foreach::ForEachLoop,
-			function_call::FunctionCall,
-			if_expression::IfExpression,
-			literal::LiteralObject,
-			name::Name,
-			object::ObjectConstructor,
-			operators::{BinaryExpression, FieldAccess},
+			block::Block, field_access::FieldAccess, foreach::ForEachLoop, function_call::FunctionCall, if_expression::IfExpression, literal::LiteralObject, name::Name,
+			object::ObjectConstructor, operators::BinaryExpression,
 		},
 		statements::tag::TagList,
 		Parse, TokenQueue,
@@ -27,6 +21,7 @@ use crate::{
 
 pub mod block;
 pub mod either;
+pub mod field_access;
 pub mod foreach;
 pub mod function_call;
 pub mod function_declaration;
@@ -292,10 +287,23 @@ pub trait Typed {
 }
 
 pub trait Spanned {
+	/// Returns the section of the source code that this expression spans. This is used by the compiler to print information about
+	/// errors that occur, such as while line and column the error occurred on.
+	///
+	/// # Parameters
+	///
+	/// - `context` - Global data about the compiler's state. This is currently only used by the implementation of `Spanned` for
+	/// `VirtualPointer`, which uses it to access it's value in virtual memory and return that value's span. See `VirtualPointer::span()`
+	/// for more information.
+	///
+	/// # Returns
+	///
+	///
+	/// The second of the program's source code that this expression spans.
 	fn span(&self, context: &Context) -> Span;
 }
 
-impl ParentExpression for Expression {
+impl RuntimeableExpression for Expression {
 	fn evaluate_subexpressions_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self> {
 		Ok(match self {
 			Self::FunctionCall(function_call) => Expression::FunctionCall(function_call.evaluate_subexpressions_at_compile_time(context)?),

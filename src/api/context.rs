@@ -129,7 +129,7 @@ impl Context {
 		}
 
 		if let Some(error_location) = self.error_position() {
-			let length = error_location.length;
+			let length = error_location.length();
 			let (error_line, error_column) = self.line_column(error_location);
 
 			format!(
@@ -197,7 +197,7 @@ impl Context {
 		let mut column = 1;
 
 		for (position, char) in blank.chars().enumerate() {
-			if position == span.start {
+			if position == span.start() {
 				break;
 			}
 

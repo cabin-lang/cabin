@@ -491,15 +491,17 @@ impl Token {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Span {
-	pub start: usize,
-	pub length: usize,
+	start: usize,
+	length: usize,
 }
 
 impl Span {
-	pub fn zero() -> Span {
+	#[deprecated]
+	pub fn unknown() -> Span {
 		Span { start: 0, length: 0 }
 	}
 
+	#[must_use]
 	pub fn cover(first: &Span, second: &Span) -> Span {
 		Span {
 			start: first.start,
@@ -507,12 +509,29 @@ impl Span {
 		}
 	}
 
+	#[must_use]
 	pub fn to(&self, other: &Span) -> Span {
 		Span::cover(self, other)
 	}
 
+	#[must_use]
 	pub fn contains(&self, position: usize) -> bool {
 		(self.start..self.start + self.length).contains(&position)
+	}
+
+	#[must_use]
+	pub fn start(&self) -> usize {
+		self.start
+	}
+
+	#[must_use]
+	pub fn end(&self) -> usize {
+		self.start + self.length
+	}
+
+	#[must_use]
+	pub fn length(&self) -> usize {
+		self.length
 	}
 }
 
