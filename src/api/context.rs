@@ -31,7 +31,6 @@ pub struct Context {
 	error_location: RefCell<Option<Span>>,
 	error_details: RefCell<Option<String>>,
 	compiler_error_position: RefCell<Vec<SourceFilePosition>>,
-	// Completely immutable
 }
 
 impl Context {
@@ -75,7 +74,8 @@ impl Context {
 	pub fn nothing(&mut self) -> anyhow::Result<Expression> {
 		Ok(Expression::Pointer(
 			self.scope_data
-				.expect_global_variable("nothing")
+				.get_variable("nothing")
+				.unwrap()
 				.clone()
 				.try_as_literal_or_name(self)
 				.cloned()

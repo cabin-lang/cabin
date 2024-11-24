@@ -15,8 +15,10 @@ use crate::{
 	parser::expressions::{object::ObjectConstructor, Expression, Spanned, Typed},
 };
 
+use super::scope::ScopeId;
+
 pub struct BuiltinFunction {
-	evaluate_at_compile_time: fn(&mut Context, usize, Vec<Expression>, Span) -> anyhow::Result<Expression>,
+	evaluate_at_compile_time: fn(&mut Context, ScopeId, Vec<Expression>, Span) -> anyhow::Result<Expression>,
 	to_c: fn(&mut Context, &[String]) -> anyhow::Result<String>,
 }
 
@@ -48,8 +50,8 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			Ok(Expression::Void(()))
 		},
 		to_c: |context, parameter_names| {
-			let text_address = context.scope_data.expect_global_variable("Text").expect_as::<VirtualPointer>().unwrap();
-			let anything_address = context.scope_data.expect_global_variable("Anything").expect_as::<VirtualPointer>().unwrap();
+			let text_address = context.scope_data.get_variable("Text").unwrap().expect_as::<VirtualPointer>().unwrap();
+			let anything_address = context.scope_data.get_variable("Anything").unwrap().expect_as::<VirtualPointer>().unwrap();
 			let object = parameter_names.first().unwrap();
 			Ok(unindent::unindent(&format!(
 				"
@@ -65,11 +67,11 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			let mut line = String::new();
 			std::io::stdin().read_line(&mut line)?;
 			line = line.get(0..line.len() - 1).unwrap().to_owned();
-			Ok(Expression::Pointer(*ObjectConstructor::from_string(&line, span).evaluate_at_compile_time(context)?.expect_as::<VirtualPointer>()?))
+			Ok(Expression::Pointer(*ObjectConstructor::from_string(&line, span, context).evaluate_at_compile_time(context)?.expect_as::<VirtualPointer>()?))
 		},
 		to_c: |context, parameter_names| {
 			let return_address = parameter_names.first().unwrap();
-			let text_address = context.scope_data.expect_global_variable("Text").expect_as::<VirtualPointer>().unwrap();
+			let text_address = context.scope_data.get_variable("Text").unwrap().expect_as::<VirtualPointer>().unwrap();
 			Ok(format!("char* buffer = malloc(sizeof(char) * 256);\nfgets(buffer, 256, stdin);\n*{return_address} = (group_u_Text_{text_address}) {{ .internal_value = buffer }};"))
 		}
 	},
@@ -83,7 +85,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			Ok(number(first_number + second_number, first.span(context).to(&second.span(context)), context))
 		},
 		to_c: |context,parameter_names| {
-			let number_address = context.scope_data.expect_global_variable("Number").expect_as::<VirtualPointer>().unwrap();
+			let number_address = context.scope_data.get_variable("Number").unwrap().expect_as::<VirtualPointer>().unwrap();
 			let first = parameter_names.first().unwrap();
 			let second = parameter_names.get(1).unwrap();
 			let number_type = format!("group_u_Number_{number_address}");
@@ -141,9 +143,10 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 				context = context,
 			})?;
 
-			let group_address = context.scope_data.expect_global_variable("Group").expect_as::<VirtualPointer>().unwrap();
-			let text_address = context.scope_data.expect_global_variable("Text").expect_as::<VirtualPointer>().unwrap();
-			let anything_address = context.scope_data.expect_global_variable("Anything").expect_as::<VirtualPointer>().unwrap();
+			let group_address = context.scope_data.get_variable("Group").unwrap().expect_as::<VirtualPointer>().unwrap();
+			let text_address = context.scope_data.get_variable("Text").unwrap().expect_as::<VirtualPointer>().unwrap();
+			let anything_address = context.scope_data.get_variable("Anything").unwrap().expect_as::<VirtualPointer>().unwrap();
+
 			Ok(unindent::unindent(&format!(
 				r#"
 				// Get the type metadata of the value
@@ -177,7 +180,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 	},
 };
 
-pub fn call_builtin_at_compile_time(name: &str, context: &mut Context, caller_scope_id: usize, arguments: Vec<Expression>, span: Span) -> anyhow::Result<Expression> {
+pub fn call_builtin_at_compile_time(name: &str, context: &mut Context, caller_scope_id: ScopeId, arguments: Vec<Expression>, span: Span) -> anyhow::Result<Expression> {
 	(BUILTINS
 		.get(name)
 		.ok_or_else(|| {

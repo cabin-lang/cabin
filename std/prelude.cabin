@@ -1,135 +1,33 @@
-let This = group {};
+// The Cabin prelude. This code is placed implicitly at the beginning of all Cabin files, aside from the standard library.
+// It just brings some commonly used names into scope.
 
-// Optionals -----------------------------------------------------------------------------------------------------------------
+// Anything
+let Anything = cabin.Anything;
+let Metadata = cabin.Metadata;
 
-let Nothing = either {
-	nothing
-};
-let nothing = Nothing.nothing;
-let Optional = oneof<Data> {
-	Data,
-	Nothing
-};
+// Primitives
+let Text = cabin.Text;
+let Number = cabin.Number;
 
-// Results -------------------------------------------------------------------------------------------------------------------
-
-// Anything ------------------------------------------------------------------------------------------------------------------
-
-let Text = group {};
-
-let Anything = group {
-
-	#[builtin<"Anything.type">]
-	type = action(this: Anything): Group,
-
-	#[builtin<"Anything.to_string">]
-	to_string = action(this: Anything): Text
-};
-
-let Metadata = represent<T> T as Anything {
-	#[builtin<"Anything.to_string">]
-	to_string = action(this: Anything): Text
-};
-
-let Object = group {};
-
-let Group = group {
-	fields: Anything,
-};
-
-let Parameter = group {
-	name: Text,
-	type: Anything
-};
-
-let OneOf = group {};
-
-let Function = group {
-	parameters: Anything,
-	return_type: Anything,
-	compile_time_parameters: Anything,
-	tags: Anything,
-	this_object: Anything,
-};
-
-// Text ----------------------------------------------------------------------------------------------------------------------
-
-// Numbers -------------------------------------------------------------------------------------------------------------------
-
-// System --------------------------------------------------------------------------------------------------------------------
-
-// Indicates that a value should only be used in the Cabin standard library. If a value tagged with `#[cabin_only]` is referenced in
-// user code, outside of the Cabin standard library, the compiler will flag it as an error. This is used for things like the `builtin<...>`
-// tag, which marks a function as a "built-in" function with special handling in the Cabin compiler. Things such as this shouldn't be used
-// outside of the standard library.
-let cabin_only = new Object {};
-
-/// Indicates that an action's return value can be ignored. By default, not using the return value of an action results in a warning;
-/// This indicates to the compiler that such warning is unnecessary as the return value can be ignored.
-///
-/// This cannot be applied to actions that have no return value, nor actions that have no side effects.
-let discardable = new Object {};
-
-#[cabin_only]
-let system_side_effects = new Object {};
-
-let Field = group {
-	name: Text,
-	value: Anything,
-};
-
-let List = group {};
-
-let Either = group {
-	variants: List
-};
-
-let Boolean = either {
-	true,
-	false
-};
+// Booleans
+let Boolean = cabin.Boolean;
 let true = Boolean.true;
 let false = Boolean.false;
 
+// Optionals
+let Optional = cabin.Optional;
+let nothing = cabin.Nothing.nothing;
 
-// The tag for a built-in function. Functions that are built into the Cabin compiler and run with native code are marked with this, usually
-// via the `builtin<>` function.
-#[cabin_only]
-let BuiltinTag = group {
-	internal_name: Text
-};
+// Results
+let Attempted = cabin.Attempted;
+let Error = cabin.Error;
 
-#[cabin_only]
-let builtin = action<name: Text>: BuiltinTag {
-	builtin is new BuiltinTag {
-		internal_name = name
-	};
-};
+// Collections
+let List = cabin.List;
+let Map = cabin.Map;
+let Object = cabin.Object;
 
-let Number = group {
-	#[builtin<"Number.plus">]
-	plus = action(this: Number, other: Number): Number,
-
-	#[builtin<"Number.minus">]
-	minus = action(this: Number, other: Number): Number
-};
-
-let Error = group {
-	message: Text
-};
-
-let Result = oneof<Data> {
-	Data,
-	Error	
-};
-
-// The terminal object. This is used for input/output operations, such as printing to the terminal or taking user input
-// from the terminal.
-let terminal = new Object {
-
-	#[builtin<"terminal.print">, system_side_effects] 
-	print = action(object: Anything),
-
-	#[builtin<"terminal.input">, system_side_effects] 
-	input = action: Text
-};
+// System
+let terminal = cabin.terminal;
+let file_system = cabin.file_system;
+let environment_variables = cabin.environment_variables;

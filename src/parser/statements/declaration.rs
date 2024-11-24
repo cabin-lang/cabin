@@ -1,5 +1,5 @@
 use crate::{
-	api::{context::Context, traits::TryAsRefMut},
+	api::{context::Context, scope::ScopeId, traits::TryAsRefMut},
 	comptime::{memory::VirtualPointer, CompileTime},
 	err,
 	lexer::TokenType,
@@ -21,7 +21,7 @@ pub enum DeclarationType {
 #[derive(Debug, Clone)]
 pub struct Declaration {
 	name: Name,
-	scope_id: usize,
+	scope_id: ScopeId,
 	declaration_type: DeclarationType,
 }
 
@@ -60,9 +60,13 @@ impl Parse for Declaration {
 		tokens.pop(TokenType::Equal)?;
 
 		// Represent-As declarations
-		if tokens.next_is(TokenType::KeywordRepresent) {
-			let represent_as = RepresentAs::parse(tokens, context)?;
+		if tokens.next_is_one_of(&[TokenType::KeywordRepresent, TokenType::KeywordDefault]) {
+			let represent_as = RepresentAs::parse(tokens, context).map_err(mapped_err! {
+				while = "parsing a represent-as declaration",
+				context = context,
+			})?;
 			context.scope_data.add_represent_as_declaration(name.clone(), represent_as);
+			tokens.pop(TokenType::Semicolon)?;
 			return Ok(Declaration {
 				name,
 				scope_id: context.scope_data.unique_id(),
@@ -88,6 +92,8 @@ impl Parse for Declaration {
 			context = context,
 		})?;
 
+		tokens.pop(TokenType::Semicolon)?;
+
 		// Return the declaration
 		Ok(Declaration {
 			name,
@@ -104,7 +110,10 @@ impl CompileTime for Declaration {
 		// Represent as
 		if self.declaration_type == DeclarationType::RepresentAs {
 			let represent = context.scope_data.get_represent_from_id(self.name.clone(), self.scope_id).unwrap().clone();
-			let evaluated = represent.evaluate_at_compile_time(context)?;
+			let evaluated = represent.evaluate_at_compile_time(context).map_err(mapped_err! {
+				while = "evaluating a represent-as declaration at compile-time",
+				context = context,
+			})?;
 			context.scope_data.reassign_represent_from_id(&self.name, evaluated, self.scope_id)?;
 			return Ok(self);
 		}
@@ -134,5 +143,11 @@ impl TranspileToC for Declaration {
 				context = context,
 			})?
 		))
+	}
+}
+
+impl Declaration {
+	pub fn name(&self) -> &Name {
+		&self.name
 	}
 }

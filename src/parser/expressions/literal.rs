@@ -5,6 +5,7 @@ use try_as::traits::TryAsRef;
 use crate::{
 	api::{
 		context::Context,
+		scope::ScopeId,
 		traits::{TerminalOutput as _, TryAs as _},
 	},
 	bail_err,
@@ -56,8 +57,8 @@ pub struct LiteralObject {
 
 	pub object_type: ObjectType,
 
-	pub outer_scope_id: usize,
-	pub inner_scope_id: usize,
+	pub outer_scope_id: ScopeId,
+	pub inner_scope_id: Option<ScopeId>,
 
 	pub name: Name,
 
@@ -76,14 +77,14 @@ pub struct LiteralObject {
 }
 
 impl LiteralObject {
-	pub fn empty(span: Span) -> Self {
+	pub fn empty(span: Span, context: &Context) -> Self {
 		Self {
 			type_name: "Object".into(),
 			fields: HashMap::new(),
 			internal_fields: HashMap::new(),
 			object_type: ObjectType::Normal,
-			outer_scope_id: 0,
-			inner_scope_id: 0,
+			outer_scope_id: context.scope_data.file_id(),
+			inner_scope_id: None,
 			address: None,
 			span,
 			name: "anonymous_object".into(),
@@ -136,7 +137,7 @@ impl LiteralObject {
 			internal_fields: object.internal_fields,
 			object_type: object.object_type,
 			outer_scope_id: object.scope_id,
-			inner_scope_id: object.inner_scope_id,
+			inner_scope_id: Some(object.inner_scope_id),
 			name: object.name,
 			address: None,
 			span: object.span,
@@ -199,7 +200,7 @@ impl LiteralObject {
 		context.virtual_memory.store(self)
 	}
 
-	pub fn outer_scope_id(&self) -> usize {
+	pub fn outer_scope_id(&self) -> ScopeId {
 		self.outer_scope_id
 	}
 
@@ -271,6 +272,7 @@ impl CompileTime for LiteralObject {
 			ObjectType::Either => Either::from_literal(&self)?.evaluate_at_compile_time(context)?.to_literal(),
 			ObjectType::OneOf => OneOf::from_literal(&self)?.evaluate_at_compile_time(context)?.to_literal(),
 			ObjectType::Normal => self,
+			_ => panic!(),
 		};
 		literal.address = address;
 		Ok(literal)

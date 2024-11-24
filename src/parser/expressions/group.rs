@@ -1,7 +1,10 @@
 use std::collections::{HashMap, VecDeque};
 
 use crate::{
-	api::{context::Context, scope::ScopeType},
+	api::{
+		context::Context,
+		scope::{ScopeId, ScopeType},
+	},
 	bail_err,
 	comptime::{memory::VirtualPointer, CompileTime},
 	if_then_some,
@@ -11,8 +14,7 @@ use crate::{
 		expressions::{
 			literal::{LiteralConvertible, LiteralObject},
 			name::Name,
-			object::InternalFieldValue,
-			object::{Field, ObjectType},
+			object::{Field, InternalFieldValue, ObjectType},
 			Expression, Parse, Spanned, Typed,
 		},
 		statements::tag::TagList,
@@ -24,8 +26,8 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct GroupDeclaration {
 	fields: Vec<Field>,
-	inner_scope_id: usize,
-	outer_scope_id: usize,
+	inner_scope_id: ScopeId,
+	outer_scope_id: ScopeId,
 	name: Name,
 	span: Span,
 }
@@ -194,7 +196,7 @@ impl LiteralConvertible for GroupDeclaration {
 			name: self.name,
 			object_type: ObjectType::Group,
 			outer_scope_id: self.outer_scope_id,
-			inner_scope_id: self.inner_scope_id,
+			inner_scope_id: Some(self.inner_scope_id),
 			span: self.span,
 			type_name: "Group".into(),
 			tags: TagList::default(),
@@ -205,7 +207,7 @@ impl LiteralConvertible for GroupDeclaration {
 		Ok(GroupDeclaration {
 			fields: literal.get_internal_field::<Vec<Field>>("fields")?.to_owned(),
 			outer_scope_id: literal.outer_scope_id(),
-			inner_scope_id: literal.inner_scope_id,
+			inner_scope_id: literal.inner_scope_id.unwrap(),
 			name: literal.name.clone(),
 			span: literal.span.clone(),
 		})

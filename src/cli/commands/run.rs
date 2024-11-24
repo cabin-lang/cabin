@@ -5,10 +5,11 @@ use crate::{
 	cli::commands::{start, CabinCommand},
 	compiler::{compile, run_native_executable},
 	comptime::CompileTime as _,
-	lexer::tokenize,
-	parser::parse,
+	lexer::{tokenize, tokenize_without_prelude},
+	parser::{expressions::Expression, parse},
 	step,
 	transpiler::transpile,
+	STDLIB,
 };
 
 #[derive(clap::Parser)]
@@ -20,8 +21,16 @@ impl CabinCommand for RunCommand {
 	fn execute(self) -> anyhow::Result<()> {
 		let path = self.path.map(PathBuf::from).unwrap_or_else(|| std::env::current_dir().unwrap());
 		let mut context = Context::new(&path)?;
-		start("Running", &context);
 
+		// Standard Library
+		let mut stdlib_tokens = tokenize_without_prelude(STDLIB, &mut context)?;
+		let stdlib_ast = parse(&mut stdlib_tokens, &mut context)?;
+		let evaluated_stdlib = stdlib_ast.evaluate_at_compile_time(&mut context)?;
+		let stdlib_module = evaluated_stdlib.into_literal(&mut context).store_in_memory(&mut context);
+		context.scope_data.declare_new_variable("cabin", Expression::Pointer(stdlib_module))?;
+
+		// User code
+		start("Running", &context);
 		let source_code = step!(std::fs::read_to_string(context.running_context.entry_point()), &context, "Reading", "source file");
 		let mut tokens = step!(tokenize(&source_code, &mut context), &context, "Tokenizing", "source code");
 		let ast = step!(parse(&mut tokens, &mut context), &context, "Parsing", "token stream");

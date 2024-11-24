@@ -10,6 +10,7 @@ pub mod lexer;
 pub mod parser;
 pub mod transpiler;
 
+pub const STDLIB: &str = include_str!("../std/stdlib.cabin");
 pub const PRELUDE: &str = include_str!("../std/prelude.cabin");
 
 #[derive(clap::Parser)]

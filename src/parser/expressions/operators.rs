@@ -154,7 +154,7 @@ impl Parse for PrimaryExpression {
 				let with_quotes = token.value;
 				let without_quotes = with_quotes.get(1..with_quotes.len() - 1).unwrap().to_owned();
 				Expression::Pointer(
-					LiteralObject::try_from_object_constructor(ObjectConstructor::from_string(&without_quotes, token.span), context)
+					LiteralObject::try_from_object_constructor(ObjectConstructor::from_string(&without_quotes, token.span, context), context)
 						.unwrap()
 						.store_in_memory(context),
 				)
@@ -164,7 +164,7 @@ impl Parse for PrimaryExpression {
 			TokenType::Number => {
 				let number_token = tokens.pop(TokenType::Number).unwrap();
 				Expression::Pointer(
-					LiteralObject::try_from_object_constructor(ObjectConstructor::from_number(number_token.value.parse().unwrap(), number_token.span), context)
+					LiteralObject::try_from_object_constructor(ObjectConstructor::from_number(number_token.value.parse().unwrap(), number_token.span, context), context)
 						.unwrap()
 						.store_in_memory(context),
 				)

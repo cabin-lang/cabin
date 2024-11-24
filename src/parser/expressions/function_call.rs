@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
 use crate::{
-	api::{builtin::call_builtin_at_compile_time, context::Context, traits::TryAs as _},
+	api::{builtin::call_builtin_at_compile_time, context::Context, scope::ScopeId, traits::TryAs as _},
 	bail_err,
 	comptime::{memory::VirtualPointer, CompileTime},
 	if_then_else_default,
@@ -22,7 +22,7 @@ pub struct FunctionCall {
 	function: Box<Expression>,
 	compile_time_arguments: Vec<Expression>,
 	arguments: Vec<Expression>,
-	scope_id: usize,
+	scope_id: ScopeId,
 	span: Span,
 }
 
@@ -217,7 +217,8 @@ impl CompileTime for FunctionCall {
 				// Get the address of system_side_effects
 				let system_side_effects_address = *context
 					.scope_data
-					.expect_global_variable("system_side_effects")
+					.get_variable("system_side_effects")
+					.unwrap()
 					.expect_as::<VirtualPointer>()
 					.map_err(mapped_err! {
 						while = format!("interpreting the global variable \"{}\" as a pointer", "system_side_effects".bold().cyan()),
@@ -395,7 +396,7 @@ impl Typed for FunctionCall {
 		if let Some(return_type) = function.return_type() {
 			return_type.expect_as::<VirtualPointer>().cloned()
 		} else {
-			context.scope_data.expect_global_variable("Nothing").expect_as::<VirtualPointer>().cloned()
+			context.scope_data.get_variable("Nothing").unwrap().expect_as::<VirtualPointer>().cloned()
 		}
 	}
 }

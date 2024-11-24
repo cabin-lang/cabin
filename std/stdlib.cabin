@@ -1,0 +1,123 @@
+let This = group {};
+
+// Optionals -----------------------------------------------------------------------------------------------------------------
+
+let Nothing = either {
+	nothing
+};
+
+let Optional = oneof<Data> {
+	Data,
+	Nothing
+};
+
+// Results -------------------------------------------------------------------------------------------------------------------
+
+// Anything ------------------------------------------------------------------------------------------------------------------
+
+let Text = group {};
+
+let Anything = group {
+
+	#[builtin<"Anything.type">]
+	type = action(this: Anything): Group,
+
+	#[builtin<"Anything.to_string">]
+	to_text = action(this: Anything): Text
+};
+
+let Object = group {};
+
+let Metadata = represent<T: Anything> T as Anything {
+
+	#[builtin<"Anything.to_string">]
+	to_text = action(this: Anything): Text
+};
+
+let Group = group {
+	fields: Anything,
+};
+
+let Parameter = group {
+	name: Text,
+	type: Anything
+};
+
+let OneOf = group {};
+
+let Function = group {
+	parameters: Anything,
+	return_type: Anything,
+	compile_time_parameters: Anything,
+	tags: Anything,
+	this_object: Anything,
+};
+
+// Text ----------------------------------------------------------------------------------------------------------------------
+
+// Numbers -------------------------------------------------------------------------------------------------------------------
+
+// System --------------------------------------------------------------------------------------------------------------------
+
+let system_side_effects = new Object {};
+
+let Field = group {
+	name: Text,
+	value: Anything,
+};
+
+let List = group {};
+
+let Either = group {
+	variants: List
+};
+
+let Boolean = either {
+	true,
+	false
+};
+
+// The tag for a built-in function. Functions that are built into the Cabin compiler and run with native code are marked with this, usually
+// via the `builtin<>` function.
+let BuiltinTag = group {
+	internal_name: Text
+};
+
+let builtin = action<name: Text>: BuiltinTag {
+	builtin is new BuiltinTag {
+		internal_name = name
+	};
+};
+
+let Number = group {
+	#[builtin<"Number.plus">]
+	plus = action(this: Number, other: Number): Number,
+
+	#[builtin<"Number.minus">]
+	minus = action(this: Number, other: Number): Number
+};
+
+let Error = group {
+	message: Text
+};
+
+let Result = oneof<Data> {
+	Data,
+	Error	
+};
+
+// The terminal object. This is used for input/output operations, such as printing to the terminal or taking user input
+// from the terminal.
+let terminal = new Object {
+
+	#[builtin<"terminal.print">, system_side_effects] 
+	print = action(object: Anything),
+
+	#[builtin<"terminal.input">, system_side_effects] 
+	input = action: Text
+};
+
+let Map = group {
+	get = action(key: Anything) {},
+	set = action(key: Anything, value: Anything) {}
+};

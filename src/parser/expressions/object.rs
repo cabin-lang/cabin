@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use try_as::traits as try_as_traits;
 
 use crate::{
-	api::{context::Context, traits::TryAs as _},
+	api::{context::Context, scope::ScopeId},
 	comptime::{memory::VirtualPointer, CompileTime},
 	lexer::{Span, TokenType},
 	mapped_err, parse_list,
@@ -15,7 +15,7 @@ use crate::{
 			Expression,
 		},
 		statements::tag::TagList,
-		ListType, Parse, ToCabin, TokenQueue, TokenQueueFunctionality,
+		ListType, Parse, TokenQueue, TokenQueueFunctionality,
 	},
 	transpiler::TranspileToC,
 };
@@ -27,8 +27,8 @@ pub struct ObjectConstructor {
 	pub type_name: Name,
 	pub fields: Vec<Field>,
 	pub internal_fields: HashMap<String, InternalFieldValue>,
-	pub scope_id: usize,
-	pub inner_scope_id: usize,
+	pub scope_id: ScopeId,
+	pub inner_scope_id: ScopeId,
 	pub object_type: ObjectType,
 	pub name: Name,
 	pub span: Span,
@@ -56,13 +56,13 @@ impl Fields for Vec<Field> {
 }
 
 impl ObjectConstructor {
-	pub fn from_string(string: &str, span: Span) -> ObjectConstructor {
+	pub fn from_string(string: &str, span: Span, context: &Context) -> ObjectConstructor {
 		ObjectConstructor {
 			type_name: Name::from("Text"),
 			fields: Vec::new(),
 			internal_fields: HashMap::from([("internal_value".to_owned(), InternalFieldValue::String(string.to_owned()))]),
-			scope_id: 0,
-			inner_scope_id: 0,
+			scope_id: context.scope_data.file_id(),
+			inner_scope_id: context.scope_data.file_id(),
 			object_type: ObjectType::Normal,
 			name: Name::non_mangled("anonymous_string_literal"),
 			span,
@@ -70,13 +70,13 @@ impl ObjectConstructor {
 		}
 	}
 
-	pub fn from_number(number: f64, span: Span) -> ObjectConstructor {
+	pub fn from_number(number: f64, span: Span, context: &Context) -> ObjectConstructor {
 		ObjectConstructor {
 			type_name: Name::from("Number"),
 			fields: Vec::new(),
 			internal_fields: HashMap::from([("internal_value".to_owned(), InternalFieldValue::Number(number))]),
-			scope_id: 0,
-			inner_scope_id: 0,
+			scope_id: context.scope_data.file_id(),
+			inner_scope_id: context.scope_data.file_id(),
 			object_type: ObjectType::Normal,
 			name: "anonymous_number".into(),
 			span,
@@ -256,6 +256,7 @@ pub enum ObjectType {
 	OneOf,
 	Either,
 	Function,
+	Module,
 }
 
 #[derive(Debug, Clone, try_as::macros::TryInto, try_as::macros::TryAsRef)]

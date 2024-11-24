@@ -1,5 +1,6 @@
 use crate::parser::expressions::try_as_traits::TryAsMut;
 use colored::Colorize as _;
+use parameter::Parameter;
 use run::{RunExpression, RuntimeableExpression};
 use try_as::traits as try_as_traits;
 
@@ -33,6 +34,7 @@ pub mod name;
 pub mod object;
 pub mod oneof;
 pub mod operators;
+pub mod parameter;
 pub mod represent_as;
 pub mod run;
 pub mod sugar;
@@ -48,6 +50,7 @@ pub enum Expression {
 	ForEachLoop(ForEachLoop),
 	Pointer(VirtualPointer),
 	Run(RunExpression),
+	Parameter(Parameter),
 	Void(()),
 }
 
@@ -84,6 +87,10 @@ impl CompileTime for Expression {
 				while = "evaluating a object constructor expression at compile-time",
 				context = context,
 			})?,
+			Self::Parameter(parameter) => Expression::Parameter(parameter.evaluate_at_compile_time(context).map_err(mapped_err! {
+				while = "evaluating a parameter expression at compile-time",
+				context = context,
+			})?),
 			Self::ForEachLoop(for_loop) => for_loop
 				.evaluate_at_compile_time(context)
 				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a for-each loop at compile-time".dimmed()))?,
@@ -165,6 +172,7 @@ impl Expression {
 			Self::If(_) => "if expression",
 			Self::ForEachLoop(_) => "for-each loop",
 			Self::Run(_) => "run expression",
+			Self::Parameter(_) => "parameter",
 		}
 	}
 
@@ -205,7 +213,7 @@ impl Expression {
 			return false;
 		};
 
-		let true_address = context.scope_data.expect_global_variable("true").expect_as().unwrap();
+		let true_address = context.scope_data.get_variable("true").unwrap().expect_as().unwrap();
 
 		literal_address == true_address
 	}
@@ -259,6 +267,7 @@ impl TranspileToC for Expression {
 			Self::Pointer(pointer) => pointer.to_c(context)?,
 			Self::ObjectConstructor(object_constructor) => object_constructor.to_c(context)?,
 			Self::Run(run_expression) => run_expression.to_c(context)?,
+			Self::Parameter(_) => todo!(),
 			Self::Void(_) => "void".to_owned(),
 		})
 	}
@@ -270,6 +279,7 @@ impl Typed for Expression {
 			Expression::Pointer(pointer) => pointer.virtual_deref(context).clone().get_type(context)?,
 			Expression::FunctionCall(function_call) => function_call.get_type(context)?,
 			Expression::Run(run_expression) => run_expression.get_type(context)?,
+			Expression::Parameter(parameter) => parameter.get_type(context)?,
 			Expression::Void(()) => bail_err! {
 				base = "Attempted to get the type of a non-existent value",
 				while = "getting the type of a generic expression",
@@ -295,6 +305,7 @@ impl Spanned for Expression {
 			Expression::If(if_expression) => if_expression.span(context),
 			Expression::FieldAccess(field_access) => field_access.span(context),
 			Expression::ForEachLoop(for_each_loop) => for_each_loop.span(context),
+			Expression::Parameter(parameter) => parameter.span(context),
 			Expression::Void(_) => panic!(),
 		}
 	}

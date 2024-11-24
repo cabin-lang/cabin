@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-	api::context::Context,
+	api::{context::Context, scope::ScopeId},
 	comptime::{memory::VirtualPointer, CompileTime},
 	lexer::{Span, TokenType},
 	parse_list,
@@ -9,8 +9,7 @@ use crate::{
 		expressions::{
 			literal::{LiteralConvertible, LiteralObject},
 			name::Name,
-			object::InternalFieldValue,
-			object::ObjectType,
+			object::{InternalFieldValue, ObjectType},
 			Spanned,
 		},
 		statements::tag::TagList,
@@ -22,8 +21,8 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct Either {
 	variants: Vec<(Name, VirtualPointer)>,
-	scope_id: usize,
-	inner_scope_id: usize,
+	scope_id: ScopeId,
+	inner_scope_id: ScopeId,
 	name: Name,
 	span: Span,
 }
@@ -37,7 +36,7 @@ impl Parse for Either {
 		let end = parse_list!(tokens, ListType::Braced, {
 			let name = Name::parse(tokens, context)?;
 			let span = name.span(context);
-			variants.push((name, LiteralObject::empty(span).store_in_memory(context)));
+			variants.push((name, LiteralObject::empty(span, context).store_in_memory(context)));
 		})
 		.span;
 
@@ -70,7 +69,7 @@ impl LiteralConvertible for Either {
 			name: self.name,
 			object_type: ObjectType::Either,
 			outer_scope_id: self.scope_id,
-			inner_scope_id: self.inner_scope_id,
+			inner_scope_id: Some(self.inner_scope_id),
 			span: self.span,
 			type_name: "Either".into(),
 			tags: TagList::default(),
@@ -81,7 +80,7 @@ impl LiteralConvertible for Either {
 		Ok(Either {
 			variants: literal.get_internal_field::<Vec<(Name, VirtualPointer)>>("variants")?.to_owned(),
 			scope_id: literal.outer_scope_id(),
-			inner_scope_id: literal.inner_scope_id,
+			inner_scope_id: literal.inner_scope_id.unwrap(),
 			name: literal.name.clone(),
 			span: literal.span.clone(),
 		})

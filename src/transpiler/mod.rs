@@ -10,7 +10,7 @@ use crate::{
 			literal::{LiteralConvertible, LiteralObject},
 			Expression, Typed,
 		},
-		Program,
+		Module,
 	},
 };
 
@@ -18,7 +18,7 @@ pub trait TranspileToC {
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String>;
 }
 
-pub fn transpile(program: &Program, context: &mut Context) -> anyhow::Result<String> {
+pub fn transpile(program: &Module, context: &mut Context) -> anyhow::Result<String> {
 	let mut builder = unindent::unindent(
 		"
 		#include <stdio.h>
@@ -75,7 +75,7 @@ pub fn transpile(program: &Program, context: &mut Context) -> anyhow::Result<Str
 	Ok(builder)
 }
 
-pub fn transpile_program(program: &Program, context: &mut Context) -> anyhow::Result<String> {
+pub fn transpile_program(program: &Module, context: &mut Context) -> anyhow::Result<String> {
 	let mut builder = String::new();
 	for line in program.to_c(context)?.lines() {
 		builder += &format!("\n\t{line}");

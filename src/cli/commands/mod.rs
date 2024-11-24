@@ -114,7 +114,7 @@ macro_rules! step {
 				// Print additional error information
 				if !$context.config.quiet {
 					if let Some(error_details) = $context.error_details() {
-						eprintln!("\n{}\n\n{error_details}", "More information:".bold().bright_blue().underline());
+						eprintln!("{}\n\n{error_details}\n", "More information:".bold().bright_blue().underline());
 					}
 				}
 

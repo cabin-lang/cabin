@@ -1,5 +1,5 @@
 use crate::{
-	api::{context::Context, traits::TryAs as _},
+	api::{context::Context, scope::ScopeId, traits::TryAs as _},
 	comptime::CompileTime,
 	lexer::{Span, TokenType},
 	parser::{
@@ -16,7 +16,7 @@ pub struct ForEachLoop {
 	binding_name: Name,
 	iterable: Box<Expression>,
 	body: Box<Expression>,
-	inner_scope_id: usize,
+	inner_scope_id: ScopeId,
 	span: Span,
 }
 

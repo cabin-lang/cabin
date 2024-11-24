@@ -1,15 +1,20 @@
-use std::{collections::HashMap, hash::Hash};
+use std::collections::HashMap;
 
 use colored::Colorize as _;
 
 use crate::{
-	api::{context::Context, traits::TryAs as _},
+	api::{
+		context::Context,
+		scope::ScopeId,
+		traits::{TerminalOutput, TryAs as _},
+	},
+	bail_err,
 	comptime::{memory::VirtualPointer, CompileTime},
 	err,
 	lexer::{Span, TokenType},
 	parser::{
 		expressions::{
-			function_declaration::FunctionDeclaration, literal::LiteralConvertible as _, name::Name, object::ObjectType, operators::PrimaryExpression, Expression, Spanned,
+			function_declaration::FunctionDeclaration, literal::LiteralConvertible as _, name::Name, object::ObjectType, operators::PrimaryExpression, Expression, Spanned, Typed,
 		},
 		statements::tag::TagList,
 		Parse, TokenQueue, TokenQueueFunctionality as _,
@@ -41,7 +46,7 @@ impl TryFrom<TokenType> for FieldAccessType {
 pub struct FieldAccess {
 	left: Box<Expression>,
 	right: Name,
-	scope_id: usize,
+	scope_id: ScopeId,
 	span: Span,
 	access_type: FieldAccessType,
 }
@@ -124,12 +129,32 @@ impl CompileTime for FieldAccess {
 				},
 				FieldAccessType::RepresentAs => match literal.object_type() {
 					ObjectType::Normal => {
-						let declaration = context.scope_data.get_represent_as(self.right).ok_or_else(|| {
-							err! {
-								base = "no represent as with this name was found",
+						let declaration = context
+							.scope_data
+							.get_represent_as(&self.right)
+							.ok_or_else(|| {
+								err! {
+									base = "no represent as with this name was found",
+									context = context,
+								}
+							})?
+							.clone();
+
+						if !declaration.can_represent(&left_evaluated, context)? {
+							bail_err! {
+								base = "Attempted to represent an object with a represent-as declaration, but that declaration can't apply to that object.",
 								context = context,
+								details = format!(
+									"
+									Here, you use the colon operator to attempt to represent an object of type \"{}\" using the represent-as declaration
+									\"{}\". However, That represent-as declaration can only represent objects of type \"{}\".
+									",
+									left_evaluated.get_type(context)?.virtual_deref(context).name().unmangled_name().bold().yellow(),
+									self.right.unmangled_name().bold().yellow(),
+									declaration.can_represent_string(context)?.bold().yellow(),
+								).as_terminal_output()
 							}
-						})?;
+						}
 
 						Expression::Pointer(
 							LiteralObject::try_from_object_constructor(
@@ -143,10 +168,10 @@ impl CompileTime for FieldAccess {
 										.to_owned(),
 									fields: declaration.fields().to_vec(),
 									internal_fields: HashMap::new(),
-									inner_scope_id: 0,
+									inner_scope_id: context.scope_data.file_id(),
 									object_type: ObjectType::Normal,
 									name: "anonymous_represent_as_casted".into(),
-									scope_id: 0,
+									scope_id: context.scope_data.file_id(),
 									tags: TagList::default(),
 									span: declaration.span(context),
 								},
@@ -195,7 +220,7 @@ impl Spanned for FieldAccess {
 }
 
 impl FieldAccess {
-	pub fn new(left: Expression, right: Name, scope_id: usize, span: Span) -> FieldAccess {
+	pub fn new(left: Expression, right: Name, scope_id: ScopeId, span: Span) -> FieldAccess {
 		FieldAccess {
 			left: Box::new(left),
 			right,

@@ -135,6 +135,12 @@ impl Hash for Name {
 	}
 }
 
+impl From<&Name> for Name {
+	fn from(val: &Name) -> Self {
+		val.clone()
+	}
+}
+
 impl Name {
 	pub fn non_mangled<T: AsRef<str>>(name: T) -> Name {
 		Name {

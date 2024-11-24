@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use crate::{
-	api::{context::Context, scope::ScopeType},
+	api::{
+		context::Context,
+		scope::{ScopeId, ScopeType},
+	},
 	comptime::{memory::VirtualPointer, CompileTime},
 	if_then_else_default,
 	lexer::{Span, TokenType},
@@ -22,8 +25,8 @@ use crate::{
 pub struct OneOf {
 	compile_time_parameters: Vec<Name>,
 	choices: Vec<Expression>,
-	outer_scope_id: usize,
-	inner_scope_id: usize,
+	outer_scope_id: ScopeId,
+	inner_scope_id: ScopeId,
 	span: Span,
 	name: Name,
 }
@@ -113,7 +116,7 @@ impl LiteralConvertible for OneOf {
 			name: self.name,
 			object_type: ObjectType::OneOf,
 			outer_scope_id: self.outer_scope_id,
-			inner_scope_id: self.inner_scope_id,
+			inner_scope_id: Some(self.inner_scope_id),
 			span: self.span,
 			type_name: "OneOf".into(),
 			tags: TagList::default(),
@@ -125,7 +128,7 @@ impl LiteralConvertible for OneOf {
 			choices: literal.get_internal_field::<Vec<Expression>>("choices")?.to_owned(),
 			compile_time_parameters: literal.get_internal_field::<Vec<Name>>("compile_time_parameters")?.to_owned(),
 			outer_scope_id: literal.outer_scope_id(),
-			inner_scope_id: literal.inner_scope_id,
+			inner_scope_id: literal.inner_scope_id.unwrap(),
 			span: literal.span.clone(),
 			name: literal.name().to_owned(),
 		})

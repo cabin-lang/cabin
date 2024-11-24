@@ -30,14 +30,21 @@ impl Parse for Statement {
 			TokenType::KeywordLet | TokenType::TagOpening => Statement::Declaration(Declaration::parse(tokens, context)?),
 			TokenType::Identifier => {
 				if tokens.peek_type2()? == &TokenType::KeywordIs {
-					Statement::Tail(TailStatement::parse(tokens, context)?)
+					let tail = Statement::Tail(TailStatement::parse(tokens, context)?);
+					tokens.pop(TokenType::Semicolon)?;
+					tail
 				} else {
-					Statement::Expression(Expression::parse(tokens, context)?)
+					let expression = Statement::Expression(Expression::parse(tokens, context)?);
+					tokens.pop(TokenType::Semicolon)?;
+					expression
 				}
 			},
-			_ => Statement::Expression(Expression::parse(tokens, context)?),
+			_ => {
+				let expression = Statement::Expression(Expression::parse(tokens, context)?);
+				tokens.pop(TokenType::Semicolon)?;
+				expression
+			},
 		};
-		tokens.pop(TokenType::Semicolon)?;
 		Ok(statement)
 	}
 }

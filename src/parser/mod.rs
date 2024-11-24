@@ -1,51 +1,66 @@
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 
 use colored::Colorize as _;
-use statements::declaration::DeclarationType;
+use expressions::{literal::LiteralObject, object::ObjectType};
+use statements::{
+	declaration::{Declaration, DeclarationType},
+	tag::TagList,
+};
 
 use crate::{
-	api::context::Context,
-	comptime::CompileTime,
+	api::{
+		context::Context,
+		scope::{ScopeId, ScopeType},
+		traits::TryAs,
+	},
+	comptime::{memory::VirtualPointer, CompileTime},
 	lexer::{Span, Token, TokenType},
 	mapped_err,
-	parser::statements::Statement,
 	transpiler::TranspileToC,
 };
 
 pub mod expressions;
 pub mod statements;
 
-pub fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Program> {
-	Program::parse(tokens, context)
+pub fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Module> {
+	Module::parse(tokens, context)
 }
 
 #[derive(Debug)]
-pub struct Program {
-	statements: Vec<Statement>,
+pub struct Module {
+	declarations: Vec<Declaration>,
+	inner_scope_id: ScopeId,
 }
 
-impl Parse for Program {
+impl Parse for Module {
 	type Output = Self;
 
 	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
+		context.scope_data.enter_new_unlabeled_scope(ScopeType::File);
+		let inner_scope_id = context.scope_data.unique_id();
 		let mut statements = Vec::new();
 		while !tokens.is_empty() {
-			statements.push(Statement::parse(tokens, context).map_err(mapped_err! {
-				while = "parsing the program's top-level statements",
+			statements.push(Declaration::parse(tokens, context).map_err(mapped_err! {
+				while = "parsing the program's top-level declarations",
 				context = context,
 			})?);
 		}
-		Ok(Program { statements })
+		context.scope_data.exit_scope()?;
+		Ok(Module {
+			declarations: statements,
+			inner_scope_id,
+		})
 	}
 }
 
-impl CompileTime for Program {
-	type Output = Program;
+impl CompileTime for Module {
+	type Output = Module;
 
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
-		Ok(Self {
-			statements: self
-				.statements
+		let previous = context.scope_data.set_current_scope(self.inner_scope_id);
+		let evaluated = Self {
+			declarations: self
+				.declarations
 				.into_iter()
 				.map(|statement| statement.evaluate_at_compile_time(context))
 				.collect::<anyhow::Result<Vec<_>>>()
@@ -55,30 +70,31 @@ impl CompileTime for Program {
 				})?
 				.into_iter()
 				.collect(),
-		})
+			inner_scope_id: self.inner_scope_id,
+		};
+		context.scope_data.set_current_scope(previous);
+		Ok(evaluated)
 	}
 }
 
-impl TranspileToC for Program {
+impl TranspileToC for Module {
 	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
 		Ok(self
-			.statements
+			.declarations
 			.iter()
-			.map(|statement| {
-				if let Statement::Declaration(declaration) = statement {
-					if declaration.declaration_type() == &DeclarationType::RepresentAs
-						|| declaration
-							.value(context)
-							.map_err(mapped_err! {
-								while = "getting the value of a declaration",
-								context = context,
-							})?
-							.is_pointer()
-					{
-						return Ok(None);
-					}
+			.map(|declaration| {
+				if declaration.declaration_type() == &DeclarationType::RepresentAs
+					|| declaration
+						.value(context)
+						.map_err(mapped_err! {
+							while = "getting the value of a declaration",
+							context = context,
+						})?
+						.is_pointer()
+				{
+					return Ok(None);
 				}
-				Ok(Some(statement.to_c(context)?))
+				Ok(Some(declaration.to_c(context)?))
 			})
 			.collect::<anyhow::Result<Vec<_>>>()
 			.map_err(mapped_err! {
@@ -190,6 +206,33 @@ impl TokenQueueFunctionality for std::collections::VecDeque<Token> {
 
 	fn current_position(&self) -> Option<Span> {
 		self.front().map(|front| front.span.clone())
+	}
+}
+
+impl Module {
+	pub fn into_literal(self, context: &mut Context) -> LiteralObject {
+		LiteralObject {
+			type_name: "Object".into(),
+			fields: self
+				.declarations
+				.into_iter()
+				.filter_map(|declaration| {
+					(declaration.declaration_type() != &DeclarationType::RepresentAs).then(|| {
+						let name = declaration.name().to_owned();
+						let value = declaration.value(context).unwrap();
+						(name, value.expect_as::<VirtualPointer>().unwrap().to_owned())
+					})
+				})
+				.collect(),
+			internal_fields: HashMap::new(),
+			object_type: ObjectType::Module,
+			inner_scope_id: Some(self.inner_scope_id),
+			outer_scope_id: self.inner_scope_id,
+			name: "anonymous_module".into(),
+			address: None,
+			span: Span::unknown(),
+			tags: TagList::default(),
+		}
 	}
 }
 

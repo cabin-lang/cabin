@@ -1,5 +1,8 @@
 use crate::{
-	api::{context::Context, scope::ScopeType},
+	api::{
+		context::Context,
+		scope::{ScopeId, ScopeType},
+	},
 	comptime::CompileTime,
 	lexer::{Span, TokenType},
 	parser::{expressions::Expression, statements::Statement, Parse, TokenQueue, TokenQueueFunctionality as _},
@@ -11,7 +14,7 @@ use super::Spanned;
 #[derive(Debug, Clone)]
 pub struct Block {
 	pub statements: Vec<Statement>,
-	pub inner_scope_id: usize,
+	pub inner_scope_id: ScopeId,
 	span: Span,
 }
 

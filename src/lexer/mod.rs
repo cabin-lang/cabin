@@ -12,7 +12,7 @@ use strum::IntoEnumIterator as _;
 use crate::{
 	api::context::Context,
 	cli::theme::{Style, Styled},
-	PRELUDE,
+	PRELUDE, STDLIB,
 };
 
 /// A type of token in Cabin source code. The first step in Cabin compilation is tokenization, which is the process of splitting a raw String of source code into
@@ -229,6 +229,7 @@ pub enum TokenType {
 	/// Like all keywords, this enum variant declaration *must* come before `Identifier`. If it doesn't, then `while` will be tokenized incorrectly as
 	/// identifiers, which will cause issues when parsing. Please be careful when moving around this keyword or the `Identifier` token type!
 	KeywordWhile,
+	KeywordDefault,
 
 	KeywordEither,
 
@@ -357,6 +358,7 @@ impl TokenType {
 			Self::KeywordWhile => regex_macro::regex!(r"^while\b"),
 			Self::KeywordRepresent => regex_macro::regex!(r"^represent\b"),
 			Self::KeywordAs => regex_macro::regex!(r"^as\b"),
+			Self::KeywordDefault => regex_macro::regex!(r"^default\b"),
 
 			// Left opening groupings
 			Self::LeftAngleBracket => regex_macro::regex!("^<"),
@@ -602,7 +604,11 @@ pub fn tokenize_program(code: &str, context: &mut Context, is_prelude: bool) -> 
 
 pub fn tokenize(code: &str, context: &mut Context) -> anyhow::Result<VecDeque<Token>> {
 	let mut tokens = tokenize_program(code, context, false)?;
-	let mut prelude_tokens = tokenize_program(PRELUDE, context, true)?;
+	let mut prelude_tokens = tokenize_program(STDLIB, context, true)?;
 	prelude_tokens.append(&mut tokens);
 	Ok(prelude_tokens)
+}
+
+pub fn tokenize_without_prelude(code: &str, context: &mut Context) -> anyhow::Result<VecDeque<Token>> {
+	tokenize_program(code, context, false)
 }

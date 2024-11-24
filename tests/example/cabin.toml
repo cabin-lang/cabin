@@ -4,5 +4,3 @@ description = "An example cabin project generated with cabin new"
 license = "All rights reserved"
 
 [options]
-developer-mode = true
-emit-c = "../output.c"

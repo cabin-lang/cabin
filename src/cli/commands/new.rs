@@ -28,6 +28,8 @@ impl CabinCommand for NewCommand {
 				license = "All rights reserved"
 				
 				[options]
+
+				[dependencies]
 				"#
 			)),
 		)?;
@@ -36,6 +38,12 @@ impl CabinCommand for NewCommand {
 		let source_dir = root_dir.join("src");
 		std::fs::create_dir_all(&source_dir)?;
 		std::fs::write(source_dir.join("main.cabin"), "run terminal.print(\"Hello world!\");")?;
+
+		let cache_dir = root_dir.join("cache");
+		std::fs::create_dir_all(cache_dir)?;
+
+		let builds_dir = root_dir.join("builds");
+		std::fs::create_dir_all(builds_dir)?;
 
 		Ok(())
 	}

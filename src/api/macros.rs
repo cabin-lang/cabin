@@ -80,7 +80,7 @@ macro_rules! function {
 }
 
 pub fn string(value: &str, span: Span, context: &mut Context) -> Expression {
-	let number = ObjectConstructor::from_string(value, span).evaluate_at_compile_time(context).unwrap();
+	let number = ObjectConstructor::from_string(value, span, context).evaluate_at_compile_time(context).unwrap();
 	if !number.is_pointer() {
 		panic!("Internal error: Number literal isn't a pointer");
 	}
@@ -88,11 +88,11 @@ pub fn string(value: &str, span: Span, context: &mut Context) -> Expression {
 }
 
 pub fn cabin_true(context: &Context) -> anyhow::Result<Expression> {
-	context.scope_data.expect_global_variable("true").expect_clone_pointer(context)
+	context.scope_data.get_variable("true").unwrap().expect_clone_pointer(context)
 }
 
 pub fn number(number: f64, span: Span, context: &mut Context) -> Expression {
-	let number = ObjectConstructor::from_number(number, span).evaluate_at_compile_time(context).unwrap();
+	let number = ObjectConstructor::from_number(number, span, context).evaluate_at_compile_time(context).unwrap();
 	if !number.is_pointer() {
 		panic!("Internal error: Number literal isn't a pointer");
 	}
