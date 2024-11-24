@@ -16,6 +16,7 @@ pub enum ScopeType {
 	Function,
 	RepresentAs,
 	File,
+	Directory,
 	Either,
 	OneOf,
 	/// The global scope type. This should only ever be used on a single scope in the whole program: The global scope.

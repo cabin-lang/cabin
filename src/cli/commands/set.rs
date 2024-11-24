@@ -74,6 +74,7 @@ static OPTIONS: phf::Map<&'static str, CompilerOption> = phf::phf_map! {
 		.choose(&["catppuccin-mocha", "one-midnight"])
 };
 
+/// Sets a compiler option and stores it in the project's cabin.toml.
 #[derive(clap::Parser)]
 pub struct SetCommand {
 	option: String,

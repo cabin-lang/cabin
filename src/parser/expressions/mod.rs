@@ -250,7 +250,9 @@ impl Expression {
 	/// whether this expression can be assigned to the given type.
 	pub fn is_assignable_to_type(&self, target_type: VirtualPointer, context: &mut Context) -> anyhow::Result<bool> {
 		let this_type = self.get_type(context)?.virtual_deref(context).clone();
-		for (name, represent_as) in context.scope_data.get_represent_as_declarations() {}
+		for (_name, _represent_as) in context.scope_data.get_represent_as_declarations() {
+			// TODO
+		}
 		this_type.is_type_assignable_to_type(target_type, context)
 	}
 }

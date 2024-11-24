@@ -5,6 +5,7 @@ use colored::Colorize;
 use crate::cli::commands::CabinCommand;
 use expression_formatter::{format, println};
 
+/// Creates a new "Hello World" Cabin project.
 #[derive(clap::Parser)]
 pub struct NewCommand {
 	project_name: String,
@@ -29,7 +30,7 @@ impl CabinCommand for NewCommand {
 				
 				[options]
 
-				[dependencies]
+				[libraries]
 				"#
 			)),
 		)?;
@@ -39,11 +40,16 @@ impl CabinCommand for NewCommand {
 		std::fs::create_dir_all(&source_dir)?;
 		std::fs::write(source_dir.join("main.cabin"), "run terminal.print(\"Hello world!\");")?;
 
+		// Cache
 		let cache_dir = root_dir.join("cache");
 		std::fs::create_dir_all(cache_dir)?;
 
+		// Builds
 		let builds_dir = root_dir.join("builds");
 		std::fs::create_dir_all(builds_dir)?;
+
+		// Gitignore
+		std::fs::write(root_dir.join(".gitignore"), "builds/\ncache/")?;
 
 		Ok(())
 	}

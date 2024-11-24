@@ -503,7 +503,6 @@ pub struct Span {
 }
 
 impl Span {
-	#[deprecated]
 	pub fn unknown() -> Span {
 		Span { start: 0, length: 0 }
 	}

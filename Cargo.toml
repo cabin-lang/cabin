@@ -19,7 +19,6 @@ strum_macros = "0.26.4"
 toml_edit = "0.22.22"
 try_as = "0.1.0"
 unindent = "0.2.3"
-walkdir = "2.5.0"
 
 [package.metadata.commands]
 run = "cargo run -q -- run"
@@ -28,3 +27,4 @@ run-prelude = "cargo run -q -- run std/prelude.cabin"
 [lints.clippy]
 assigning_clones = "allow"
 tabs_in_doc_comments = "allow"
+blocks_in_conditions = "allow"

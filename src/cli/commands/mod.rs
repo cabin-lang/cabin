@@ -1,16 +1,19 @@
 use colored::Colorize as _;
 use new::NewCommand;
+use package::add::AddCommand;
 use run::RunCommand;
 use set::SetCommand;
 
 use crate::api::context::Context;
 
 pub mod new;
+pub mod package;
 pub mod run;
 pub mod set;
 
 #[enum_dispatch::enum_dispatch]
 pub trait CabinCommand {
+	/// Executes this subcommand.
 	fn execute(self) -> anyhow::Result<()>;
 }
 
@@ -20,6 +23,7 @@ pub enum SubCommand {
 	Run(RunCommand),
 	Set(SetCommand),
 	New(NewCommand),
+	Add(AddCommand),
 }
 
 #[macro_export]
@@ -56,7 +60,7 @@ macro_rules! step {
 		match $expression {
 			Ok(return_value) => {
 				if !$context.config.quiet {
-					if $action == "Evaluating" && $context.lines_printed != 0 {
+					if $object.starts_with("compile-time") && $context.lines_printed != 0 {
 						move_cursor_up_and_over($context.lines_printed, ($context.config.tab() + "evaluating abstract syntax tree... ").len());
 					}
 
@@ -64,7 +68,7 @@ macro_rules! step {
 						println!("{}", "Done!".bold().green());
 					}
 
-					if $action == "Evaluating" && $context.lines_printed != 0 {
+					if $object.starts_with("compile-time") && $context.lines_printed != 0 {
 						move_cursor_down_and_left($context.lines_printed, 0);
 					}
 				}
@@ -73,7 +77,7 @@ macro_rules! step {
 
 			// Error during this step of compilation
 			Err(error) => {
-				if $action == "Evaluating" && $context.lines_printed != 0 {
+				if $object.starts_with("compile-time") && $context.lines_printed != 0 {
 					move_cursor_up_and_over($context.lines_printed, ($context.config.tab() + "evaluating abstract syntax tree... ").len());
 				}
 
@@ -81,7 +85,7 @@ macro_rules! step {
 					println!("{}", "Error:".bold().red());
 				}
 
-				if $action == "Evaluating" && $context.lines_printed != 0 {
+				if $object.starts_with("compile-time") && $context.lines_printed != 0 {
 					move_cursor_down_and_left($context.lines_printed, 0);
 				}
 

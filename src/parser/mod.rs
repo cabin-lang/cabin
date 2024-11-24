@@ -210,8 +210,8 @@ impl TokenQueueFunctionality for std::collections::VecDeque<Token> {
 }
 
 impl Module {
-	pub fn into_literal(self, context: &mut Context) -> LiteralObject {
-		LiteralObject {
+	pub fn into_literal(self, context: &mut Context) -> anyhow::Result<LiteralObject> {
+		Ok(LiteralObject {
 			type_name: "Object".into(),
 			fields: self
 				.declarations
@@ -232,7 +232,7 @@ impl Module {
 			address: None,
 			span: Span::unknown(),
 			tags: TagList::default(),
-		}
+		})
 	}
 }
 

@@ -226,8 +226,47 @@ impl LiteralObject {
 	}
 
 	/// Returns whether a value who's type is this literal, can be assigned to a name who's type is pointed to by the given pointer.
-	pub fn is_type_assignable_to_type(&self, target_type: VirtualPointer, context: &mut Context) -> anyhow::Result<bool> {
-		Ok(self.address.unwrap() == target_type)
+	pub fn is_type_assignable_to_type(&self, target_type: VirtualPointer, _context: &mut Context) -> anyhow::Result<bool> {
+		Ok(self.address.unwrap() == target_type) // TODO: check for polymorphism
+	}
+
+	/// Prints this literal object as a JSON-like string, with it's virtual pointers dereferenced into their literal values,
+	/// recursively. Handy tool for debugging literals.
+	///
+	/// This isn't an `impl Debug` because it requires the program's context to access virtual memory to dereference pointers.
+	///
+	/// # Parameters
+	///
+	/// - `context` - Global data about the compiler's state; In this case, it's used to access virtual memory to dereference
+	/// the pointer values in this literal.
+	///
+	/// # Returns
+	/// This literal as a pretty-printed JSON-like string.
+	pub fn debug(&self, context: &Context) -> String {
+		let mut builder = format!("{} {{", self.type_name.unmangled_name());
+
+		for (field_name, field_pointer) in &self.fields {
+			builder += &format!(
+				"\n\t{} = {},",
+				field_name.unmangled_name(),
+				field_pointer
+					.virtual_deref(context)
+					.debug(context)
+					.lines()
+					.map(|line| format!("\t{line}"))
+					.collect::<Vec<_>>()
+					.join("\n")
+					.trim()
+			)
+		}
+
+		if !self.fields.is_empty() {
+			builder += "\n";
+		}
+
+		builder += "}";
+
+		builder
 	}
 }
 
@@ -272,7 +311,6 @@ impl CompileTime for LiteralObject {
 			ObjectType::Either => Either::from_literal(&self)?.evaluate_at_compile_time(context)?.to_literal(),
 			ObjectType::OneOf => OneOf::from_literal(&self)?.evaluate_at_compile_time(context)?.to_literal(),
 			ObjectType::Normal => self,
-			_ => panic!(),
 		};
 		literal.address = address;
 		Ok(literal)
