@@ -1,5 +1,5 @@
 use crate::{
-	api::{context::Context, traits::TryAs},
+	api::context::Context,
 	comptime::memory::VirtualPointer,
 	mapped_err,
 	parser::{
@@ -8,7 +8,7 @@ use crate::{
 			function_declaration::FunctionDeclaration,
 			group::GroupDeclaration,
 			literal::{LiteralConvertible, LiteralObject},
-			Expression, Typed,
+			Typed,
 		},
 		Module,
 	},

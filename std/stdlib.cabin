@@ -101,7 +101,7 @@ let Error = group {
 	message: Text
 };
 
-let Result = oneof<Data> {
+let Attempted = oneof<Data> {
 	Data,
 	Error	
 };
@@ -116,6 +116,9 @@ let terminal = new Object {
 	#[builtin<"terminal.input">, system_side_effects] 
 	input = action: Text
 };
+
+let file_system = new Object {};
+let environment_variables = new Object {};
 
 let Map = group {
 	get = action(key: Anything) {},

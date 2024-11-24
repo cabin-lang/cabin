@@ -3,7 +3,6 @@
 
 // Anything
 let Anything = cabin.Anything;
-let Metadata = cabin.Metadata;
 
 // Primitives
 let Text = cabin.Text;

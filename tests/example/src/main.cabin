@@ -1,1 +1,1 @@
-run terminal.print("Hello world!");
+let x = 10;

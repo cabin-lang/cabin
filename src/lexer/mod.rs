@@ -12,7 +12,7 @@ use strum::IntoEnumIterator as _;
 use crate::{
 	api::context::Context,
 	cli::theme::{Style, Styled},
-	PRELUDE, STDLIB,
+	PRELUDE,
 };
 
 /// A type of token in Cabin source code. The first step in Cabin compilation is tokenization, which is the process of splitting a raw String of source code into
@@ -602,13 +602,46 @@ pub fn tokenize_program(code: &str, context: &mut Context, is_prelude: bool) -> 
 	Ok(VecDeque::from(tokens))
 }
 
+/// Tokenizes a string of Cabin source code into a vector of tokens. This is the first step in compiling Cabin source code. The returned vector of tokens
+/// should be passed into the Cabin parser, which will convert it into an abstract syntax tree.
+///
+/// The Cabin prelude is automatically prepended to the returned token stream. To tokenize without the prelude, use `tokenize_without_prelude()`
+/// (I'm very creative with names, I know).
+///
+/// # Parameters
+/// - `code` - The Cabin source code. If the given code is not valid Cabin code, this function makes no guarantees to return an error, nor does it make
+/// a guarantee to return an `Ok`. This includes semantic and syntactic errors. This function will only return an error if an unrecognized token is found;
+/// Meaning a piece of code is encountered that doesn't match any known token types. This could be a non-ASCII character or just generally any unused character
+/// in the language like `@`.
+///
+/// # Returns
+/// A vector of tokens in the order they appeared in the given source code after tokenization, or an `Err` if an unrecognized token was found.
+///
+/// # Errors
+/// If the given code string is not syntactically valid Cabin code. It needn't be semantically valid, but it must be comprised of the proper tokens.
 pub fn tokenize(code: &str, context: &mut Context) -> anyhow::Result<VecDeque<Token>> {
 	let mut tokens = tokenize_program(code, context, false)?;
-	let mut prelude_tokens = tokenize_program(STDLIB, context, true)?;
+	let mut prelude_tokens = tokenize_program(PRELUDE, context, true)?;
 	prelude_tokens.append(&mut tokens);
 	Ok(prelude_tokens)
 }
 
+/// Tokenizes a string of Cabin source code into a vector of tokens. This is the first step in compiling Cabin source code. The returned vector of tokens
+/// should be passed into the Cabin parser, which will convert it into an abstract syntax tree.
+///
+/// The Cabin prelude is not prepended to the returned token stream. To tokenize with the prelude, use `tokenize()`.
+///
+/// # Parameters
+/// - `code` - The Cabin source code. If the given code is not valid Cabin code, this function makes no guarantees to return an error, nor does it make
+/// a guarantee to return an `Ok`. This includes semantic and syntactic errors. This function will only return an error if an unrecognized token is found;
+/// Meaning a piece of code is encountered that doesn't match any known token types. This could be a non-ASCII character or just generally any unused character
+/// in the language like `@`.
+///
+/// # Returns
+/// A vector of tokens in the order they appeared in the given source code after tokenization, or an `Err` if an unrecognized token was found.
+///
+/// # Errors
+/// If the given code string is not syntactically valid Cabin code. It needn't be semantically valid, but it must be comprised of the proper tokens.
 pub fn tokenize_without_prelude(code: &str, context: &mut Context) -> anyhow::Result<VecDeque<Token>> {
 	tokenize_program(code, context, false)
 }

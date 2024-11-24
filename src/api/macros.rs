@@ -5,6 +5,7 @@ use crate::{
 	parser::expressions::{object::ObjectConstructor, Expression},
 };
 
+/// Returns a `err!()` from the current function, wrapped in a `Result::Err()`.
 #[macro_export]
 macro_rules! bail_err {
 	(
@@ -46,6 +47,15 @@ macro_rules! err {
 	}}
 }
 
+/// Equivalent to `err!`, but returns a closure that takes an error as a parameter and uses that error as the base for
+/// the error stack. This is generally used in `map_err()`, i.e.:
+///
+/// ```rust
+/// try_something().map_err(mapped_err! {
+/// 	while = "trying to do something",
+/// 	context = context,
+/// })?;
+/// ```
 #[macro_export]
 macro_rules! mapped_err {
 	(
@@ -128,6 +138,32 @@ macro_rules! if_then_else_default {
 			Default::default()
 		}
 	};
+}
+
+/// Parses a comma-separated list of things. This takes a block of code as one of its parameters. The block is run once at the beginning,
+/// and then while the next token is a comma, a comma is consumed and the block is run again. This is used for many comma-separated lists
+/// in the language like function parameters, function arguments, group fields, group instantiation, etc.
+///
+/// This will return the last token that was parsed, so that expressions that end in a list can generate their spans.
+#[macro_export]
+macro_rules! parse_list {
+	(
+		$tokens: expr, $list_type: expr, $body: block
+	) => {{
+		use $crate::parser::TokenQueueFunctionality as _;
+
+		$tokens.pop($list_type.opening())?;
+		while !$tokens.next_is($list_type.closing()) {
+			$body
+			if $tokens.next_is($crate::lexer::TokenType::Comma) {
+				$tokens.pop($crate::lexer::TokenType::Comma)?;
+			} else {
+				break;
+			}
+		}
+
+		$tokens.pop($list_type.closing())?
+	}};
 }
 
 #[derive(Default)]

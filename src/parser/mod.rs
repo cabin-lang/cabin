@@ -225,7 +225,7 @@ impl Module {
 				})
 				.collect(),
 			internal_fields: HashMap::new(),
-			object_type: ObjectType::Module,
+			object_type: ObjectType::Normal,
 			inner_scope_id: Some(self.inner_scope_id),
 			outer_scope_id: self.inner_scope_id,
 			name: "anonymous_module".into(),
@@ -234,32 +234,6 @@ impl Module {
 			tags: TagList::default(),
 		}
 	}
-}
-
-/// Parses a comma-separated list of things. This takes a block of code as one of its parameters. The block is run once at the beginning,
-/// and then while the next token is a comma, a comma is consumed and the block is run again. This is used for many comma-separated lists
-/// in the language like function parameters, function arguments, group fields, group instantiation, etc.
-///
-/// This will return the last token that was parsed, so that expressions that end in a list can generate their spans.
-#[macro_export]
-macro_rules! parse_list {
-	(
-		$tokens: expr, $list_type: expr, $body: block
-	) => {{
-		use $crate::parser::TokenQueueFunctionality as _;
-
-		$tokens.pop($list_type.opening())?;
-		while !$tokens.next_is($list_type.closing()) {
-			$body
-			if $tokens.next_is($crate::lexer::TokenType::Comma) {
-				$tokens.pop($crate::lexer::TokenType::Comma)?;
-			} else {
-				break;
-			}
-		}
-
-		$tokens.pop($list_type.closing())?
-	}};
 }
 
 pub enum ListType {

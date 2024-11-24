@@ -256,7 +256,6 @@ pub enum ObjectType {
 	OneOf,
 	Either,
 	Function,
-	Module,
 }
 
 #[derive(Debug, Clone, try_as::macros::TryInto, try_as::macros::TryAsRef)]
