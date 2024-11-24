@@ -42,7 +42,11 @@ impl CabinCommand for NewCommand {
 
 		// Cache
 		let cache_dir = root_dir.join("cache");
-		std::fs::create_dir_all(cache_dir)?;
+		std::fs::create_dir_all(&cache_dir)?;
+		std::fs::write(
+			root_dir.join(cache_dir).join("libraries.toml"),
+			"# This file is managed by Cabin and should not be manually edited.\n\n[libraries]",
+		)?;
 
 		// Builds
 		let builds_dir = root_dir.join("builds");

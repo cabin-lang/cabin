@@ -27,6 +27,6 @@ let Map = cabin.Map;
 let Object = cabin.Object;
 
 // System
-let terminal = cabin.terminal;
-let file_system = cabin.file_system;
-let environment_variables = cabin.environment_variables;
+let system = cabin.system;
+let print = system.terminal.print;
+let input = system.terminal.input;

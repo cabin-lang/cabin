@@ -8,4 +8,3 @@ developer-mode = true
 emit-c = "output.c"
 
 [libraries]
-dotfiles = { repository = "vi013t/dotfiles", commit = "667b8ddd96ba784ffe6111e10f109757dbce4523" }
