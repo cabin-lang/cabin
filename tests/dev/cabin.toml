@@ -1,0 +1,9 @@
+[information]
+name = "dev"
+version = "0.1.0"
+description = "An example cabin project generated with cabin new"
+license = "All rights reserved"
+
+[options]
+
+[libraries]

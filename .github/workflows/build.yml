@@ -6,6 +6,6 @@ jobs:
   build:
     runs-on: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - name: Build test file
+      - name: Build test project
         run: cargo run -q -- run
-        working-directory: ./tests/example
+        working-directory: ./tests/build

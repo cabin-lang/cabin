@@ -25,6 +25,7 @@ impl CabinCommand for NewCommand {
 				r#"
 				[information]
 				name = "{root_dir.components().last().unwrap().as_os_str().to_str().unwrap()}"
+				version = "0.1.0"
 				description = "An example cabin project generated with cabin new"
 				license = "All rights reserved"
 				
@@ -41,11 +42,19 @@ impl CabinCommand for NewCommand {
 		std::fs::write(source_dir.join("main.cabin"), "run terminal.print(\"Hello world!\");")?;
 
 		// Cache
-		let cache_dir = root_dir.join("cache");
+		let cache_dir = root_dir.join(".cache");
 		std::fs::create_dir_all(&cache_dir)?;
 		std::fs::write(
-			root_dir.join(cache_dir).join("libraries.toml"),
-			"# This file is managed by Cabin and should not be manually edited.\n\n[libraries]",
+			root_dir.join(cache_dir).join("metadata.toml"),
+			unindent::unindent(&format!(
+				"
+				# This file is managed by Cabin and should not be manually edited.
+				
+				[libraries]
+
+				[versions]
+				"
+			)),
 		)?;
 
 		// Builds
@@ -53,7 +62,7 @@ impl CabinCommand for NewCommand {
 		std::fs::create_dir_all(builds_dir)?;
 
 		// Gitignore
-		std::fs::write(root_dir.join(".gitignore"), "builds/\ncache/")?;
+		std::fs::write(root_dir.join(".gitignore"), "builds/\ncache/libraries/")?;
 
 		Ok(())
 	}

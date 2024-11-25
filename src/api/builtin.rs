@@ -31,7 +31,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 
 			let mut first_print = false;
 			if context.lines_printed == 0 {
-				if !context.config.quiet {
+				if !context.config().options().quiet() {
 					println!("\n");
 				}
 				first_print = true;
@@ -41,7 +41,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			context.lines_printed = string_value.chars().filter(|character| character == &'\n').count() + 3;
 
 			if first_print {
-				if !context.config.quiet {
+				if !context.config().options().quiet() {
 					println!();
 				}
 				context.lines_printed += 1;

@@ -72,25 +72,6 @@ impl CabinCommand for AddCommand {
 			"version information"
 		);
 
-		let commit = commit.get(1..commit.len() - 1).unwrap();
-
-		let libraries = project
-			.config
-			.get_mut("libraries")
-			.ok_or_else(|| anyhow::anyhow!("No libraries found in cabin.toml"))?
-			.as_table_mut()
-			.unwrap();
-
-		let mut table = toml_edit::InlineTable::new();
-		table.insert("repository", self.library.clone().into());
-		table.insert("commit", commit.into());
-
-		step!(anyhow::Ok(()), context, "Updating", "cabin.toml");
-		libraries.insert(library_name, table.into());
-		project.write_config();
-
-		step!(anyhow::Ok(()), context, "Validating", "library code");
-
 		expression_formatter::println!(r#"{"Done!".bold().green()}"#);
 		println!();
 

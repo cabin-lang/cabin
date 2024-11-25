@@ -1,13 +1,12 @@
 use std::{cell::RefCell, path::PathBuf};
 
 use colored::{ColoredString, Colorize};
-use smart_default::SmartDefault;
 
 use crate::{
 	api::scope::ScopeData,
 	cli::{
 		theme::{Styled as _, Theme, CATPPUCCIN_MOCHA},
-		Project, RunningContext,
+		RunningContext,
 	},
 	comptime::memory::VirtualMemory,
 	lexer::Span,
@@ -15,12 +14,13 @@ use crate::{
 	parser::expressions::{name::Name, Expression},
 };
 
+use super::config_files::{CabinToml, CabinTomlWriteOnDrop};
+
 pub struct Context {
 	// Publicly mutable
 	pub scope_data: ScopeData,
 	pub scope_label: Option<Name>,
 	pub virtual_memory: VirtualMemory,
-	pub config: CompilerConfiguration,
 	pub running_context: RunningContext,
 	pub lines_printed: usize,
 	pub theme: Theme,
@@ -31,19 +31,13 @@ pub struct Context {
 	error_location: RefCell<Option<Span>>,
 	error_details: RefCell<Option<String>>,
 	compiler_error_position: RefCell<Vec<SourceFilePosition>>,
+	options: CabinToml,
 }
 
 impl Context {
 	pub fn new(path: &PathBuf) -> anyhow::Result<Context> {
-		let running_context = if PathBuf::from(path).is_dir() {
-			RunningContext::Project(Project::new(path)?)
-		} else if PathBuf::from(path).is_file() {
-			RunningContext::SingleFile(path.to_owned())
-		} else {
-			anyhow::bail!("Invalid path");
-		};
-
 		Ok(Context {
+			options: CabinToml::default(),
 			scope_data: ScopeData::global(),
 			scope_label: None,
 			virtual_memory: VirtualMemory::empty(),
@@ -51,9 +45,8 @@ impl Context {
 			error_location: RefCell::new(None),
 			error_details: RefCell::new(None),
 			compiler_error_position: RefCell::new(Vec::new()),
-			config: running_context.config(),
 			lines_printed: 0,
-			running_context,
+			running_context: RunningContext::try_from(path.to_owned())?,
 			theme: CATPPUCCIN_MOCHA,
 			colored_program: Vec::new(),
 		})
@@ -211,16 +204,20 @@ impl Context {
 
 		(line, column)
 	}
-}
 
-#[derive(SmartDefault)]
-pub struct CompilerConfiguration {
-	#[default = 4]
-	pub code_tab_size: usize,
-	#[default = false]
-	pub quiet: bool,
-	#[default = true]
-	pub developer_mode: bool,
+	pub fn config(&self) -> &CabinToml {
+		&self.options
+	}
+
+	/// Returns a mutable reference to the data stored in the project's `cabin.toml`. If the user is running a single
+	/// Cabin file and not in a project, an error is returned. When this value is dropped, the `cabin.toml` file is
+	/// written to update to the contents of the returned object.
+	pub fn cabin_toml_mut(&mut self) -> anyhow::Result<CabinTomlWriteOnDrop> {
+		let RunningContext::Project(project) = &self.running_context else {
+			anyhow::bail!("Attempted to get a mutable reference to the cabin.toml, but Cabin is not currently running in a project.");
+		};
+		Ok(CabinTomlWriteOnDrop::new(&mut self.options, project.root_directory().to_owned()))
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -258,14 +255,4 @@ macro_rules! here {
 	() => {
 		$crate::api::context::SourceFilePosition::new(std::line!(), std::column!(), std::file!(), $crate::function!())
 	};
-}
-
-impl CompilerConfiguration {
-	pub fn tab(&self) -> String {
-		" ".repeat(self.code_tab_size)
-	}
-
-	pub fn tabs(&self, count: usize) -> String {
-		self.tab().repeat(count)
-	}
 }

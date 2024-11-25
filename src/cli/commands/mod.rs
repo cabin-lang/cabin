@@ -7,6 +7,9 @@ use set::SetCommand;
 use crate::api::context::Context;
 
 pub mod new;
+
+/// The package manager module. This module contains the compiler's subcommands for interacting with package management, such as publishing,
+/// adding dependencies, removing dependencies, etc.
 pub mod package;
 pub mod run;
 pub mod set;
@@ -49,8 +52,8 @@ macro_rules! step {
 
 		let here = $crate::here!();
 
-		if !$context.config.quiet {
-			print!("{}{} {}... ", $context.config.tab(), $action.bold().green(), $object);
+		if !$context.config().options().quiet() {
+			print!("{}{} {}... ", $context.config().options().tabs(1), $action.bold().green(), $object);
 			std::io::stdout().flush().unwrap();
 			if $action == "Running" {
 				println!("\n");
@@ -59,9 +62,9 @@ macro_rules! step {
 
 		match $expression {
 			Ok(return_value) => {
-				if !$context.config.quiet {
+				if !$context.config().options().quiet() {
 					if $object.starts_with("compile-time") && $context.lines_printed != 0 {
-						move_cursor_up_and_over($context.lines_printed, ($context.config.tab() + "evaluating abstract syntax tree... ").len());
+						move_cursor_up_and_over($context.lines_printed, ($context.config().options().tabs(1) + "evaluating abstract syntax tree... ").len());
 					}
 
 					if $action != "Running" {
@@ -78,7 +81,7 @@ macro_rules! step {
 			// Error during this step of compilation
 			Err(error) => {
 				if $object.starts_with("compile-time") && $context.lines_printed != 0 {
-					move_cursor_up_and_over($context.lines_printed, ($context.config.tab() + "evaluating abstract syntax tree... ").len());
+					move_cursor_up_and_over($context.lines_printed, ($context.config().options().tabs(1) + "evaluating abstract syntax tree... ").len());
 				}
 
 				if $action != "Running" {
@@ -93,14 +96,12 @@ macro_rules! step {
 				eprintln!(
 					"\n{} {}",
 					"Error:".bold().red(),
-					if $context.config.quiet {
+					if $context.config().options().quiet() {
 						format!("{}", error).lines().next().unwrap().to_owned()
 					} else {
 						format!("{}\n", error)
 					}
 				);
-
-				// Print error location
 
 				// Print the program
 				if let Some(error_position) = $context.error_position() {
@@ -116,20 +117,20 @@ macro_rules! step {
 				}
 
 				// Print additional error information
-				if !$context.config.quiet {
+				if !$context.config().options().quiet() && $context.config().options().detailed_errors() {
 					if let Some(error_details) = $context.error_details() {
 						eprintln!("{}\n\n{error_details}\n", "More information:".bold().bright_blue().underline());
 					}
 				}
 
 				// Print compiler bug location
-				if $context.config.developer_mode {
+				if $context.config().options().developer_mode() {
 					println!("{}\n", "Developer Information:".bold().purple().underline());
 					println!("{}\n", "This error occurred in the Cabin compiler with the following stack trace:".bold());
 					for (index, position) in $context.get_compiler_error_position().iter().enumerate() {
 						let trace = format!(
 							"{}in {} at {}",
-							$context.config.tabs(if index == 0 { 1 } else { 2 }),
+							$context.config().options().tabs(if index == 0 { 1 } else { 2 }),
 							position.function_name().cyan(),
 							format!("{}:{}:{}", position.file_name(), position.line(), position.column()).purple()
 						);
@@ -140,7 +141,7 @@ macro_rules! step {
 						"{}",
 						format!(
 							"{}in {} at {}",
-							$context.config.tabs(2),
+							$context.config().options().tabs(2),
 							here.function_name().cyan(),
 							format!("{}:{}:{}", here.file_name(), here.line(), here.column()).purple()
 						)
@@ -172,7 +173,7 @@ macro_rules! step {
 }
 
 pub fn start(action: &str, context: &Context) {
-	if !context.config.quiet {
+	if !context.config().options().quiet() {
 		println!(
 			"\n{} {}...                    {}",
 			action.bold().green(),
