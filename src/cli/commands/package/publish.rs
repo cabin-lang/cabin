@@ -1,12 +1,7 @@
 use std::process::Command;
 
-use crate::{
-	api::context::{context, Context},
-	cli::{commands::CabinCommand, RunningContext},
-	step,
-};
+use crate::{api::context::context, cli::commands::CabinCommand, step};
 
-use colored::Colorize as _;
 use semver::Version;
 
 #[derive(clap::Parser)]
@@ -23,15 +18,7 @@ pub struct PublishCommand {
 
 impl CabinCommand for PublishCommand {
 	fn execute(self) -> anyhow::Result<()> {
-		let RunningContext::Project(project) = &mut context().running_context else {
-			anyhow::bail!(expression_formatter::format!(
-				r#"
-				{"Error:".bold().red()} The {"add".bold().cyan()} command can only be used from within a Cabin project. No cabin.toml was found in the current directory.
-				"#
-			));
-		};
-
-		let commit = step!(
+		let _commit = step!(
 			String::from_utf8(Command::new("git").arg("log").arg("-n").arg("1").arg("--pretty=format:\"%H\"").output()?.stdout,),
 			"Getting",
 			"version information"

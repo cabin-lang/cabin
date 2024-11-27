@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, thread::Scope};
 
 use crate::{
 	api::{builtin::call_builtin_at_compile_time, context::context, scope::ScopeId, traits::TryAs as _},
@@ -448,5 +448,16 @@ impl FunctionCall {
 			scope_id: context().scope_data.unique_id(),
 			span: start.to(&end),
 		})
+	}
+
+	pub fn call_main(function: Expression, scope_id: ScopeId) -> anyhow::Result<Expression> {
+		FunctionCall {
+			function: Box::new(function),
+			compile_time_arguments: Vec::new(),
+			arguments: Vec::new(),
+			scope_id,
+			span: Span::unknown(),
+		}
+		.evaluate_at_compile_time()
 	}
 }

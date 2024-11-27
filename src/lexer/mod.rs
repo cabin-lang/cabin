@@ -511,7 +511,7 @@ impl Span {
 	pub fn cover(first: &Span, second: &Span) -> Span {
 		Span {
 			start: first.start,
-			length: second.start + second.length - first.start,
+			length: (second.start + second.length).abs_diff(first.start),
 		}
 	}
 
@@ -643,4 +643,13 @@ pub fn tokenize(code: &str) -> anyhow::Result<VecDeque<Token>> {
 /// If the given code string is not syntactically valid Cabin code. It needn't be semantically valid, but it must be comprised of the proper tokens.
 pub fn tokenize_without_prelude(code: &str) -> anyhow::Result<VecDeque<Token>> {
 	tokenize_program(code, false)
+}
+
+pub fn tokenize_main(code: &str) -> anyhow::Result<VecDeque<Token>> {
+	let mut tokens = tokenize(code)?;
+	let mut pre_tokens = tokenize_program("let main_function = action {", true)?;
+	let mut post_tokens = tokenize_program("};", true)?;
+	pre_tokens.append(&mut tokens);
+	pre_tokens.append(&mut post_tokens);
+	Ok(pre_tokens)
 }

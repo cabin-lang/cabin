@@ -53,7 +53,7 @@ impl CabinCommand for AddCommand {
 			"library code"
 		);
 
-		let commit = step!(
+		let _commit = step!(
 			String::from_utf8(
 				Command::new("git")
 					.arg("log")

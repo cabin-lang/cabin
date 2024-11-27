@@ -197,11 +197,7 @@ impl Scope {
 		string.push(format!("\tlabel: [{:?}]", self.label));
 		string.push(format!(
 			"\tvariables: [{}],",
-			self.variables
-				.iter()
-				.map(|(name, value)| format!("{}: {:?}", name.unmangled_name(), value))
-				.collect::<Vec<_>>()
-				.join("\n\n")
+			self.variables.keys().map(|name| name.unmangled_name()).collect::<Vec<_>>().join(",")
 		));
 		for child_scope in &self.children {
 			for line in scopes

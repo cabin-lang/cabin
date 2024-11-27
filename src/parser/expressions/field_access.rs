@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Pointer};
+use std::collections::HashMap;
 
 use colored::Colorize as _;
 
@@ -10,7 +10,7 @@ use crate::{
 	},
 	bail_err,
 	comptime::{memory::VirtualPointer, CompileTime},
-	debug_log, err,
+	err,
 	lexer::{Span, TokenType},
 	parser::{
 		expressions::{function_declaration::FunctionDeclaration, literal::LiteralConvertible as _, name::Name, operators::PrimaryExpression, Expression, Spanned, Typed},

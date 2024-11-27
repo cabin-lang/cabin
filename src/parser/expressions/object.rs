@@ -4,7 +4,7 @@ use colored::Colorize;
 use try_as::traits as try_as_traits;
 
 use crate::{
-	api::{context::context, scope::ScopeId, traits::TryAs},
+	api::{context::context, scope::ScopeId},
 	comptime::{memory::VirtualPointer, CompileTime},
 	debug_log, if_then_some,
 	lexer::{Span, TokenType},
@@ -132,6 +132,11 @@ impl ObjectConstructor {
 
 		true
 	}
+
+	pub fn get_field<T: Into<Name>>(&self, name: T) -> Option<&Expression> {
+		let name = name.into();
+		self.fields.iter().find_map(|field| (field.name == name).then(|| field.value.as_ref().unwrap()))
+	}
 }
 
 impl Parse for ObjectConstructor {
@@ -246,10 +251,6 @@ impl CompileTime for ObjectConstructor {
 			};
 
 			self.fields.add_or_overwrite_field(evaluated_field);
-
-			if self.type_name == "Module".into() {
-				context().scope_data.reassign_variable(&field.name, field_value)?;
-			}
 		}
 
 		context().scope_data.set_current_scope(previous);
