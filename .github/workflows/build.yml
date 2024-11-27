@@ -8,4 +8,4 @@ jobs:
     steps:
       - name: Build test project
         run: cargo run -q -- run
-        working-directory: ./tests/build
+        working-directory: tests/build
