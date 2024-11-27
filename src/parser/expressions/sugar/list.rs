@@ -3,8 +3,9 @@ use crate::{
 	parse_list,
 	parser::{
 		expressions::{
+			field_access::FieldAccessType,
 			name::Name,
-			object::{InternalFieldValue, ObjectConstructor, ObjectType},
+			object::{InternalFieldValue, ObjectConstructor},
 			Expression,
 		},
 		statements::tag::TagList,
@@ -26,9 +27,9 @@ impl Parse for List {
 			type_name: Name::from("List"),
 			fields: Vec::new(),
 			internal_fields: std::collections::HashMap::from([("elements".to_owned(), InternalFieldValue::ExpressionList(list))]),
-			scope_id: context.scope_data.unique_id(),
+			outer_scope_id: context.scope_data.unique_id(),
 			inner_scope_id: context.scope_data.unique_id(),
-			object_type: ObjectType::Normal,
+			field_access_type: FieldAccessType::Normal,
 			name: "anonymous_runtime_list".into(),
 			span: start.to(&end),
 			tags: TagList::default(),

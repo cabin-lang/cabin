@@ -22,6 +22,12 @@ pub struct Theme {
 	function: Style,
 }
 
+impl Default for Theme {
+	fn default() -> Self {
+		CATPPUCCIN_MOCHA
+	}
+}
+
 impl Theme {
 	/// Returns the keyword style for this theme. Themes should be immutable, so the `keyword` field is kept private, and this method is the only way to access
 	/// it and obtain a reference to the keyword style.

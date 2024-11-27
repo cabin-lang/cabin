@@ -10,12 +10,10 @@ use crate::{
 	},
 	bail_err,
 	comptime::{memory::VirtualPointer, CompileTime},
-	err,
+	debug_log, err,
 	lexer::{Span, TokenType},
 	parser::{
-		expressions::{
-			function_declaration::FunctionDeclaration, literal::LiteralConvertible as _, name::Name, object::ObjectType, operators::PrimaryExpression, Expression, Spanned, Typed,
-		},
+		expressions::{function_declaration::FunctionDeclaration, literal::LiteralConvertible as _, name::Name, operators::PrimaryExpression, Expression, Spanned, Typed},
 		statements::tag::TagList,
 		Parse, TokenQueue, TokenQueueFunctionality as _,
 	},
@@ -24,19 +22,31 @@ use crate::{
 
 use super::{literal::LiteralObject, object::ObjectConstructor};
 
-#[derive(Debug, Clone)]
+/// A type describing how fields are accessed on this type of objects via the dot operator.
+/// For example, on a normal object, the dot operator just gets a field with the given name,
+/// but for `eithers`, it indexes into the either's variants and finds the one with the given
+/// name.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FieldAccessType {
 	Normal,
-	RepresentAs,
+	Group,
+	OneOf,
+	Either,
 }
 
-impl TryFrom<TokenType> for FieldAccessType {
+#[derive(Debug, Clone)]
+pub enum FieldAccessOperator {
+	Dot,
+	Colon,
+}
+
+impl TryFrom<TokenType> for FieldAccessOperator {
 	type Error = anyhow::Error;
 
 	fn try_from(value: TokenType) -> Result<Self, Self::Error> {
 		Ok(match value {
-			TokenType::Dot => FieldAccessType::Normal,
-			TokenType::Colon => FieldAccessType::RepresentAs,
+			TokenType::Dot => FieldAccessOperator::Dot,
+			TokenType::Colon => FieldAccessOperator::Colon,
 			_ => anyhow::bail!("literally how did you even get ths error to happen"),
 		})
 	}
@@ -48,7 +58,7 @@ pub struct FieldAccess {
 	right: Name,
 	scope_id: ScopeId,
 	span: Span,
-	access_type: FieldAccessType,
+	access_type: FieldAccessOperator,
 }
 
 impl Parse for FieldAccess {
@@ -58,7 +68,7 @@ impl Parse for FieldAccess {
 		let mut expression = PrimaryExpression::parse(tokens, context)?; // There should be no map_err here
 		let start = expression.span(context);
 		while tokens.next_is_one_of(&[TokenType::Dot, TokenType::Colon]) {
-			let access_type = FieldAccessType::try_from(tokens.pop_front().unwrap().token_type)?;
+			let access_type = FieldAccessOperator::try_from(tokens.pop_front().unwrap().token_type)?;
 			let right = Name::parse(tokens, context)?;
 			let end = right.span(context);
 			expression = Expression::FieldAccess(Self {
@@ -78,16 +88,22 @@ impl CompileTime for FieldAccess {
 	type Output = Expression;
 
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
+		debug_log!(
+			context,
+			"Evaluating field access {:?}.{} at compile-time",
+			self.left,
+			self.right.unmangled_name().bold().red()
+		);
 		let left_evaluated = self.left.evaluate_at_compile_time(context)?;
 
 		// Resolvable at compile-time
-		if let Ok(pointer) = left_evaluated.try_as_literal_or_name(context).map(|value| value.address.unwrap()) {
+		if let Ok(pointer) = left_evaluated.try_as_literal(context).map(|value| value.address.unwrap()) {
 			let literal = pointer.virtual_deref(context);
 
 			Ok(match self.access_type {
-				FieldAccessType::Normal => match literal.object_type() {
+				FieldAccessOperator::Dot => match literal.object_type() {
 					// Object fields
-					ObjectType::Normal => {
+					FieldAccessType::Normal => {
 						let field = literal.get_field(self.right.clone()).ok_or_else(|| {
 							anyhow::anyhow!(
 								"Attempted to access a the field \"{}\" on an object, but no field with that name exists on that object.",
@@ -98,7 +114,7 @@ impl CompileTime for FieldAccess {
 						let pointer = field.try_as::<VirtualPointer>();
 						if let Ok(pointer) = pointer {
 							let literal = pointer.virtual_deref(context).clone();
-							if literal.object_type() == &ObjectType::Function {
+							if literal.type_name() == &"Function".into() {
 								let mut function_declaration = FunctionDeclaration::from_literal(&literal).unwrap();
 								function_declaration.set_this_object(left_evaluated);
 								context.virtual_memory.replace(pointer.to_owned(), function_declaration.to_literal());
@@ -112,7 +128,7 @@ impl CompileTime for FieldAccess {
 					},
 
 					// Either fields
-					ObjectType::Either => {
+					FieldAccessType::Either => {
 						let variants = literal.get_internal_field::<Vec<(Name, VirtualPointer)>>("variants").unwrap();
 						variants
 							.iter()
@@ -127,8 +143,8 @@ impl CompileTime for FieldAccess {
 					},
 					_value => todo!("{literal:?} {}", self.right.unmangled_name()),
 				},
-				FieldAccessType::RepresentAs => match literal.object_type() {
-					ObjectType::Normal => {
+				FieldAccessOperator::Colon => match literal.object_type() {
+					FieldAccessType::Normal => {
 						let declaration = context
 							.scope_data
 							.get_represent_as(&self.right)
@@ -169,9 +185,9 @@ impl CompileTime for FieldAccess {
 									fields: declaration.fields().to_vec(),
 									internal_fields: HashMap::new(),
 									inner_scope_id: context.scope_data.file_id(),
-									object_type: ObjectType::Normal,
+									field_access_type: FieldAccessType::Normal,
 									name: "anonymous_represent_as_casted".into(),
-									scope_id: context.scope_data.file_id(),
+									outer_scope_id: context.scope_data.file_id(),
 									tags: TagList::default(),
 									span: declaration.span(context),
 								},
@@ -204,7 +220,7 @@ impl TranspileToC for FieldAccess {
 			format!(
 				"{}_{}",
 				self.left.to_c(context)?,
-				name.clone().evaluate_at_compile_time(context)?.try_as_literal_or_name(context)?.address.unwrap()
+				name.clone().evaluate_at_compile_time(context)?.try_as_literal(context)?.address.unwrap()
 			)
 		} else {
 			self.left.to_c(context)?
@@ -226,7 +242,7 @@ impl FieldAccess {
 			right,
 			scope_id,
 			span,
-			access_type: FieldAccessType::Normal,
+			access_type: FieldAccessOperator::Dot,
 		}
 	}
 }

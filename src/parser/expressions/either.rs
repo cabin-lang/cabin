@@ -9,7 +9,7 @@ use crate::{
 		expressions::{
 			literal::{LiteralConvertible, LiteralObject},
 			name::Name,
-			object::{InternalFieldValue, ObjectType},
+			object::InternalFieldValue,
 			Spanned,
 		},
 		statements::tag::TagList,
@@ -17,6 +17,8 @@ use crate::{
 	},
 	transpiler::TranspileToC,
 };
+
+use super::field_access::FieldAccessType;
 
 #[derive(Debug, Clone)]
 pub struct Either {
@@ -67,7 +69,7 @@ impl LiteralConvertible for Either {
 			fields: HashMap::from([]),
 			internal_fields: HashMap::from([("variants".to_owned(), InternalFieldValue::LiteralMap(self.variants))]),
 			name: self.name,
-			object_type: ObjectType::Either,
+			field_access_type: FieldAccessType::Either,
 			outer_scope_id: self.scope_id,
 			inner_scope_id: Some(self.inner_scope_id),
 			span: self.span,

@@ -127,7 +127,7 @@ impl CompileTime for FunctionCall {
 		}
 
 		// Evaluate function
-		let literal = function.try_as_literal_or_name(context);
+		let literal = function.try_as_literal(context);
 		if let Ok(function_declaration) = literal {
 			let function_declaration = match FunctionDeclaration::from_literal(function_declaration) {
 				Ok(function_declaration) => function_declaration,
@@ -151,7 +151,7 @@ impl CompileTime for FunctionCall {
 
 			// Validate compile-time arguments
 			for (argument, (_parameter_name, parameter_type)) in compile_time_arguments.iter().zip(function_declaration.compile_time_parameters().iter()) {
-				let parameter_type_pointer = parameter_type.try_as_literal_or_name(context)?.address.as_ref().unwrap().to_owned();
+				let parameter_type_pointer = parameter_type.try_as_literal(context)?.address.as_ref().unwrap().to_owned();
 				if !argument.is_assignable_to_type(parameter_type_pointer, context)? {
 					bail_err! {
 						base = format!(
@@ -170,7 +170,7 @@ impl CompileTime for FunctionCall {
 
 			// Validate arguments
 			for (argument, (_parameter_name, parameter_type)) in arguments.iter().zip(function_declaration.parameters().iter()) {
-				let parameter_type_pointer = parameter_type.try_as_literal_or_name(context)?.address.as_ref().unwrap().to_owned();
+				let parameter_type_pointer = parameter_type.try_as_literal(context)?.address.as_ref().unwrap().to_owned();
 				if !argument.is_assignable_to_type(parameter_type_pointer, context)? {
 					bail_err! {
 						base = format!(
@@ -205,7 +205,7 @@ impl CompileTime for FunctionCall {
 					context = context,
 				})?;
 
-				if return_value.try_as_literal_or_name(context).is_ok() {
+				if return_value.try_as_literal(context).is_ok() {
 					return Ok(return_value);
 				}
 			}
@@ -227,7 +227,7 @@ impl CompileTime for FunctionCall {
 
 				// Get builtin and side effect tags
 				for tag in &function_declaration.tags().values {
-					if let Ok(object) = tag.try_as_literal_or_name(context).cloned() {
+					if let Ok(object) = tag.try_as_literal(context).cloned() {
 						if object.type_name() == &Name::from("BuiltinTag") {
 							builtin_name = Some(
 								object
@@ -286,7 +286,7 @@ impl TranspileToC for FunctionCall {
 		)?;
 
 		let return_type = if let Some(return_type) = function.return_type() {
-			format!("{}* return_address;", return_type.expect_literal(context)?.clone().to_c_type(context)?)
+			format!("{}* return_address;", return_type.try_as_literal(context)?.clone().to_c_type(context)?)
 		} else {
 			String::new()
 		};
@@ -317,14 +317,14 @@ impl TranspileToC for FunctionCall {
 				let mut parameters = function
 					.parameters()
 					.iter()
-					.map(|parameter| Ok(format!("{}*", parameter.1.expect_literal(context)?.clone().to_c_type(context)?)))
+					.map(|parameter| Ok(format!("{}*", parameter.1.try_as_literal(context)?.clone().to_c_type(context)?)))
 					.collect::<anyhow::Result<Vec<_>>>()?
 					.join(", ");
 				if let Some(return_type) = function.return_type().as_ref() {
 					if !parameters.is_empty() {
 						parameters += ", ";
 					}
-					parameters += &format!("{}*", return_type.expect_literal(context)?.clone().to_c_type(context)?);
+					parameters += &format!("{}*", return_type.try_as_literal(context)?.clone().to_c_type(context)?);
 				}
 				parameters
 			},
@@ -392,7 +392,7 @@ impl RuntimeableExpression for FunctionCall {
 
 impl Typed for FunctionCall {
 	fn get_type(&self, context: &mut Context) -> anyhow::Result<VirtualPointer> {
-		let function = FunctionDeclaration::from_literal(self.function.expect_literal(context)?)?;
+		let function = FunctionDeclaration::from_literal(self.function.try_as_literal(context)?)?;
 		if let Some(return_type) = function.return_type() {
 			return_type.expect_as::<VirtualPointer>().cloned()
 		} else {

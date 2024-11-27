@@ -87,7 +87,7 @@ impl Parse for RepresentAs {
 			}
 
 			// Add field
-			fields.add_field(Field {
+			fields.add_or_overwrite_field(Field {
 				name,
 				value: Some(value),
 				field_type: None,
@@ -136,7 +136,7 @@ impl CompileTime for RepresentAs {
 				context = context,
 			})?;
 
-			fields.add_field(Field {
+			fields.add_or_overwrite_field(Field {
 				name: field.name,
 				value: Some(field_value),
 				field_type: None,

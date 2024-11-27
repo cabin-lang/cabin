@@ -49,7 +49,7 @@ impl CompileTime for ForEachLoop {
 	type Output = Expression;
 
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
-		if let Ok(literal) = self.iterable.try_as_literal_or_name(context) {
+		if let Ok(literal) = self.iterable.try_as_literal(context) {
 			let elements = literal.try_as::<Vec<Expression>>()?.to_owned();
 			for element in elements {
 				context.scope_data.reassign_variable_from_id(&self.binding_name, element.clone(), self.inner_scope_id)?; // TODO: sneaky clone

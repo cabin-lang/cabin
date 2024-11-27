@@ -18,7 +18,8 @@ toml! {
 
 	[options]
 	quiet: bool = false;
-	developer_mode: bool = false;
+	debug_mode: bool = true;
+	developer_mode: bool = true;
 	detailed_errors: bool = true;
 	tab_size: i64 = 4;
 	theme: String = choose!("catppuccin-mocha", "one-midnight").default("catppuccin-mocha");

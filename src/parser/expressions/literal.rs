@@ -15,7 +15,7 @@ use crate::{
 		expressions::{
 			group::GroupDeclaration,
 			name::Name,
-			object::{InternalFieldValue, ObjectConstructor, ObjectType},
+			object::{InternalFieldValue, ObjectConstructor},
 			Expression, Typed,
 		},
 		statements::tag::TagList,
@@ -23,7 +23,7 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
-use super::{either::Either, function_declaration::FunctionDeclaration, oneof::OneOf, Spanned};
+use super::{either::Either, field_access::FieldAccessType, function_declaration::FunctionDeclaration, oneof::OneOf, Spanned};
 
 /// A "literal object". Literal objects can be thought of as simple associative arrays, similar to a JSON object or similar.
 /// Specifically, a literal object is a collection of fields where each field's value is another literal object.
@@ -55,7 +55,7 @@ pub struct LiteralObject {
 	/// similarly.
 	pub internal_fields: HashMap<String, InternalFieldValue>,
 
-	pub object_type: ObjectType,
+	pub field_access_type: FieldAccessType,
 
 	pub outer_scope_id: ScopeId,
 	pub inner_scope_id: Option<ScopeId>,
@@ -82,7 +82,7 @@ impl LiteralObject {
 			type_name: "Object".into(),
 			fields: HashMap::new(),
 			internal_fields: HashMap::new(),
-			object_type: ObjectType::Normal,
+			field_access_type: FieldAccessType::Normal,
 			outer_scope_id: context.scope_data.file_id(),
 			inner_scope_id: None,
 			address: None,
@@ -135,8 +135,8 @@ impl LiteralObject {
 			type_name: object.type_name,
 			fields,
 			internal_fields: object.internal_fields,
-			object_type: object.object_type,
-			outer_scope_id: object.scope_id,
+			field_access_type: object.field_access_type,
+			outer_scope_id: object.outer_scope_id,
 			inner_scope_id: Some(object.inner_scope_id),
 			name: object.name,
 			address: None,
@@ -149,8 +149,8 @@ impl LiteralObject {
 		&self.type_name
 	}
 
-	pub fn object_type(&self) -> &ObjectType {
-		&self.object_type
+	pub fn object_type(&self) -> &FieldAccessType {
+		&self.field_access_type
 	}
 
 	pub fn name(&self) -> &Name {
@@ -305,12 +305,12 @@ impl CompileTime for LiteralObject {
 
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
 		let address = self.address;
-		let mut literal = match self.object_type {
-			ObjectType::Function => FunctionDeclaration::from_literal(&self)?.evaluate_at_compile_time(context)?.to_literal(),
-			ObjectType::Group => GroupDeclaration::from_literal(&self)?.evaluate_at_compile_time(context)?.to_literal(),
-			ObjectType::Either => Either::from_literal(&self)?.evaluate_at_compile_time(context)?.to_literal(),
-			ObjectType::OneOf => OneOf::from_literal(&self)?.evaluate_at_compile_time(context)?.to_literal(),
-			ObjectType::Normal => self,
+		let mut literal = match self.type_name().unmangled_name().as_str() {
+			"Function" => FunctionDeclaration::from_literal(&self)?.evaluate_at_compile_time(context)?.to_literal(),
+			"Group" => GroupDeclaration::from_literal(&self)?.evaluate_at_compile_time(context)?.to_literal(),
+			"Either" => Either::from_literal(&self)?.evaluate_at_compile_time(context)?.to_literal(),
+			"OneOf" => OneOf::from_literal(&self)?.evaluate_at_compile_time(context)?.to_literal(),
+			_ => self,
 		};
 		literal.address = address;
 		Ok(literal)

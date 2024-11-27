@@ -17,7 +17,7 @@ use crate::{
 			block::Block,
 			literal::{LiteralConvertible, LiteralObject},
 			name::Name,
-			object::{InternalFieldValue, ObjectType},
+			object::InternalFieldValue,
 			Expression, Parse, Spanned,
 		},
 		statements::tag::TagList,
@@ -25,6 +25,8 @@ use crate::{
 	},
 	transpiler::TranspileToC,
 };
+
+use super::field_access::FieldAccessType;
 
 #[derive(Debug, Clone)]
 pub struct FunctionDeclaration {
@@ -190,7 +192,7 @@ impl TranspileToC for FunctionDeclaration {
 		// Get builtin and side effect tags
 		let mut builtin_body = None;
 		for tag in &self.tags.values {
-			if let Ok(object) = tag.try_as_literal_or_name(context).cloned() {
+			if let Ok(object) = tag.try_as_literal(context).cloned() {
 				if object.type_name() == &Name::from("BuiltinTag") {
 					let builtin_name = object.get_field_literal("internal_name", context).unwrap().expect_as::<String>()?.to_owned();
 					let mut parameters = self.parameters.iter().map(|(parameter_name, _)| parameter_name.to_c(context).unwrap()).collect::<Vec<_>>();
@@ -208,7 +210,7 @@ impl TranspileToC for FunctionDeclaration {
 			format!(
 				"{}{}* return_address",
 				if self.parameters.is_empty() { "" } else { ", " },
-				return_type.try_as_literal_or_name(context)?.clone().to_c_type(context)?
+				return_type.try_as_literal(context)?.clone().to_c_type(context)?
 			)
 		} else {
 			String::new()
@@ -218,11 +220,7 @@ impl TranspileToC for FunctionDeclaration {
 			"({}{}) {{\n{}\n}}",
 			self.parameters
 				.iter()
-				.map(|(name, parameter_type)| Ok(format!(
-					"{}* {}",
-					parameter_type.try_as_literal_or_name(context)?.clone().to_c_type(context)?,
-					name.to_c(context)?
-				)))
+				.map(|(name, parameter_type)| Ok(format!("{}* {}", parameter_type.try_as_literal(context)?.clone().to_c_type(context)?, name.to_c(context)?)))
 				.collect::<anyhow::Result<Vec<_>>>()?
 				.join(", "),
 			return_type_c,
@@ -254,7 +252,7 @@ impl LiteralConvertible for FunctionDeclaration {
 				("this_object".to_owned(), InternalFieldValue::OptionalExpression(self.this_object)),
 			]),
 			name: self.name,
-			object_type: ObjectType::Function,
+			field_access_type: FieldAccessType::Normal,
 			outer_scope_id: self.outer_scope_id,
 			inner_scope_id: self.inner_scope_id,
 			span: self.span,

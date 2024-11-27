@@ -13,13 +13,15 @@ use crate::{
 		expressions::{
 			literal::{LiteralConvertible, LiteralObject},
 			name::Name,
-			object::{InternalFieldValue, ObjectType},
+			object::InternalFieldValue,
 			Expression, Spanned,
 		},
 		statements::tag::TagList,
 		ListType, Parse, TokenQueue, TokenQueueFunctionality,
 	},
 };
+
+use super::field_access::FieldAccessType;
 
 #[derive(Debug, Clone)]
 pub struct OneOf {
@@ -114,7 +116,7 @@ impl LiteralConvertible for OneOf {
 				("compile_time_parameters".to_owned(), InternalFieldValue::NameList(self.compile_time_parameters)),
 			]),
 			name: self.name,
-			object_type: ObjectType::OneOf,
+			field_access_type: FieldAccessType::OneOf,
 			outer_scope_id: self.outer_scope_id,
 			inner_scope_id: Some(self.inner_scope_id),
 			span: self.span,

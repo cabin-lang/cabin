@@ -1,15 +1,23 @@
 use std::{collections::HashMap, path::PathBuf};
 
+use colored::Colorize;
+
 use crate::{
 	api::context::Context,
 	cli::{
 		commands::{start, CabinCommand},
 		RunningContext,
 	},
-	comptime::{memory::VirtualPointer, CompileTime as _},
+	comptime::CompileTime as _,
+	debug_log,
 	lexer::{tokenize, tokenize_without_prelude, Span},
+	mapped_err, object,
 	parser::{
-		expressions::{literal::LiteralObject, name::Name, object::ObjectType, Expression},
+		expressions::{
+			field_access::FieldAccessType,
+			object::{Field, ObjectConstructor},
+			Expression,
+		},
 		parse,
 		statements::tag::TagList,
 		Module, TokenQueue,
@@ -29,11 +37,14 @@ impl CabinCommand for RunCommand {
 		let mut context = Context::new(&path)?;
 
 		// Standard Library
-		let mut stdlib_tokens = tokenize_without_prelude(STDLIB, &mut context)?;
-		let stdlib_ast = parse(&mut stdlib_tokens, &mut context)?;
-		let evaluated_stdlib = stdlib_ast.evaluate_at_compile_time(&mut context)?;
-		let stdlib_module = evaluated_stdlib.into_literal(&mut context)?.store_in_memory(&mut context);
-		context.scope_data.declare_new_variable("cabin", Expression::Pointer(stdlib_module))?;
+		{
+			debug_log!(&mut context, "{} stdlib module...", "Adding".bold().green());
+			let mut stdlib_tokens = tokenize_without_prelude(STDLIB, &mut context)?;
+			let stdlib_ast = parse(&mut stdlib_tokens, &mut context)?;
+			let evaluated_stdlib = stdlib_ast.evaluate_at_compile_time(&mut context)?;
+			let stdlib_module = evaluated_stdlib.into_literal(&mut context)?.store_in_memory(&mut context);
+			context.scope_data.declare_new_variable("cabin", Expression::Pointer(stdlib_module))?;
+		}
 
 		// User code
 		start("Running", &context);
@@ -43,9 +54,16 @@ impl CabinCommand for RunCommand {
 			let root = step!(get_source_code_directory(&project.root_directory().join("src")), context, "Reading", "source files");
 			let tokenized = step!(tokenize_directory(root, &mut context), context, "Tokenizing", "source code");
 			let module_ast = step!(parse_directory(tokenized, &mut context), context, "Parsing", "token streams");
-			let compile_time_evaluated_module = step!(evaluate_directory(module_ast, &mut context), context, "Running", "compile-time code");
-			let module_literal = literalize_directory(compile_time_evaluated_module, &mut context)?;
-			let _global_module: VirtualPointer = composite_directory_into_module(module_literal, &mut context);
+			let root_module = add_modules_to_scope(module_ast, &mut context)?;
+			let compile_time_evaluated_module = step!(
+				root_module.evaluate_at_compile_time(&mut context).map_err(mapped_err! {
+					while = "evaluating the project's root module at compile-time",
+					context = context,
+				}),
+				context,
+				"Running",
+				"compile-time code"
+			);
 		}
 
 		// let c_code = step!(transpile(&comptime_ast, &mut context), &context, "Transpiling", "evaluated AST to C");
@@ -57,6 +75,7 @@ impl CabinCommand for RunCommand {
 	}
 }
 
+#[derive(Debug)]
 struct CabinDirectory<T> {
 	source_files: HashMap<String, T>,
 	sub_directories: HashMap<String, CabinDirectory<T>>,
@@ -67,49 +86,58 @@ fn get_source_code_directory(root_dir: &PathBuf) -> anyhow::Result<CabinDirector
 	let mut sub_directories = HashMap::new();
 	for entry in std::fs::read_dir(root_dir).unwrap().filter_map(Result::ok) {
 		if entry.path().is_file() && entry.path().extension().unwrap() == "cabin" {
-			source_files.insert(
-				entry.path().file_name().unwrap().to_str().unwrap().to_owned().strip_suffix(".cabin").unwrap().to_owned(),
-				std::fs::read_to_string(entry.path())?,
-			);
+			let name = entry.path().file_name().unwrap().to_str().unwrap().to_owned().strip_suffix(".cabin").unwrap().to_owned();
+			source_files.insert(name, std::fs::read_to_string(entry.path())?);
 		} else if entry.path().is_dir() {
-			sub_directories.insert(entry.path().file_name().unwrap().to_str().unwrap().to_owned(), get_source_code_directory(&entry.path())?);
+			let name = entry.path().file_name().unwrap().to_str().unwrap().to_owned().strip_suffix(".cabin").unwrap().to_owned();
+			sub_directories.insert(name.clone(), get_source_code_directory(&entry.path())?);
 		}
 	}
 
 	Ok(CabinDirectory { source_files, sub_directories })
 }
 
-fn composite_directory_into_module(directory: CabinDirectory<LiteralObject>, context: &mut Context) -> VirtualPointer {
-	let mut fields = HashMap::new();
+fn add_modules_to_scope(directory: CabinDirectory<Module>, context: &mut Context) -> anyhow::Result<ObjectConstructor> {
+	let mut fields = Vec::new();
 
-	let mut submodules = HashMap::new();
+	for (file_name, file_module) in directory.source_files {
+		fields.push(Field {
+			name: file_name.into(),
+			value: Some(Expression::ObjectConstructor(file_module.into_object(context).unwrap())),
+			field_type: None,
+		});
+	}
 
 	for (sub_directory_name, sub_directory_module) in directory.sub_directories {
-		let composite = composite_directory_into_module(sub_directory_module, context);
-		submodules.insert(Name::from(sub_directory_name.clone()), composite);
-		fields.insert(Name::from(sub_directory_name), composite);
+		let constructor = add_modules_to_scope(sub_directory_module, context)?;
+		let previous = context.scope_data.set_current_scope(constructor.inner_scope_id);
+
+		context
+			.scope_data
+			.declare_new_variable(sub_directory_name.clone(), Expression::ObjectConstructor(constructor))?;
+
+		fields.push(Field {
+			name: sub_directory_name.clone().into(),
+			value: Some(Expression::Name(sub_directory_name.into())),
+			field_type: None,
+		});
+
+		context.scope_data.set_current_scope(previous);
 	}
 
-	for (file_name, mut file_module) in directory.source_files {
-		for (sub_module_name, sub_module) in &submodules {
-			file_module.fields.insert(sub_module_name.clone(), *sub_module);
-		}
-		fields.insert(Name::from(file_name), file_module.store_in_memory(context));
-	}
-
-	LiteralObject {
-		type_name: "Object".into(),
-		fields,
+	let constructor = ObjectConstructor {
+		type_name: "Module".into(),
 		internal_fields: HashMap::new(),
-		object_type: ObjectType::Normal,
-		outer_scope_id: context.scope_data.unique_id(),
-		inner_scope_id: None,
-		name: "anonymous_directory_module".into(),
-		address: None,
+		fields,
 		span: Span::unknown(),
+		inner_scope_id: context.scope_data.unique_id(),
+		outer_scope_id: context.scope_data.unique_id(),
+		field_access_type: FieldAccessType::Normal,
+		name: "root_module".into(),
 		tags: TagList::default(),
-	}
-	.store_in_memory(context)
+	};
+
+	Ok(constructor)
 }
 
 macro_rules! directory_actions {
@@ -142,6 +170,4 @@ macro_rules! directory_actions {
 directory_actions! {
 	tokenize_directory(|_file_name, source_code: String, context| tokenize(&source_code, context)): String => TokenQueue;
 	parse_directory(|_file_name, mut tokens, context| parse(&mut tokens, context)): TokenQueue => Module;
-	evaluate_directory(|_file_name, ast: Module, context| ast.evaluate_at_compile_time(context)): Module => Module;
-	literalize_directory(|_file_name, ast: Module, context| ast.into_literal(context)): Module => LiteralObject;
 }

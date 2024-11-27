@@ -14,7 +14,7 @@ use crate::{
 		expressions::{
 			literal::{LiteralConvertible, LiteralObject},
 			name::Name,
-			object::{Field, InternalFieldValue, ObjectType},
+			object::{Field, InternalFieldValue},
 			Expression, Parse, Spanned, Typed,
 		},
 		statements::tag::TagList,
@@ -22,6 +22,8 @@ use crate::{
 	},
 	transpiler::TranspileToC,
 };
+
+use super::field_access::FieldAccessType;
 
 #[derive(Debug, Clone)]
 pub struct GroupDeclaration {
@@ -159,7 +161,7 @@ impl TranspileToC for GroupDeclaration {
 			builder += &format!(
 				"\n\t{}* {};",
 				if let Some(field_type) = &field.field_type {
-					field_type.try_as_literal_or_name(context)?.clone().to_c_type(context)?
+					field_type.try_as_literal(context)?.clone().to_c_type(context)?
 				} else {
 					field
 						.value
@@ -194,7 +196,7 @@ impl LiteralConvertible for GroupDeclaration {
 			fields: HashMap::from([]),
 			internal_fields: HashMap::from([("fields".to_owned(), InternalFieldValue::FieldList(self.fields))]),
 			name: self.name,
-			object_type: ObjectType::Group,
+			field_access_type: FieldAccessType::Group,
 			outer_scope_id: self.outer_scope_id,
 			inner_scope_id: Some(self.inner_scope_id),
 			span: self.span,

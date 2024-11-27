@@ -1,7 +1,11 @@
 use std::collections::{HashMap, VecDeque};
 
 use colored::Colorize as _;
-use expressions::{literal::LiteralObject, object::ObjectType};
+use expressions::{
+	field_access::FieldAccessType,
+	literal::LiteralObject,
+	object::{Field, ObjectConstructor},
+};
 use statements::{
 	declaration::{Declaration, DeclarationType},
 	tag::TagList,
@@ -225,11 +229,35 @@ impl Module {
 				})
 				.collect(),
 			internal_fields: HashMap::new(),
-			object_type: ObjectType::Normal,
+			field_access_type: FieldAccessType::Normal,
 			inner_scope_id: Some(self.inner_scope_id),
 			outer_scope_id: self.inner_scope_id,
 			name: "anonymous_module".into(),
 			address: None,
+			span: Span::unknown(),
+			tags: TagList::default(),
+		})
+	}
+
+	pub fn into_object(self, context: &mut Context) -> anyhow::Result<ObjectConstructor> {
+		Ok(ObjectConstructor {
+			type_name: "Object".into(),
+			fields: self
+				.declarations
+				.into_iter()
+				.filter_map(|declaration| {
+					(declaration.declaration_type() != &DeclarationType::RepresentAs).then(|| {
+						let name = declaration.name().to_owned();
+						let value = Some(declaration.value(context).unwrap().clone());
+						Field { name, value, field_type: None }
+					})
+				})
+				.collect(),
+			internal_fields: HashMap::new(),
+			field_access_type: FieldAccessType::Normal,
+			inner_scope_id: self.inner_scope_id,
+			outer_scope_id: self.inner_scope_id,
+			name: "anonymous_module".into(),
 			span: Span::unknown(),
 			tags: TagList::default(),
 		})

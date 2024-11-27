@@ -1,4 +1,8 @@
-use std::{cell::RefCell, path::PathBuf};
+use std::{
+	cell::RefCell,
+	path::PathBuf,
+	sync::{Arc, LazyLock, Mutex},
+};
 
 use colored::{ColoredString, Colorize};
 
@@ -32,6 +36,25 @@ pub struct Context {
 	error_details: RefCell<Option<String>>,
 	compiler_error_position: RefCell<Vec<SourceFilePosition>>,
 	options: CabinToml,
+}
+
+impl Default for Context {
+	fn default() -> Self {
+		Context {
+			options: CabinToml::default(),
+			scope_data: ScopeData::global(),
+			scope_label: None,
+			virtual_memory: VirtualMemory::empty(),
+			side_effects_stack: Vec::new(),
+			error_location: RefCell::new(None),
+			error_details: RefCell::new(None),
+			compiler_error_position: RefCell::new(Vec::new()),
+			lines_printed: 0,
+			running_context: RunningContext::try_from(std::env::current_dir().unwrap()).unwrap(),
+			theme: CATPPUCCIN_MOCHA,
+			colored_program: Vec::new(),
+		}
+	}
 }
 
 impl Context {
@@ -70,7 +93,7 @@ impl Context {
 				.get_variable("nothing")
 				.unwrap()
 				.clone()
-				.try_as_literal_or_name(self)
+				.try_as_literal(self)
 				.cloned()
 				.map_err(mapped_err! {
 					while = format!("interpreting the value of the global variable {} as a literal", "nothing".bold().yellow()),
@@ -255,4 +278,14 @@ macro_rules! here {
 	() => {
 		$crate::api::context::SourceFilePosition::new(std::line!(), std::column!(), std::file!(), $crate::function!())
 	};
+}
+
+pub static CONTEXT: LazyLock<Arc<Mutex<Context>>> = LazyLock::new(|| Arc::new(Mutex::new(Context::default())));
+
+#[macro_export]
+macro_rules! context {
+	() => {{
+		let binding = $crate::api::context::CONTEXT.clone();
+		binding.lock().unwrap()
+	}};
 }

@@ -90,7 +90,7 @@ macro_rules! function {
 }
 
 pub fn string(value: &str, span: Span, context: &mut Context) -> Expression {
-	let number = ObjectConstructor::from_string(value, span, context).evaluate_at_compile_time(context).unwrap();
+	let number = ObjectConstructor::string(value, span, context).evaluate_at_compile_time(context).unwrap();
 	if !number.is_pointer() {
 		panic!("Internal error: Number literal isn't a pointer");
 	}
@@ -102,7 +102,7 @@ pub fn cabin_true(context: &Context) -> anyhow::Result<Expression> {
 }
 
 pub fn number(number: f64, span: Span, context: &mut Context) -> Expression {
-	let number = ObjectConstructor::from_number(number, span, context).evaluate_at_compile_time(context).unwrap();
+	let number = ObjectConstructor::number(number, span, context).evaluate_at_compile_time(context).unwrap();
 	if !number.is_pointer() {
 		panic!("Internal error: Number literal isn't a pointer");
 	}
@@ -172,4 +172,15 @@ pub struct CabinError {
 	pub details: Option<String>,
 	pub at: Option<Span>,
 	pub process: Option<String>,
+}
+
+#[macro_export]
+macro_rules! debug_log {
+	(
+		$context: expr, $($tokens: tt)*
+	) => {
+		if $context.config().options().debug_mode() {
+			println!($($tokens)*)
+		}
+	};
 }

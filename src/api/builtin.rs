@@ -27,7 +27,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 		evaluate_at_compile_time: |context, caller_scope_id, arguments, span| {
 			let pointer = VecDeque::from(arguments).pop_front().ok_or_else(|| anyhow::anyhow!("Missing argument to print"))?;
 			let returned_object = call_builtin_at_compile_time("Anything.to_string", context, caller_scope_id, vec![pointer], span)?;
-			let string_value = returned_object.try_as_literal_or_name(context)?.try_as::<String>()?.to_owned();
+			let string_value = returned_object.try_as_literal(context)?.try_as::<String>()?.to_owned();
 
 			let mut first_print = false;
 			if context.lines_printed == 0 {
@@ -67,7 +67,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			let mut line = String::new();
 			std::io::stdin().read_line(&mut line)?;
 			line = line.get(0..line.len() - 1).unwrap().to_owned();
-			Ok(Expression::Pointer(*ObjectConstructor::from_string(&line, span, context).evaluate_at_compile_time(context)?.expect_as::<VirtualPointer>()?))
+			Ok(Expression::Pointer(*ObjectConstructor::string(&line, span, context).evaluate_at_compile_time(context)?.expect_as::<VirtualPointer>()?))
 		},
 		to_c: |context, parameter_names| {
 			let return_address = parameter_names.first().unwrap();
@@ -78,9 +78,9 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 	"Number.plus" => BuiltinFunction {
 		evaluate_at_compile_time: |context, _caller_scope_id, arguments, _span| {
 			let first = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?;
-			let first_number = first.try_as_literal_or_name(context)?.expect_as::<f64>()?.to_owned();
+			let first_number = first.try_as_literal(context)?.expect_as::<f64>()?.to_owned();
 			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?;
-			let second_number = second.try_as_literal_or_name(context)?.expect_as::<f64>()?;
+			let second_number = second.try_as_literal(context)?.expect_as::<f64>()?;
 
 			Ok(number(first_number + second_number, first.span(context).to(&second.span(context)), context))
 		},
@@ -95,9 +95,9 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 	"Number.minus" => BuiltinFunction {
 		evaluate_at_compile_time: |context, _caller_scope_id, arguments, _span| {
 			let first = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?;
-			let first_number = first.try_as_literal_or_name(context)?.expect_as::<f64>()?.to_owned();
+			let first_number = first.try_as_literal(context)?.expect_as::<f64>()?.to_owned();
 			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?;
-			let second_number = second.try_as_literal_or_name(context)?.expect_as::<f64>()?;
+			let second_number = second.try_as_literal(context)?.expect_as::<f64>()?;
 
 			Ok(number(first_number - second_number, first.span(context).to(&second.span(context)), context))
 		},
@@ -110,7 +110,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			let this = arguments
 				.first()
 				.ok_or_else(|| anyhow::anyhow!("Missing argument to {}", format!("{}.{}()", "Anything".yellow(), "to_string".blue()).bold()))?
-				.try_as_literal_or_name(context).cloned().map_err(mapped_err! {
+				.try_as_literal(context).cloned().map_err(mapped_err! {
 					while = format!("Interpreting the first argument to {} as a literal", format!("{}.{}()", "Anything".yellow(), "to_string".blue()).bold()),
 					context = context,
 				})?;

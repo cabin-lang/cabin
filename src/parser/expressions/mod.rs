@@ -110,7 +110,7 @@ impl CompileTime for Expression {
 }
 
 impl Expression {
-	pub fn try_as_literal_or_name<'a>(&self, context: &'a mut Context) -> anyhow::Result<&'a LiteralObject> {
+	pub fn try_as_literal<'a>(&self, context: &'a mut Context) -> anyhow::Result<&'a LiteralObject> {
 		Ok(match self {
 			Self::Pointer(pointer) => pointer.virtual_deref(context),
 			Self::Name(name) => name
@@ -120,7 +120,7 @@ impl Expression {
 					while = format!("evaluating the name \"{}\" at compile-time", name.unmangled_name().bold().cyan()),
 					context = context,
 				})?
-				.try_as_literal_or_name(context)?,
+				.try_as_literal(context)?,
 			_ => bail_err! {
 				base = format!("A value that's not fully known at compile-time was used as a type; It can only be evaluated into a {} at compile-time.", self.kind_name().bold().yellow()),
 				context = context,
@@ -141,10 +141,6 @@ impl Expression {
 				.is_fully_known_at_compile_time(context)?,
 			_ => false,
 		})
-	}
-
-	pub fn expect_literal<'a>(&'a self, context: &'a mut Context) -> anyhow::Result<&'a LiteralObject> {
-		self.try_as_literal_or_name(context)
 	}
 
 	pub fn is_pointer(&self) -> bool {

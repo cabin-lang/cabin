@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 
+use colored::Colorize;
 use try_as::traits as try_as_traits;
 
 use crate::{
-	api::{context::Context, scope::ScopeId},
+	api::{context::Context, scope::ScopeId, traits::TryAs},
 	comptime::{memory::VirtualPointer, CompileTime},
+	debug_log, if_then_some,
 	lexer::{Span, TokenType},
 	mapped_err, parse_list,
 	parser::{
@@ -20,16 +22,16 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
-use super::Spanned;
+use super::{field_access::FieldAccessType, Spanned};
 
 #[derive(Debug, Clone)]
 pub struct ObjectConstructor {
 	pub type_name: Name,
 	pub fields: Vec<Field>,
 	pub internal_fields: HashMap<String, InternalFieldValue>,
-	pub scope_id: ScopeId,
+	pub outer_scope_id: ScopeId,
 	pub inner_scope_id: ScopeId,
-	pub object_type: ObjectType,
+	pub field_access_type: FieldAccessType,
 	pub name: Name,
 	pub span: Span,
 	pub tags: TagList,
@@ -43,11 +45,11 @@ pub struct Field {
 }
 
 pub trait Fields {
-	fn add_field(&mut self, field: Field);
+	fn add_or_overwrite_field(&mut self, field: Field);
 }
 
 impl Fields for Vec<Field> {
-	fn add_field(&mut self, field: Field) {
+	fn add_or_overwrite_field(&mut self, field: Field) {
 		while let Some(index) = self.iter().enumerate().find_map(|(index, other)| (other.name == field.name).then_some(index)) {
 			self.remove(index);
 		}
@@ -56,28 +58,56 @@ impl Fields for Vec<Field> {
 }
 
 impl ObjectConstructor {
-	pub fn from_string(string: &str, span: Span, context: &Context) -> ObjectConstructor {
+	pub fn untyped(fields: Vec<Field>, span: Span, context: &Context) -> ObjectConstructor {
+		ObjectConstructor {
+			type_name: "Object".into(),
+			name: "anonymous_object".into(),
+			field_access_type: FieldAccessType::Normal,
+			internal_fields: HashMap::new(),
+			inner_scope_id: context.scope_data.unique_id(),
+			outer_scope_id: context.scope_data.unique_id(),
+			fields,
+			tags: TagList::default(),
+			span,
+		}
+	}
+
+	pub fn typed<T: Into<Name>>(type_name: T, fields: Vec<Field>, span: Span, context: &Context) -> ObjectConstructor {
+		ObjectConstructor {
+			type_name: type_name.into(),
+			name: "anonymous_object".into(),
+			field_access_type: FieldAccessType::Normal,
+			internal_fields: HashMap::new(),
+			inner_scope_id: context.scope_data.unique_id(),
+			outer_scope_id: context.scope_data.unique_id(),
+			fields,
+			tags: TagList::default(),
+			span,
+		}
+	}
+
+	pub fn string(string: &str, span: Span, context: &Context) -> ObjectConstructor {
 		ObjectConstructor {
 			type_name: Name::from("Text"),
 			fields: Vec::new(),
 			internal_fields: HashMap::from([("internal_value".to_owned(), InternalFieldValue::String(string.to_owned()))]),
-			scope_id: context.scope_data.file_id(),
+			outer_scope_id: context.scope_data.file_id(),
 			inner_scope_id: context.scope_data.file_id(),
-			object_type: ObjectType::Normal,
+			field_access_type: FieldAccessType::Normal,
 			name: Name::non_mangled("anonymous_string_literal"),
 			span,
 			tags: TagList::default(),
 		}
 	}
 
-	pub fn from_number(number: f64, span: Span, context: &Context) -> ObjectConstructor {
+	pub fn number(number: f64, span: Span, context: &Context) -> ObjectConstructor {
 		ObjectConstructor {
 			type_name: Name::from("Number"),
 			fields: Vec::new(),
 			internal_fields: HashMap::from([("internal_value".to_owned(), InternalFieldValue::Number(number))]),
-			scope_id: context.scope_data.file_id(),
+			outer_scope_id: context.scope_data.file_id(),
 			inner_scope_id: context.scope_data.file_id(),
-			object_type: ObjectType::Normal,
+			field_access_type: FieldAccessType::Normal,
 			name: "anonymous_number".into(),
 			span,
 			tags: TagList::default(),
@@ -139,7 +169,7 @@ impl Parse for ObjectConstructor {
 			}
 
 			// Add field
-			fields.add_field(Field {
+			fields.add_or_overwrite_field(Field {
 				name,
 				value: Some(value),
 				field_type: None,
@@ -151,10 +181,10 @@ impl Parse for ObjectConstructor {
 		Ok(ObjectConstructor {
 			type_name: name,
 			fields,
-			scope_id: context.scope_data.unique_id(),
+			outer_scope_id: context.scope_data.unique_id(),
 			inner_scope_id: context.scope_data.unique_id(),
 			internal_fields: HashMap::new(),
-			object_type: ObjectType::Normal,
+			field_access_type: FieldAccessType::Normal,
 			name: Name::non_mangled("anonymous_object"),
 			span: start.to(&end),
 			tags: TagList::default(),
@@ -166,41 +196,39 @@ impl CompileTime for ObjectConstructor {
 	type Output = Expression;
 
 	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
+		debug_log!(context, "Evaluating an object of type {} at compile-time", self.type_name.unmangled_name().bold().yellow());
+
 		let mut fields = Vec::new();
 
 		// Get object type
-		let object_type = if self.type_name == "Group".into() {
-			None
-		} else {
-			Some(
-				GroupDeclaration::from_literal(
-					&self
-						.type_name
-						.clone()
-						.evaluate_at_compile_time(context)
-						.map_err(mapped_err! {
-							while = format!("evaluating the type of an object constructor at compile time"),
-							context = context,
-						})?
-						.try_as_literal_or_name(context)
-						.cloned()
-						.map_err(mapped_err! {
-							while = format!("interpreting an object constructor's type (\"{}\") as a literal", self.type_name.unmangled_name().bold().cyan()),
-							context = context,
-						})?,
-				)
-				.map_err(mapped_err! {
-					while = "converting an object constructor's type from a literal to a group declaration",
-					context = context,
-				})?,
+		let object_type = if_then_some!(!matches!(self.type_name.unmangled_name().as_str(), "Group" | "Module" | "Object"), {
+			GroupDeclaration::from_literal(
+				&self
+					.type_name
+					.clone()
+					.evaluate_at_compile_time(context)
+					.map_err(mapped_err! {
+						while = format!("evaluating the type of an object constructor at compile time"),
+						context = context,
+					})?
+					.try_as_literal(context)
+					.cloned()
+					.map_err(mapped_err! {
+						while = format!("interpreting an object constructor's type (\"{}\") as a literal", self.type_name.unmangled_name().bold().cyan()),
+						context = context,
+					})?,
 			)
-		};
+			.map_err(mapped_err! {
+				while = "converting an object constructor's type from a literal to a group declaration",
+				context = context,
+			})?
+		});
 
 		// Default fields
 		if let Some(object_type) = object_type {
 			for field in object_type.fields() {
 				if let Some(value) = &field.value {
-					fields.add_field(Field {
+					fields.add_or_overwrite_field(Field {
 						name: field.name.clone(),
 						value: Some(value.clone()),
 						field_type: None,
@@ -211,7 +239,15 @@ impl CompileTime for ObjectConstructor {
 
 		// Explicit fields
 		for field in self.fields {
-			let field_value = field.value.unwrap().evaluate_at_compile_time(context).map_err(mapped_err! {
+			let field_value = field.value.unwrap();
+
+			let previous = if self.type_name == "Module".into() {
+				context.scope_data.set_current_scope(field_value.expect_as::<ObjectConstructor>().unwrap().inner_scope_id)
+			} else {
+				context.scope_data.unique_id()
+			};
+
+			let field_value = field_value.evaluate_at_compile_time(context).map_err(mapped_err! {
 				while = format!(
 					"evaluating the value of the field \"{}\" of an object at compile-time",
 					field.name.unmangled_name().bold().cyan()
@@ -219,7 +255,9 @@ impl CompileTime for ObjectConstructor {
 				context = context,
 			})?;
 
-			fields.add_field(Field {
+			context.scope_data.set_current_scope(previous);
+
+			fields.add_or_overwrite_field(Field {
 				name: field.name,
 				value: Some(field_value),
 				field_type: None,
@@ -230,10 +268,10 @@ impl CompileTime for ObjectConstructor {
 		let constructor = ObjectConstructor {
 			type_name: self.type_name,
 			fields,
-			scope_id: self.scope_id,
+			outer_scope_id: self.outer_scope_id,
 			inner_scope_id: self.inner_scope_id,
 			internal_fields: self.internal_fields,
-			object_type: self.object_type,
+			field_access_type: self.field_access_type,
 			name: self.name,
 			span: self.span,
 			tags: TagList::default(),
@@ -247,15 +285,6 @@ impl CompileTime for ObjectConstructor {
 			Ok(Expression::ObjectConstructor(constructor))
 		}
 	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ObjectType {
-	Normal,
-	Group,
-	OneOf,
-	Either,
-	Function,
 }
 
 #[derive(Debug, Clone, try_as::macros::TryInto, try_as::macros::TryAsRef)]
@@ -297,4 +326,32 @@ impl Spanned for ObjectConstructor {
 	fn span(&self, _context: &Context) -> Span {
 		self.span.clone()
 	}
+}
+
+#[macro_export]
+macro_rules! object {
+	(
+		$context: expr,
+		$type_name: ident {
+			$(
+				$field_name: ident = $field_value: expr
+			),* $(,)?
+		}
+	) => {
+		$crate::parser::expressions::object::ObjectConstructor {
+			type_name: stringify!($type_name).into(),
+			fields: vec![$($crate::parser::expressions::object::Field {
+				name: stringify!($field_name),
+				field_type: None,
+				value: Some($field_value),
+			}),*],
+			internal_fields: std::collections::HashMap::new(),
+			name: $crate::parser::expressions::name::Name::non_mangled("anonymous_object"),
+			span: $crate::lexer::Span::unknown(),
+			outer_scope_id: $context.scope_data.unique_id(),
+			inner_scope_id: $context.scope_data.unique_id(),
+			tags: $crate::parser::statements::tag::TagList::default(),
+			field_access_type: $crate::parser::expressions::field_access::FieldAccessType::Normal,
+		}
+	};
 }

@@ -1,9 +1,12 @@
-[information]
-name = "dev"
+[description]
+name = "unnamed"
+description = "An example cabin project."
 version = "0.1.0"
-description = "An example cabin project generated with cabin new"
-license = "All rights reserved"
 
 [options]
-
-[libraries]
+quiet = false
+debug_mode = true
+developer_mode = false
+detailed_errors = true
+tab_size = 4
+theme = "catppuccin-mocha"

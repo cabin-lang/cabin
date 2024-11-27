@@ -20,7 +20,7 @@ macro_rules! toml {
 		use $crate::api::toml::SetOption as _;
 
 		paste::paste! {
-			#[derive(Default)]
+			#[derive(Default, Debug)]
 			pub struct [<$document_name:camel Toml>] {
 				$(
 					$heading: [<$document_name:camel $heading:camel>],
@@ -76,7 +76,7 @@ macro_rules! toml {
 
 			impl<'a> Drop for [<$document_name:camel TomlWriteOnDrop>]<'a> {
 				fn drop(&mut self) {
-					let path = self.root_directory.join(stringify!($path));
+					let path = self.root_directory.join($path);
 					let config: toml_edit::DocumentMut = self.options.into();
 					std::fs::write(path, config.to_string()).unwrap();
 				}
@@ -85,6 +85,7 @@ macro_rules! toml {
 
 		$(
 			paste::paste! {
+				#[derive(Debug)]
 				pub struct [<$document_name:camel $heading:camel>] {
 					$(
 						$(#[$attrs])?
@@ -144,6 +145,7 @@ macro_rules! choose {
 	};
 }
 
+#[derive(Debug)]
 pub struct TomlValue<T: Clone> {
 	pub value: Option<T>,
 	pub choices: Vec<T>,

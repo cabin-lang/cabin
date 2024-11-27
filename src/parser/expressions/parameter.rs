@@ -65,7 +65,7 @@ impl Spanned for Parameter {
 
 impl Typed for Parameter {
 	fn get_type(&self, context: &mut Context) -> anyhow::Result<VirtualPointer> {
-		Ok(self.parameter_type.try_as_literal_or_name(context)?.address.unwrap())
+		Ok(self.parameter_type.try_as_literal(context)?.address.unwrap())
 	}
 }
 
