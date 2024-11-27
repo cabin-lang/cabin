@@ -237,7 +237,7 @@ impl Module {
 
 	pub fn into_object(self) -> anyhow::Result<ObjectConstructor> {
 		Ok(ObjectConstructor {
-			type_name: "Object".into(),
+			type_name: "Module".into(),
 			fields: self
 				.declarations
 				.into_iter()

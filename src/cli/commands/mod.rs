@@ -55,9 +55,6 @@ macro_rules! step {
 		if !$crate::api::context::context().config().options().quiet() {
 			print!("{}{} {}... ", $crate::api::context::context().config().options().tabs(1), $action.bold().green(), $object);
 			std::io::stdout().flush().unwrap();
-			if $action == "Running" {
-				println!("\n");
-			}
 		}
 
 		match $expression {
@@ -67,9 +64,7 @@ macro_rules! step {
 						move_cursor_up_and_over($crate::api::context::context().lines_printed, ($crate::api::context::context().config().options().tabs(1) + "evaluating abstract syntax tree... ").len());
 					}
 
-					if $action != "Running" {
-						println!("{}", "Done!".bold().green());
-					}
+					println!("{}", "Done!".bold().green());
 
 					if $object.starts_with("compile-time") && $crate::api::context::context().lines_printed != 0 {
 						move_cursor_down_and_left($crate::api::context::context().lines_printed, 0);

@@ -1,11 +1,14 @@
-use std::sync::{LazyLock, RwLock};
+use std::sync::LazyLock;
 
-use colored::{ColoredString, Colorize};
+use colored::{ColoredString, Colorize as _};
 
 use crate::{
-	api::scope::ScopeData,
+	api::{
+		config_files::{CabinToml, CabinTomlWriteOnDrop},
+		scope::ScopeData,
+	},
 	cli::{
-		theme::{Styled as _, Theme, CATPPUCCIN_MOCHA},
+		theme::{Styled as _, Theme},
 		RunningContext,
 	},
 	comptime::memory::VirtualMemory,
@@ -13,8 +16,6 @@ use crate::{
 	mapped_err,
 	parser::expressions::{name::Name, Expression},
 };
-
-use super::config_files::{CabinToml, CabinTomlWriteOnDrop};
 
 pub struct Context {
 	// Publicly mutable
@@ -28,9 +29,9 @@ pub struct Context {
 
 	// Privately mutable
 	side_effects_stack: Vec<bool>,
-	error_location: RwLock<Option<Span>>,
-	error_details: RwLock<Option<String>>,
-	compiler_error_position: RwLock<Vec<SourceFilePosition>>,
+	error_location: Option<Span>,
+	error_details: Option<String>,
+	compiler_error_position: Vec<SourceFilePosition>,
 	options: CabinToml,
 }
 
@@ -42,12 +43,12 @@ impl Default for Context {
 			scope_label: None,
 			virtual_memory: VirtualMemory::empty(),
 			side_effects_stack: Vec::new(),
-			error_location: RwLock::new(None),
-			error_details: RwLock::new(None),
-			compiler_error_position: RwLock::new(Vec::new()),
+			error_location: None,
+			error_details: None,
+			compiler_error_position: Vec::new(),
 			lines_printed: 0,
 			running_context: RunningContext::try_from(std::env::current_dir().unwrap()).unwrap(),
-			theme: CATPPUCCIN_MOCHA,
+			theme: Theme::default(),
 			colored_program: Vec::new(),
 		}
 	}
@@ -82,32 +83,32 @@ impl Context {
 		))
 	}
 
-	pub fn set_error_position(&self, position: &Span) {
-		if self.error_location.try_read().unwrap().is_none() {
-			*self.error_location.try_write().unwrap() = Some(position.clone());
+	pub fn set_error_position(&mut self, position: &Span) {
+		if self.error_location.is_none() {
+			self.error_location = Some(position.clone());
 		}
 	}
 
-	pub fn set_error_details(&self, error_details: &str) {
-		if self.error_details.try_read().unwrap().is_none() {
-			*self.error_details.try_write().unwrap() = Some(error_details.to_owned());
+	pub fn set_error_details(&mut self, error_details: &str) {
+		if self.error_details.is_none() {
+			self.error_details = Some(error_details.to_owned());
 		}
 	}
 
 	pub fn error_details(&self) -> Option<String> {
-		self.error_details.try_read().unwrap().to_owned()
+		self.error_details.clone()
 	}
 
 	pub fn error_position(&self) -> Option<Span> {
-		self.error_location.try_read().unwrap().to_owned()
+		self.error_location.clone()
 	}
 
-	pub fn set_compiler_error_position(&self, position: SourceFilePosition) {
-		self.compiler_error_position.try_write().unwrap().push(position);
+	pub fn set_compiler_error_position(&mut self, position: SourceFilePosition) {
+		self.compiler_error_position.push(position);
 	}
 
 	pub fn get_compiler_error_position(&self) -> Vec<SourceFilePosition> {
-		self.compiler_error_position.try_read().unwrap().clone()
+		self.compiler_error_position.clone()
 	}
 
 	pub fn colored_program(&self) -> String {
@@ -267,7 +268,6 @@ impl SourceFilePosition {
 /// made a lot of things impossible &mdash; like implementing `Drop` or `Debug` for things that need to reference
 /// the context. Not to mention an excessive amount of cloning to make the borrow checker happy &mdash; overall,
 /// it was a poor syntactic layer over what was essentially just global mutable state anyway. Sue me.
-///
 static CONTEXT: LazyLock<Context> = LazyLock::new(Context::default);
 
 /// Returns a non-borrow-checked static mutable reference to the program's `Context`, which holds global state

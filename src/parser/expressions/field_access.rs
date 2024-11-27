@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Pointer};
 
 use colored::Colorize as _;
 
@@ -88,7 +88,6 @@ impl CompileTime for FieldAccess {
 	type Output = Expression;
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
-		debug_log!("Evaluating field access {:?}.{} at compile-time", self.left, self.right.unmangled_name().bold().red());
 		let left_evaluated = self.left.evaluate_at_compile_time()?;
 
 		// Resolvable at compile-time
@@ -106,19 +105,14 @@ impl CompileTime for FieldAccess {
 							)
 						})?;
 
-						let pointer = field.try_as::<VirtualPointer>();
-						if let Ok(pointer) = pointer {
-							let literal = pointer.virtual_deref().clone();
-							if literal.type_name() == &"Function".into() {
-								let mut function_declaration = FunctionDeclaration::from_literal(&literal).unwrap();
-								function_declaration.set_this_object(left_evaluated);
-								context().virtual_memory.replace(pointer.to_owned(), function_declaration.to_literal());
-								Expression::Pointer(pointer.to_owned())
-							} else {
-								field
-							}
+						let literal = field.virtual_deref();
+						if literal.type_name() == &"Function".into() {
+							let mut function_declaration = FunctionDeclaration::from_literal(literal).unwrap();
+							function_declaration.set_this_object(left_evaluated);
+							context().virtual_memory.replace(field.to_owned(), function_declaration.to_literal());
+							Expression::Pointer(field.to_owned())
 						} else {
-							field
+							Expression::Pointer(field)
 						}
 					},
 

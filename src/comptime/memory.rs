@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Debug};
 
 use crate::{
 	api::context::context,
@@ -24,8 +24,14 @@ use super::CompileTime;
 /// and when to use which. Also see the documentation for `VirtualMemory` for more information about virtual memory.
 ///
 /// This internally just wraps a `usize`, so cloning and copying is incredibly cheap.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct VirtualPointer(usize);
+
+impl Debug for VirtualPointer {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "(Pointer): {:?}", self.virtual_deref())
+	}
+}
 
 impl VirtualPointer {
 	/// Retrieves the `LiteralObject` value that this pointer points to.

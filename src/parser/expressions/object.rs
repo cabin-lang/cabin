@@ -190,10 +190,9 @@ impl Parse for ObjectConstructor {
 impl CompileTime for ObjectConstructor {
 	type Output = Expression;
 
-	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
+	fn evaluate_at_compile_time(mut self) -> anyhow::Result<Self::Output> {
 		debug_log!("Evaluating an object of type {} at compile-time", self.type_name.unmangled_name().bold().yellow());
-
-		let mut fields = Vec::new();
+		let previous = context().scope_data.set_current_scope(self.inner_scope_id);
 
 		// Get object type
 		let object_type = if_then_some!(!matches!(self.type_name.unmangled_name().as_str(), "Group" | "Module" | "Object"), {
@@ -220,7 +219,7 @@ impl CompileTime for ObjectConstructor {
 		if let Some(object_type) = object_type {
 			for field in object_type.fields() {
 				if let Some(value) = &field.value {
-					fields.add_or_overwrite_field(Field {
+					self.fields.add_or_overwrite_field(Field {
 						name: field.name.clone(),
 						value: Some(value.clone()),
 						field_type: None,
@@ -230,14 +229,8 @@ impl CompileTime for ObjectConstructor {
 		}
 
 		// Explicit fields
-		for field in self.fields {
-			let field_value = field.value.unwrap();
-
-			let previous = if self.type_name == "Module".into() {
-				context().scope_data.set_current_scope(field_value.expect_as::<ObjectConstructor>().unwrap().inner_scope_id)
-			} else {
-				context().scope_data.unique_id()
-			};
+		for field in self.fields.clone() {
+			let field_value = field.value.clone().unwrap();
 
 			let field_value = field_value.evaluate_at_compile_time().map_err(mapped_err! {
 				while = format!(
@@ -246,34 +239,26 @@ impl CompileTime for ObjectConstructor {
 				),
 			})?;
 
-			context().scope_data.set_current_scope(previous);
-
-			fields.add_or_overwrite_field(Field {
-				name: field.name,
-				value: Some(field_value),
+			let evaluated_field = Field {
+				name: field.name.clone(),
+				value: Some(field_value.clone()),
 				field_type: None,
-			});
+			};
+
+			self.fields.add_or_overwrite_field(evaluated_field);
+
+			if self.type_name == "Module".into() {
+				context().scope_data.reassign_variable(&field.name, field_value)?;
+			}
 		}
 
-		// Return the new object
-		let constructor = ObjectConstructor {
-			type_name: self.type_name,
-			fields,
-			outer_scope_id: self.outer_scope_id,
-			inner_scope_id: self.inner_scope_id,
-			internal_fields: self.internal_fields,
-			field_access_type: self.field_access_type,
-			name: self.name,
-			span: self.span,
-			tags: TagList::default(),
-		};
-
-		if constructor.is_literal() {
-			let literal = LiteralObject::try_from_object_constructor(constructor)?;
+		context().scope_data.set_current_scope(previous);
+		if self.is_literal() {
+			let literal = LiteralObject::try_from_object_constructor(self)?;
 			let address = context().virtual_memory.store(literal);
 			Ok(Expression::Pointer(address))
 		} else {
-			Ok(Expression::ObjectConstructor(constructor))
+			Ok(Expression::ObjectConstructor(self))
 		}
 	}
 }

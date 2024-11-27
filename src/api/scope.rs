@@ -197,7 +197,11 @@ impl Scope {
 		string.push(format!("\tlabel: [{:?}]", self.label));
 		string.push(format!(
 			"\tvariables: [{}],",
-			self.variables.keys().map(|name| name.unmangled_name()).collect::<Vec<_>>().join(", ")
+			self.variables
+				.iter()
+				.map(|(name, value)| format!("{}: {:?}", name.unmangled_name(), value))
+				.collect::<Vec<_>>()
+				.join("\n\n")
 		));
 		for child_scope in &self.children {
 			for line in scopes
@@ -601,7 +605,7 @@ impl ScopeData {
 
 impl Debug for ScopeData {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", self.get_global_scope().to_string(&self.scopes))
+		write!(f, "{}: CURRENT = {}", self.get_global_scope().to_string(&self.scopes), self.current_scope)
 	}
 }
 

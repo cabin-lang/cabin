@@ -3,7 +3,7 @@ use std::{collections::HashMap, path::PathBuf};
 use colored::Colorize;
 
 use crate::{
-	api::context::context,
+	api::{context::context, scope::ScopeType},
 	cli::{
 		commands::{start, CabinCommand},
 		RunningContext,
@@ -15,6 +15,7 @@ use crate::{
 	parser::{
 		expressions::{
 			field_access::FieldAccessType,
+			name::Name,
 			object::{Field, ObjectConstructor},
 			Expression,
 		},
@@ -34,6 +35,7 @@ pub struct RunCommand {
 impl CabinCommand for RunCommand {
 	fn execute(self) -> anyhow::Result<()> {
 		let path = self.path.map(PathBuf::from).unwrap_or_else(|| std::env::current_dir().unwrap());
+		context().running_context = RunningContext::try_from(path)?;
 
 		// Standard Library
 		{
@@ -99,37 +101,25 @@ fn get_source_code_directory(root_dir: &PathBuf) -> anyhow::Result<CabinDirector
 fn add_modules_to_scope(directory: CabinDirectory<Module>) -> anyhow::Result<ObjectConstructor> {
 	let mut fields = Vec::new();
 
+	context().scope_data.enter_new_unlabeled_scope(ScopeType::File);
+	let inner_scope_id = context().scope_data.unique_id();
 	for (file_name, file_module) in directory.source_files {
+		let value = Expression::ObjectConstructor(file_module.into_object().unwrap());
+		context().scope_data.declare_new_variable(file_name.clone(), value)?;
 		fields.push(Field {
-			name: file_name.into(),
-			value: Some(Expression::ObjectConstructor(file_module.into_object().unwrap())),
+			name: file_name.clone().into(),
 			field_type: None,
-		});
+			value: Some(Expression::Name(Name::from(file_name))),
+		})
 	}
-
-	for (sub_directory_name, sub_directory_module) in directory.sub_directories {
-		let constructor = add_modules_to_scope(sub_directory_module)?;
-		let previous = context().scope_data.set_current_scope(constructor.inner_scope_id);
-
-		context()
-			.scope_data
-			.declare_new_variable(sub_directory_name.clone(), Expression::ObjectConstructor(constructor))?;
-
-		fields.push(Field {
-			name: sub_directory_name.clone().into(),
-			value: Some(Expression::Name(sub_directory_name.into())),
-			field_type: None,
-		});
-
-		context().scope_data.set_current_scope(previous);
-	}
+	context().scope_data.exit_scope()?;
 
 	let constructor = ObjectConstructor {
 		type_name: "Module".into(),
 		internal_fields: HashMap::new(),
 		fields,
 		span: Span::unknown(),
-		inner_scope_id: context().scope_data.unique_id(),
+		inner_scope_id,
 		outer_scope_id: context().scope_data.unique_id(),
 		field_access_type: FieldAccessType::Normal,
 		name: "root_module".into(),

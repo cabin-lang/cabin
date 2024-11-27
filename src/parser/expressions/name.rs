@@ -81,7 +81,6 @@ impl CompileTime for Name {
 						.map(|(name, _)| format!("    - {}", name.unmangled_name().bold().green()))
 						.collect::<Vec<_>>()
 						.join("\n")
-						.trim_start()
 				)),
 			})?;
 

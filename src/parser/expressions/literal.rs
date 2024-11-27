@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Debug};
 
 use try_as::traits::TryAsRef;
 
@@ -40,7 +40,7 @@ use super::{either::Either, field_access::FieldAccessType, function_declaration:
 /// function declarations, and one-of declarations are stored as literal objects. That's because at their core, all information about them is
 /// known at compile-time. Any such object should be stored as a `LiteralObject`. Read the documentation on the `LiteralConvertible` trait for
 /// more information about how these types of syntaxes are stored as and retrieved from `LiteralObjects`.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct LiteralObject {
 	/// The type name of this `LiteralObject`. This is the name that the object would be constructed with in an object constructor, such as `Text`,
 	/// `Number`, `Object`, etc.
@@ -156,8 +156,8 @@ impl LiteralObject {
 		&self.name
 	}
 
-	pub fn get_field(&self, name: impl Into<Name>) -> Option<Expression> {
-		self.fields.get(&name.into()).map(|address| Expression::Pointer(*address))
+	pub fn get_field(&self, name: impl Into<Name>) -> Option<VirtualPointer> {
+		self.fields.get(&name.into()).copied()
 	}
 
 	pub fn get_field_literal(&self, name: impl Into<Name>) -> Option<&'static LiteralObject> {
@@ -266,6 +266,35 @@ impl LiteralObject {
 		builder += "}";
 
 		builder
+	}
+}
+
+impl Debug for LiteralObject {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let mut builder = format!("{} {{", self.type_name.unmangled_name());
+
+		for (field_name, field_pointer) in &self.fields {
+			builder += &format!(
+				"\n\t{} = (Pointer): {},",
+				field_name.unmangled_name(),
+				field_pointer
+					.virtual_deref()
+					.debug()
+					.lines()
+					.map(|line| format!("\t{line}"))
+					.collect::<Vec<_>>()
+					.join("\n")
+					.trim()
+			)
+		}
+
+		if !self.fields.is_empty() {
+			builder += "\n";
+		}
+
+		builder += "}";
+
+		write!(f, "{}", builder)
 	}
 }
 
