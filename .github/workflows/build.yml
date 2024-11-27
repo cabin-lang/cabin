@@ -6,6 +6,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Build test project
-        run: cargo run -q -- run
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: Run test project
+        run: cargo run -q --release -- run
         working-directory: tests/build
