@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
 	api::{
-		context::Context,
+		context::context,
 		scope::{ScopeId, ScopeType},
 	},
 	comptime::{memory::VirtualPointer, CompileTime},
@@ -36,19 +36,19 @@ pub struct OneOf {
 impl Parse for OneOf {
 	type Output = VirtualPointer;
 
-	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
+	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
 		let start = tokens.pop(TokenType::KeywordOneOf)?.span;
 
 		// Enter inner scope
-		context.scope_data.enter_new_unlabeled_scope(ScopeType::OneOf);
-		let inner_scope_id = context.scope_data.unique_id();
+		context().scope_data.enter_new_unlabeled_scope(ScopeType::OneOf);
+		let inner_scope_id = context().scope_data.unique_id();
 
 		// Compile-time parameters
 		let compile_time_parameters = if_then_else_default!(tokens.next_is(TokenType::LeftAngleBracket), {
 			let mut compile_time_parameters = Vec::new();
 			parse_list!(tokens, ListType::AngleBracketed, {
-				let name = Name::parse(tokens, context)?;
-				context.scope_data.declare_new_variable(name.clone(), Expression::Void(()))?;
+				let name = Name::parse(tokens)?;
+				context().scope_data.declare_new_variable(name.clone(), Expression::Void(()))?;
 				compile_time_parameters.push(name);
 			});
 			compile_time_parameters
@@ -57,31 +57,31 @@ impl Parse for OneOf {
 		// Choices
 		let mut choices = Vec::new();
 		let end = parse_list!(tokens, ListType::Braced, {
-			choices.push(Expression::parse(tokens, context)?);
+			choices.push(Expression::parse(tokens)?);
 		})
 		.span;
 
 		// Exit the scope
-		context.scope_data.exit_scope()?;
+		context().scope_data.exit_scope()?;
 
 		// Return
 		Ok(OneOf {
 			choices,
 			compile_time_parameters,
-			outer_scope_id: context.scope_data.unique_id(),
+			outer_scope_id: context().scope_data.unique_id(),
 			inner_scope_id,
 			span: start.to(&end),
 			name: "anonymous_one_of".into(),
 		}
 		.to_literal()
-		.store_in_memory(context))
+		.store_in_memory())
 	}
 }
 
 impl CompileTime for OneOf {
 	type Output = OneOf;
 
-	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
+	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
 		let mut choices = Vec::new();
 		for choice in self.choices {
 			if let Expression::Name(choice_name) = &choice {
@@ -91,7 +91,7 @@ impl CompileTime for OneOf {
 				}
 			}
 
-			let choice_value = choice.evaluate_at_compile_time(context)?;
+			let choice_value = choice.evaluate_at_compile_time()?;
 			choices.push(choice_value);
 		}
 
@@ -138,7 +138,7 @@ impl LiteralConvertible for OneOf {
 }
 
 impl Spanned for OneOf {
-	fn span(&self, _context: &Context) -> Span {
+	fn span(&self) -> Span {
 		self.span.clone()
 	}
 }

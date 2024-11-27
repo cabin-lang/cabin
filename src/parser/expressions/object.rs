@@ -4,7 +4,7 @@ use colored::Colorize;
 use try_as::traits as try_as_traits;
 
 use crate::{
-	api::{context::Context, scope::ScopeId, traits::TryAs},
+	api::{context::context, scope::ScopeId, traits::TryAs},
 	comptime::{memory::VirtualPointer, CompileTime},
 	debug_log, if_then_some,
 	lexer::{Span, TokenType},
@@ -58,41 +58,41 @@ impl Fields for Vec<Field> {
 }
 
 impl ObjectConstructor {
-	pub fn untyped(fields: Vec<Field>, span: Span, context: &Context) -> ObjectConstructor {
+	pub fn untyped(fields: Vec<Field>, span: Span) -> ObjectConstructor {
 		ObjectConstructor {
 			type_name: "Object".into(),
 			name: "anonymous_object".into(),
 			field_access_type: FieldAccessType::Normal,
 			internal_fields: HashMap::new(),
-			inner_scope_id: context.scope_data.unique_id(),
-			outer_scope_id: context.scope_data.unique_id(),
+			inner_scope_id: context().scope_data.unique_id(),
+			outer_scope_id: context().scope_data.unique_id(),
 			fields,
 			tags: TagList::default(),
 			span,
 		}
 	}
 
-	pub fn typed<T: Into<Name>>(type_name: T, fields: Vec<Field>, span: Span, context: &Context) -> ObjectConstructor {
+	pub fn typed<T: Into<Name>>(type_name: T, fields: Vec<Field>, span: Span) -> ObjectConstructor {
 		ObjectConstructor {
 			type_name: type_name.into(),
 			name: "anonymous_object".into(),
 			field_access_type: FieldAccessType::Normal,
 			internal_fields: HashMap::new(),
-			inner_scope_id: context.scope_data.unique_id(),
-			outer_scope_id: context.scope_data.unique_id(),
+			inner_scope_id: context().scope_data.unique_id(),
+			outer_scope_id: context().scope_data.unique_id(),
 			fields,
 			tags: TagList::default(),
 			span,
 		}
 	}
 
-	pub fn string(string: &str, span: Span, context: &Context) -> ObjectConstructor {
+	pub fn string(string: &str, span: Span) -> ObjectConstructor {
 		ObjectConstructor {
 			type_name: Name::from("Text"),
 			fields: Vec::new(),
 			internal_fields: HashMap::from([("internal_value".to_owned(), InternalFieldValue::String(string.to_owned()))]),
-			outer_scope_id: context.scope_data.file_id(),
-			inner_scope_id: context.scope_data.file_id(),
+			outer_scope_id: context().scope_data.file_id(),
+			inner_scope_id: context().scope_data.file_id(),
 			field_access_type: FieldAccessType::Normal,
 			name: Name::non_mangled("anonymous_string_literal"),
 			span,
@@ -100,13 +100,13 @@ impl ObjectConstructor {
 		}
 	}
 
-	pub fn number(number: f64, span: Span, context: &Context) -> ObjectConstructor {
+	pub fn number(number: f64, span: Span) -> ObjectConstructor {
 		ObjectConstructor {
 			type_name: Name::from("Number"),
 			fields: Vec::new(),
 			internal_fields: HashMap::from([("internal_value".to_owned(), InternalFieldValue::Number(number))]),
-			outer_scope_id: context.scope_data.file_id(),
-			inner_scope_id: context.scope_data.file_id(),
+			outer_scope_id: context().scope_data.file_id(),
+			inner_scope_id: context().scope_data.file_id(),
 			field_access_type: FieldAccessType::Normal,
 			name: "anonymous_number".into(),
 			span,
@@ -137,35 +137,30 @@ impl ObjectConstructor {
 impl Parse for ObjectConstructor {
 	type Output = ObjectConstructor;
 
-	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
+	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
 		let start = tokens.pop(TokenType::KeywordNew)?.span;
 
 		// Name
-		let name = Name::parse(tokens, context)?;
+		let name = Name::parse(tokens)?;
 
 		// Fields
 		let mut fields = Vec::new();
 		let end = parse_list!(tokens, ListType::Braced, {
 			// Parse tags
-			let tags = if tokens.next_is(TokenType::TagOpening) {
-				Some(TagList::parse(tokens, context)?)
-			} else {
-				None
-			};
+			let tags = if tokens.next_is(TokenType::TagOpening) { Some(TagList::parse(tokens)?) } else { None };
 
 			// Name
-			let name = Name::parse(tokens, context).map_err(mapped_err! {
+			let name = Name::parse(tokens).map_err(mapped_err! {
 				while = "attempting to parse an object constructor",
-				context = context,
 			})?;
 
 			// Value
 			tokens.pop(TokenType::Equal)?;
-			let mut value = Expression::parse(tokens, context)?;
+			let mut value = Expression::parse(tokens)?;
 
 			// Set tags
 			if let Some(tags) = tags.clone() {
-				value.set_tags(tags, context);
+				value.set_tags(tags);
 			}
 
 			// Add field
@@ -181,8 +176,8 @@ impl Parse for ObjectConstructor {
 		Ok(ObjectConstructor {
 			type_name: name,
 			fields,
-			outer_scope_id: context.scope_data.unique_id(),
-			inner_scope_id: context.scope_data.unique_id(),
+			outer_scope_id: context().scope_data.unique_id(),
+			inner_scope_id: context().scope_data.unique_id(),
 			internal_fields: HashMap::new(),
 			field_access_type: FieldAccessType::Normal,
 			name: Name::non_mangled("anonymous_object"),
@@ -195,8 +190,8 @@ impl Parse for ObjectConstructor {
 impl CompileTime for ObjectConstructor {
 	type Output = Expression;
 
-	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
-		debug_log!(context, "Evaluating an object of type {} at compile-time", self.type_name.unmangled_name().bold().yellow());
+	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
+		debug_log!("Evaluating an object of type {} at compile-time", self.type_name.unmangled_name().bold().yellow());
 
 		let mut fields = Vec::new();
 
@@ -206,21 +201,18 @@ impl CompileTime for ObjectConstructor {
 				&self
 					.type_name
 					.clone()
-					.evaluate_at_compile_time(context)
+					.evaluate_at_compile_time()
 					.map_err(mapped_err! {
 						while = format!("evaluating the type of an object constructor at compile time"),
-						context = context,
 					})?
-					.try_as_literal(context)
+					.try_as_literal()
 					.cloned()
 					.map_err(mapped_err! {
 						while = format!("interpreting an object constructor's type (\"{}\") as a literal", self.type_name.unmangled_name().bold().cyan()),
-						context = context,
 					})?,
 			)
 			.map_err(mapped_err! {
 				while = "converting an object constructor's type from a literal to a group declaration",
-				context = context,
 			})?
 		});
 
@@ -242,20 +234,19 @@ impl CompileTime for ObjectConstructor {
 			let field_value = field.value.unwrap();
 
 			let previous = if self.type_name == "Module".into() {
-				context.scope_data.set_current_scope(field_value.expect_as::<ObjectConstructor>().unwrap().inner_scope_id)
+				context().scope_data.set_current_scope(field_value.expect_as::<ObjectConstructor>().unwrap().inner_scope_id)
 			} else {
-				context.scope_data.unique_id()
+				context().scope_data.unique_id()
 			};
 
-			let field_value = field_value.evaluate_at_compile_time(context).map_err(mapped_err! {
+			let field_value = field_value.evaluate_at_compile_time().map_err(mapped_err! {
 				while = format!(
 					"evaluating the value of the field \"{}\" of an object at compile-time",
 					field.name.unmangled_name().bold().cyan()
 				),
-				context = context,
 			})?;
 
-			context.scope_data.set_current_scope(previous);
+			context().scope_data.set_current_scope(previous);
 
 			fields.add_or_overwrite_field(Field {
 				name: field.name,
@@ -278,8 +269,8 @@ impl CompileTime for ObjectConstructor {
 		};
 
 		if constructor.is_literal() {
-			let literal = LiteralObject::try_from_object_constructor(constructor, context)?;
-			let address = context.virtual_memory.store(literal);
+			let literal = LiteralObject::try_from_object_constructor(constructor)?;
+			let address = context().virtual_memory.store(literal);
 			Ok(Expression::Pointer(address))
 		} else {
 			Ok(Expression::ObjectConstructor(constructor))
@@ -302,19 +293,19 @@ pub enum InternalFieldValue {
 }
 
 impl TranspileToC for ObjectConstructor {
-	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
+	fn to_c(&self) -> anyhow::Result<String> {
 		// Type name
 		let name = if self.type_name == "Object".into() {
-			format!("type_{}_UNKNOWN", self.name.to_c(context)?) // TODO
+			format!("type_{}_UNKNOWN", self.name.to_c()?) // TODO
 		} else {
-			self.type_name.clone().evaluate_at_compile_time(context)?.to_c(context)?
+			self.type_name.clone().evaluate_at_compile_time()?.to_c()?
 		};
 
 		let mut builder = format!("({}) {{", name);
 
 		// Fields
 		for field in &self.fields {
-			builder += &format!("\n\t.{} = {},", field.name.to_c(context)?, field.value.as_ref().unwrap().to_c(context)?);
+			builder += &format!("\n\t.{} = {},", field.name.to_c()?, field.value.as_ref().unwrap().to_c()?);
 		}
 
 		builder += "\n}";
@@ -323,7 +314,7 @@ impl TranspileToC for ObjectConstructor {
 }
 
 impl Spanned for ObjectConstructor {
-	fn span(&self, _context: &Context) -> Span {
+	fn span(&self) -> Span {
 		self.span.clone()
 	}
 }

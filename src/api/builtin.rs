@@ -4,7 +4,7 @@ use colored::Colorize as _;
 
 use crate::{
 	api::{
-		context::Context,
+		context::context,
 		macros::{number, string},
 		traits::TryAs as _,
 	},
@@ -18,40 +18,40 @@ use crate::{
 use super::scope::ScopeId;
 
 pub struct BuiltinFunction {
-	evaluate_at_compile_time: fn(&mut Context, ScopeId, Vec<Expression>, Span) -> anyhow::Result<Expression>,
-	to_c: fn(&mut Context, &[String]) -> anyhow::Result<String>,
+	evaluate_at_compile_time: fn(ScopeId, Vec<Expression>, Span) -> anyhow::Result<Expression>,
+	to_c: fn(&[String]) -> anyhow::Result<String>,
 }
 
 static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 	"terminal.print" => BuiltinFunction {
-		evaluate_at_compile_time: |context, caller_scope_id, arguments, span| {
+		evaluate_at_compile_time: |caller_scope_id, arguments, span| {
 			let pointer = VecDeque::from(arguments).pop_front().ok_or_else(|| anyhow::anyhow!("Missing argument to print"))?;
-			let returned_object = call_builtin_at_compile_time("Anything.to_string", context, caller_scope_id, vec![pointer], span)?;
-			let string_value = returned_object.try_as_literal(context)?.try_as::<String>()?.to_owned();
+			let returned_object = call_builtin_at_compile_time("Anything.to_string", caller_scope_id, vec![pointer], span)?;
+			let string_value = returned_object.try_as_literal()?.try_as::<String>()?.to_owned();
 
 			let mut first_print = false;
-			if context.lines_printed == 0 {
-				if !context.config().options().quiet() {
+			if context().lines_printed == 0 {
+				if !context().config().options().quiet() {
 					println!("\n");
 				}
 				first_print = true;
 			}
 
 			println!("{string_value}");
-			context.lines_printed = string_value.chars().filter(|character| character == &'\n').count() + 3;
+			context().lines_printed = string_value.chars().filter(|character| character == &'\n').count() + 3;
 
 			if first_print {
-				if !context.config().options().quiet() {
+				if !context().config().options().quiet() {
 					println!();
 				}
-				context.lines_printed += 1;
+				context().lines_printed += 1;
 			}
 
 			Ok(Expression::Void(()))
 		},
-		to_c: |context, parameter_names| {
-			let text_address = context.scope_data.get_variable("Text").unwrap().expect_as::<VirtualPointer>().unwrap();
-			let anything_address = context.scope_data.get_variable("Anything").unwrap().expect_as::<VirtualPointer>().unwrap();
+		to_c: |parameter_names| {
+			let text_address = context().scope_data.get_variable("Text").unwrap().expect_as::<VirtualPointer>().unwrap();
+			let anything_address = context().scope_data.get_variable("Anything").unwrap().expect_as::<VirtualPointer>().unwrap();
 			let object = parameter_names.first().unwrap();
 			Ok(unindent::unindent(&format!(
 				"
@@ -63,29 +63,29 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 		}
 	},
 	"terminal.input" => BuiltinFunction {
-		evaluate_at_compile_time: |context, _caller_scope_id, _arguments, span| {
+		evaluate_at_compile_time: |_caller_scope_id, _arguments, span| {
 			let mut line = String::new();
 			std::io::stdin().read_line(&mut line)?;
 			line = line.get(0..line.len() - 1).unwrap().to_owned();
-			Ok(Expression::Pointer(*ObjectConstructor::string(&line, span, context).evaluate_at_compile_time(context)?.expect_as::<VirtualPointer>()?))
+			Ok(Expression::Pointer(*ObjectConstructor::string(&line, span).evaluate_at_compile_time()?.expect_as::<VirtualPointer>()?))
 		},
-		to_c: |context, parameter_names| {
+		to_c: |parameter_names| {
 			let return_address = parameter_names.first().unwrap();
-			let text_address = context.scope_data.get_variable("Text").unwrap().expect_as::<VirtualPointer>().unwrap();
+			let text_address = context().scope_data.get_variable("Text").unwrap().expect_as::<VirtualPointer>().unwrap();
 			Ok(format!("char* buffer = malloc(sizeof(char) * 256);\nfgets(buffer, 256, stdin);\n*{return_address} = (group_u_Text_{text_address}) {{ .internal_value = buffer }};"))
 		}
 	},
 	"Number.plus" => BuiltinFunction {
-		evaluate_at_compile_time: |context, _caller_scope_id, arguments, _span| {
+		evaluate_at_compile_time: |_caller_scope_id, arguments, _span| {
 			let first = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?;
-			let first_number = first.try_as_literal(context)?.expect_as::<f64>()?.to_owned();
+			let first_number = first.try_as_literal()?.expect_as::<f64>()?.to_owned();
 			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?;
-			let second_number = second.try_as_literal(context)?.expect_as::<f64>()?;
+			let second_number = second.try_as_literal()?.expect_as::<f64>()?;
 
-			Ok(number(first_number + second_number, first.span(context).to(&second.span(context)), context))
+			Ok(number(first_number + second_number, first.span().to(&second.span())))
 		},
-		to_c: |context,parameter_names| {
-			let number_address = context.scope_data.get_variable("Number").unwrap().expect_as::<VirtualPointer>().unwrap();
+		to_c: |parameter_names| {
+			let number_address = context().scope_data.get_variable("Number").unwrap().expect_as::<VirtualPointer>().unwrap();
 			let first = parameter_names.first().unwrap();
 			let second = parameter_names.get(1).unwrap();
 			let number_type = format!("group_u_Number_{number_address}");
@@ -93,26 +93,25 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 		}
 	},
 	"Number.minus" => BuiltinFunction {
-		evaluate_at_compile_time: |context, _caller_scope_id, arguments, _span| {
+		evaluate_at_compile_time: |_caller_scope_id, arguments, _span| {
 			let first = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?;
-			let first_number = first.try_as_literal(context)?.expect_as::<f64>()?.to_owned();
+			let first_number = first.try_as_literal()?.expect_as::<f64>()?.to_owned();
 			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?;
-			let second_number = second.try_as_literal(context)?.expect_as::<f64>()?;
+			let second_number = second.try_as_literal()?.expect_as::<f64>()?;
 
-			Ok(number(first_number - second_number, first.span(context).to(&second.span(context)), context))
+			Ok(number(first_number - second_number, first.span().to(&second.span())))
 		},
-		to_c: |_context, _parameter_names| {
+		to_c: |_parameter_names| {
 			Ok(String::new())
 		}
 	},
 	"Anything.to_string" => BuiltinFunction {
-		evaluate_at_compile_time: |context, _caller_scope_id, arguments, span| {
+		evaluate_at_compile_time: |_caller_scope_id, arguments, span| {
 			let this = arguments
 				.first()
 				.ok_or_else(|| anyhow::anyhow!("Missing argument to {}", format!("{}.{}()", "Anything".yellow(), "to_string".blue()).bold()))?
-				.try_as_literal(context).cloned().map_err(mapped_err! {
+				.try_as_literal().cloned().map_err(mapped_err! {
 					while = format!("Interpreting the first argument to {} as a literal", format!("{}.{}()", "Anything".yellow(), "to_string".blue()).bold()),
-					context = context,
 				})?;
 
 			Ok(string(&match this.type_name().unmangled_name().as_str() {
@@ -133,19 +132,18 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 
 					builder
 				}
-			}, span, context))
+			}, span))
 		},
-		to_c: |context, parameter_names| {
+		to_c: |parameter_names| {
 			let object = parameter_names.first().unwrap();
 			let return_address = parameter_names.get(1).ok_or_else(|| err! {
 				base = format!("Missing first argument to {}", format!("{}.{}()", "Anything".yellow(), "to_string".blue()).bold()),
 				while = format!("getting the first argument to {}", format!("{}.{}()", "Anything".yellow(), "to_string".blue()).bold()),
-				context = context,
 			})?;
 
-			let group_address = context.scope_data.get_variable("Group").unwrap().expect_as::<VirtualPointer>().unwrap();
-			let text_address = context.scope_data.get_variable("Text").unwrap().expect_as::<VirtualPointer>().unwrap();
-			let anything_address = context.scope_data.get_variable("Anything").unwrap().expect_as::<VirtualPointer>().unwrap();
+			let group_address = context().scope_data.get_variable("Group").unwrap().expect_as::<VirtualPointer>().unwrap();
+			let text_address = context().scope_data.get_variable("Text").unwrap().expect_as::<VirtualPointer>().unwrap();
+			let anything_address = context().scope_data.get_variable("Anything").unwrap().expect_as::<VirtualPointer>().unwrap();
 
 			Ok(unindent::unindent(&format!(
 				r#"
@@ -170,17 +168,17 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 		}
 	},
 	"Anything.type" => BuiltinFunction {
-		evaluate_at_compile_time: |context, _caller_scope_id, arguments, _span| {
+		evaluate_at_compile_time: |_caller_scope_id, arguments, _span| {
 			let this = arguments.first().unwrap();
-			Ok(Expression::Pointer(this.get_type(context)?))
+			Ok(Expression::Pointer(this.get_type()?))
 		},
-		to_c: |_context, _parameter_names| {
+		to_c: |_parameter_names| {
 			Ok(String::new())
 		}
 	},
 };
 
-pub fn call_builtin_at_compile_time(name: &str, context: &mut Context, caller_scope_id: ScopeId, arguments: Vec<Expression>, span: Span) -> anyhow::Result<Expression> {
+pub fn call_builtin_at_compile_time(name: &str, caller_scope_id: ScopeId, arguments: Vec<Expression>, span: Span) -> anyhow::Result<Expression> {
 	(BUILTINS
 		.get(name)
 		.ok_or_else(|| {
@@ -189,14 +187,13 @@ pub fn call_builtin_at_compile_time(name: &str, context: &mut Context, caller_sc
 				name.bold().cyan()
 			)
 		})?
-		.evaluate_at_compile_time)(context, caller_scope_id, arguments, span)
+		.evaluate_at_compile_time)(caller_scope_id, arguments, span)
 	.map_err(mapped_err! {
 		while = format!("calling the built-in function \"{}\" at compile-time", name.bold().cyan()).dimmed(),
-		context = context,
 	})
 }
 
-pub fn transpile_builtin_to_c(name: &str, context: &mut Context, parameters: &[String]) -> anyhow::Result<String> {
+pub fn transpile_builtin_to_c(name: &str, parameters: &[String]) -> anyhow::Result<String> {
 	(BUILTINS
 		.get(name)
 		.ok_or_else(|| {
@@ -205,5 +202,5 @@ pub fn transpile_builtin_to_c(name: &str, context: &mut Context, parameters: &[S
 				name.bold().cyan()
 			)
 		})?
-		.to_c)(context, parameters)
+		.to_c)(parameters)
 }

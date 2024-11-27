@@ -10,7 +10,7 @@ use convert_case::Casing as _;
 use strum::IntoEnumIterator as _;
 
 use crate::{
-	api::context::Context,
+	api::context::context,
 	cli::theme::{Style, Styled},
 	PRELUDE,
 };
@@ -451,16 +451,16 @@ pub struct Token {
 }
 
 impl Token {
-	fn style<'a>(&self, next: Option<&Token>, context: &'a Context) -> &'a Style {
+	fn style(&self, next: Option<&Token>) -> &Style {
 		match self.token_type {
 			// Comments
-			TokenType::LineComment => context.theme.comment(),
+			TokenType::LineComment => context().theme.comment(),
 
 			// Numbers
-			TokenType::Number => context.theme.number(),
+			TokenType::Number => context().theme.number(),
 
 			// String
-			TokenType::String => context.theme.string(),
+			TokenType::String => context().theme.string(),
 
 			// Keywords
 			TokenType::KeywordAction
@@ -476,22 +476,22 @@ impl Token {
 			| TokenType::KeywordForEach
 			| TokenType::KeywordIn
 			| TokenType::KeywordWhile
-			| TokenType::KeywordEither => context.theme.keyword(),
+			| TokenType::KeywordEither => context().theme.keyword(),
 
 			// Identifiers
 			TokenType::Identifier => {
 				if let Some(next) = next {
 					if next.token_type == TokenType::LeftAngleBracket || next.token_type == TokenType::LeftParenthesis {
-						return context.theme.function();
+						return context().theme.function();
 					}
 				}
 				if self.value.starts_with(|character: char| character.is_uppercase()) {
-					context.theme.type_name()
+					context().theme.type_name()
 				} else {
-					context.theme.variable_name()
+					context().theme.variable_name()
 				}
 			},
-			_ => context.theme.normal(),
+			_ => context().theme.normal(),
 		}
 	}
 }
@@ -556,7 +556,7 @@ impl Span {
 /// # Errors
 /// If the given code string is not syntactically valid Cabin code. It needn't be semantically valid, but it must be comprised of the proper tokens.
 #[allow(clippy::missing_panics_doc)]
-pub fn tokenize_program(code: &str, context: &mut Context, is_prelude: bool) -> anyhow::Result<VecDeque<Token>> {
+pub fn tokenize_program(code: &str, is_prelude: bool) -> anyhow::Result<VecDeque<Token>> {
 	let mut code = code.to_owned();
 	code = code.replace('\t', "    ");
 
@@ -589,9 +589,9 @@ pub fn tokenize_program(code: &str, context: &mut Context, is_prelude: bool) -> 
 
 	if !is_prelude {
 		for (index, token) in tokens.iter().enumerate() {
-			let style = token.style(tokens.get(index + 1), context).clone();
+			let style = token.style(tokens.get(index + 1)).clone();
 			for character in token.value.chars() {
-				context.colored_program.push(character.to_string().style(&style));
+				context().colored_program.push(character.to_string().style(&style));
 			}
 		}
 	}
@@ -618,9 +618,9 @@ pub fn tokenize_program(code: &str, context: &mut Context, is_prelude: bool) -> 
 ///
 /// # Errors
 /// If the given code string is not syntactically valid Cabin code. It needn't be semantically valid, but it must be comprised of the proper tokens.
-pub fn tokenize(code: &str, context: &mut Context) -> anyhow::Result<VecDeque<Token>> {
-	let mut tokens = tokenize_program(code, context, false)?;
-	let mut prelude_tokens = tokenize_program(PRELUDE, context, true)?;
+pub fn tokenize(code: &str) -> anyhow::Result<VecDeque<Token>> {
+	let mut tokens = tokenize_program(code, false)?;
+	let mut prelude_tokens = tokenize_program(PRELUDE, true)?;
 	prelude_tokens.append(&mut tokens);
 	Ok(prelude_tokens)
 }
@@ -641,6 +641,6 @@ pub fn tokenize(code: &str, context: &mut Context) -> anyhow::Result<VecDeque<To
 ///
 /// # Errors
 /// If the given code string is not syntactically valid Cabin code. It needn't be semantically valid, but it must be comprised of the proper tokens.
-pub fn tokenize_without_prelude(code: &str, context: &mut Context) -> anyhow::Result<VecDeque<Token>> {
-	tokenize_program(code, context, false)
+pub fn tokenize_without_prelude(code: &str) -> anyhow::Result<VecDeque<Token>> {
+	tokenize_program(code, false)
 }

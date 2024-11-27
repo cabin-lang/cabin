@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
 	api::{
 		builtin::transpile_builtin_to_c,
-		context::Context,
+		context::context,
 		scope::{ScopeId, ScopeType},
 		traits::{TryAs as _, TupleOption},
 	},
@@ -45,7 +45,7 @@ pub struct FunctionDeclaration {
 impl Parse for FunctionDeclaration {
 	type Output = VirtualPointer;
 
-	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
+	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
 		// "function" keyword
 		let start = tokens.pop(TokenType::KeywordAction)?.span;
 		let mut end = start.clone();
@@ -54,9 +54,9 @@ impl Parse for FunctionDeclaration {
 		let compile_time_parameters = if_then_else_default!(tokens.next_is(TokenType::LeftAngleBracket), {
 			let mut compile_time_parameters = Vec::new();
 			end = parse_list!(tokens, ListType::AngleBracketed, {
-				let name = Name::parse(tokens, context)?;
+				let name = Name::parse(tokens)?;
 				tokens.pop(TokenType::Colon)?;
-				let parameter_type = Expression::parse(tokens, context)?;
+				let parameter_type = Expression::parse(tokens)?;
 				compile_time_parameters.push((name, parameter_type));
 			})
 			.span;
@@ -67,9 +67,9 @@ impl Parse for FunctionDeclaration {
 		let parameters = if_then_else_default!(tokens.next_is(TokenType::LeftParenthesis), {
 			let mut parameters = Vec::new();
 			end = parse_list!(tokens, ListType::Parenthesized, {
-				let name = Name::parse(tokens, context)?;
+				let name = Name::parse(tokens)?;
 				tokens.pop(TokenType::Colon)?;
-				let parameter_type = Expression::parse(tokens, context)?;
+				let parameter_type = Expression::parse(tokens)?;
 				parameters.push((name, parameter_type));
 			})
 			.span;
@@ -79,21 +79,21 @@ impl Parse for FunctionDeclaration {
 		// Return Type
 		let return_type = if_then_some!(tokens.next_is(TokenType::Colon), {
 			tokens.pop(TokenType::Colon)?;
-			let expression = Expression::parse(tokens, context)?;
-			end = expression.span(context);
+			let expression = Expression::parse(tokens)?;
+			end = expression.span();
 			expression
 		});
 
 		// Body
 		let (body, inner_scope_id) = if_then_some!(tokens.next_is(TokenType::LeftBrace), {
-			let block = Block::parse_type(tokens, context, ScopeType::Function)?;
+			let block = Block::parse_type(tokens, ScopeType::Function)?;
 			let inner_scope_id = block.inner_scope_id;
 			for (parameter_name, _parameter_type) in &compile_time_parameters {
-				context
+				context()
 					.scope_data
 					.declare_new_variable_from_id(parameter_name.clone(), Expression::Void(()), block.inner_scope_id)?;
 			}
-			end = block.span(context);
+			end = block.span();
 			(Expression::Block(block), inner_scope_id)
 		})
 		.deconstruct();
@@ -105,26 +105,26 @@ impl Parse for FunctionDeclaration {
 			compile_time_parameters,
 			return_type,
 			body,
-			outer_scope_id: context.scope_data.unique_id(),
+			outer_scope_id: context().scope_data.unique_id(),
 			inner_scope_id,
 			this_object: None,
 			name: Name::non_mangled("anonymous_function"),
 			span: start.to(&end),
 		}
 		.to_literal()
-		.store_in_memory(context))
+		.store_in_memory())
 	}
 }
 
 impl CompileTime for FunctionDeclaration {
 	type Output = FunctionDeclaration;
 
-	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
+	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
 		// Compile-time parameters
 		let compile_time_parameters = {
 			let mut compile_time_parameters = Vec::new();
 			for (parameter_name, parameter_type) in self.compile_time_parameters {
-				let parameter_type = parameter_type.evaluate_at_compile_time(context)?;
+				let parameter_type = parameter_type.evaluate_at_compile_time()?;
 				if !parameter_type.is_pointer() {
 					anyhow::bail!("A value that's not fully known at compile-time was used as a function parameter type");
 				}
@@ -137,15 +137,13 @@ impl CompileTime for FunctionDeclaration {
 		let parameters = {
 			let mut parameters = Vec::new();
 			for (parameter_name, parameter_type) in self.parameters {
-				let parameter_type = parameter_type.evaluate_at_compile_time(context).map_err(mapped_err! {
+				let parameter_type = parameter_type.evaluate_at_compile_time().map_err(mapped_err! {
 					while = format!("evaluating the type of the parameter \"{}\" of a function at compile-time", parameter_name.unmangled_name().bold().cyan()),
-					context = context,
 				})?;
 				if !parameter_type.is_pointer() {
 					bail_err!(
 						base = "A value that's not fully known at compile-time was used as a function parameter type",
 						while = format!("checking the type of the parameter \"{}\"", parameter_name.unmangled_name().bold().cyan()),
-						context = context,
 					);
 				}
 				parameters.push((parameter_name, parameter_type));
@@ -154,15 +152,14 @@ impl CompileTime for FunctionDeclaration {
 		};
 
 		// Return type
-		let return_type = self.return_type.map(|return_type| anyhow::Ok(return_type.evaluate_at_compile_time(context)?)).transpose()?;
+		let return_type = self.return_type.map(|return_type| anyhow::Ok(return_type.evaluate_at_compile_time()?)).transpose()?;
 
 		// Body
-		let body = self.body.map(|body| body.evaluate_at_compile_time(context)).transpose().map_err(mapped_err! {
+		let body = self.body.map(|body| body.evaluate_at_compile_time()).transpose().map_err(mapped_err! {
 			while = "evaluating the body of a function declaration at compile-time",
-			context = context,
 		})?;
 
-		let this_object = self.this_object.map(|this| this.evaluate_at_compile_time(context)).transpose()?;
+		let this_object = self.this_object.map(|this| this.evaluate_at_compile_time()).transpose()?;
 
 		// Return
 		let function = FunctionDeclaration {
@@ -170,7 +167,7 @@ impl CompileTime for FunctionDeclaration {
 			parameters,
 			body,
 			return_type,
-			tags: self.tags.evaluate_at_compile_time(context)?,
+			tags: self.tags.evaluate_at_compile_time()?,
 			this_object,
 			name: self.name,
 			span: self.span,
@@ -184,7 +181,7 @@ impl CompileTime for FunctionDeclaration {
 }
 
 impl TranspileToC for FunctionDeclaration {
-	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
+	fn to_c(&self) -> anyhow::Result<String> {
 		if !self.compile_time_parameters.is_empty() {
 			return Ok(String::new());
 		}
@@ -192,14 +189,13 @@ impl TranspileToC for FunctionDeclaration {
 		// Get builtin and side effect tags
 		let mut builtin_body = None;
 		for tag in &self.tags.values {
-			if let Ok(object) = tag.try_as_literal(context).cloned() {
+			if let Ok(object) = tag.try_as_literal().cloned() {
 				if object.type_name() == &Name::from("BuiltinTag") {
-					let builtin_name = object.get_field_literal("internal_name", context).unwrap().expect_as::<String>()?.to_owned();
-					let mut parameters = self.parameters.iter().map(|(parameter_name, _)| parameter_name.to_c(context).unwrap()).collect::<Vec<_>>();
+					let builtin_name = object.get_field_literal("internal_name").unwrap().expect_as::<String>()?.to_owned();
+					let mut parameters = self.parameters.iter().map(|(parameter_name, _)| parameter_name.to_c().unwrap()).collect::<Vec<_>>();
 					parameters.push("return_address".to_string());
-					builtin_body = Some(transpile_builtin_to_c(&builtin_name, context, &parameters).map_err(mapped_err! {
+					builtin_body = Some(transpile_builtin_to_c(&builtin_name, &parameters).map_err(mapped_err! {
 						while = format!("transpiling the body of the built-in function {}()", builtin_name.bold().blue()),
-						context = context,
 					})?);
 				}
 			}
@@ -210,7 +206,7 @@ impl TranspileToC for FunctionDeclaration {
 			format!(
 				"{}{}* return_address",
 				if self.parameters.is_empty() { "" } else { ", " },
-				return_type.try_as_literal(context)?.clone().to_c_type(context)?
+				return_type.try_as_literal()?.clone().to_c_type()?
 			)
 		} else {
 			String::new()
@@ -220,14 +216,14 @@ impl TranspileToC for FunctionDeclaration {
 			"({}{}) {{\n{}\n}}",
 			self.parameters
 				.iter()
-				.map(|(name, parameter_type)| Ok(format!("{}* {}", parameter_type.try_as_literal(context)?.clone().to_c_type(context)?, name.to_c(context)?)))
+				.map(|(name, parameter_type)| Ok(format!("{}* {}", parameter_type.try_as_literal()?.clone().to_c_type()?, name.to_c()?)))
 				.collect::<anyhow::Result<Vec<_>>>()?
 				.join(", "),
 			return_type_c,
 			if let Some(builtin_body) = builtin_body {
 				builtin_body
 			} else {
-				let body = self.body.as_ref().unwrap().to_c(context)?;
+				let body = self.body.as_ref().unwrap().to_c()?;
 				let body = body.strip_prefix("({").unwrap().strip_suffix("})").unwrap().to_owned();
 				body
 			}
@@ -278,7 +274,7 @@ impl LiteralConvertible for FunctionDeclaration {
 }
 
 impl Spanned for FunctionDeclaration {
-	fn span(&self, _context: &Context) -> Span {
+	fn span(&self) -> Span {
 		self.span.clone()
 	}
 }

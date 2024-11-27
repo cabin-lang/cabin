@@ -1,5 +1,5 @@
 use crate::{
-	api::{context::Context, scope::ScopeId, traits::TryAs as _},
+	api::{context::context, scope::ScopeId, traits::TryAs as _},
 	comptime::CompileTime,
 	lexer::{Span, TokenType},
 	parser::{
@@ -23,15 +23,15 @@ pub struct ForEachLoop {
 impl Parse for ForEachLoop {
 	type Output = ForEachLoop;
 
-	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
+	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
 		let start = tokens.pop(TokenType::KeywordForEach)?.span;
-		let binding_name = Name::parse(tokens, context)?;
+		let binding_name = Name::parse(tokens)?;
 		tokens.pop(TokenType::KeywordIn)?;
-		let iterable = Box::new(Expression::parse(tokens, context)?);
-		let body = Block::parse(tokens, context)?;
-		let end = body.span(context);
+		let iterable = Box::new(Expression::parse(tokens)?);
+		let body = Block::parse(tokens)?;
+		let end = body.span();
 		let inner_scope_id = body.inner_scope_id;
-		context
+		context()
 			.scope_data
 			.declare_new_variable_from_id(binding_name.clone(), Expression::Void(()), inner_scope_id)?;
 
@@ -48,12 +48,12 @@ impl Parse for ForEachLoop {
 impl CompileTime for ForEachLoop {
 	type Output = Expression;
 
-	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
-		if let Ok(literal) = self.iterable.try_as_literal(context) {
+	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
+		if let Ok(literal) = self.iterable.try_as_literal() {
 			let elements = literal.try_as::<Vec<Expression>>()?.to_owned();
 			for element in elements {
-				context.scope_data.reassign_variable_from_id(&self.binding_name, element.clone(), self.inner_scope_id)?; // TODO: sneaky clone
-				let value = self.body.clone().evaluate_at_compile_time(context)?;
+				context().scope_data.reassign_variable_from_id(&self.binding_name, element.clone(), self.inner_scope_id)?; // TODO: sneaky clone
+				let value = self.body.clone().evaluate_at_compile_time()?;
 				if value.is_pointer() {
 					return Ok(value);
 				}
@@ -65,17 +65,17 @@ impl CompileTime for ForEachLoop {
 }
 
 impl TranspileToC for ForEachLoop {
-	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
+	fn to_c(&self) -> anyhow::Result<String> {
 		Ok(format!(
 			"({{\n\tlet elements = {};\n\tfor (int index = 0; index < elements->length(); index++) {{\n\t{}\n\t}}\n}})",
-			self.iterable.to_c(context)?,
-			self.body.to_c(context)?.lines().map(|line| format!("\t\t{line}")).collect::<Vec<_>>().join("\n")
+			self.iterable.to_c()?,
+			self.body.to_c()?.lines().map(|line| format!("\t\t{line}")).collect::<Vec<_>>().join("\n")
 		))
 	}
 }
 
 impl Spanned for ForEachLoop {
-	fn span(&self, _context: &Context) -> Span {
+	fn span(&self) -> Span {
 		self.span.clone()
 	}
 }

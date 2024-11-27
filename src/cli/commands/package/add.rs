@@ -3,7 +3,7 @@ use std::process::{Command, Stdio};
 use colored::Colorize as _;
 
 use crate::{
-	api::context::Context,
+	api::context::context,
 	cli::{commands::CabinCommand, RunningContext},
 	step,
 };
@@ -15,9 +15,7 @@ pub struct AddCommand {
 
 impl CabinCommand for AddCommand {
 	fn execute(self) -> anyhow::Result<()> {
-		let mut context = Context::new(&std::env::current_dir().unwrap())?;
-
-		let RunningContext::Project(project) = &mut context.running_context else {
+		let RunningContext::Project(project) = &mut context().running_context else {
 			anyhow::bail!(expression_formatter::format!(
 				r#"
 				{"Error:".bold().red()} The {"add".bold().cyan()} command can only be used from within a Cabin project. No cabin.toml was found in the current directory.
@@ -51,7 +49,6 @@ impl CabinCommand for AddCommand {
 					anyhow::bail!("Failed to download library code");
 				}
 			})(),
-			context,
 			"Downloading",
 			"library code"
 		);
@@ -67,7 +64,6 @@ impl CabinCommand for AddCommand {
 					.output()?
 					.stdout,
 			),
-			context,
 			"Getting",
 			"version information"
 		);

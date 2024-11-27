@@ -3,7 +3,7 @@ use std::hash::Hash;
 use colored::Colorize;
 
 use crate::{
-	api::context::Context,
+	api::context::context,
 	comptime::CompileTime,
 	lexer::{Span, TokenType},
 	mapped_err,
@@ -35,13 +35,12 @@ pub struct Name {
 impl Parse for Name {
 	type Output = Self;
 
-	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
+	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
 		let span = tokens.current_position().unwrap();
 
 		let token = tokens.pop(TokenType::Identifier).map_err(mapped_err! {
 			while = "attempting to parse a variable name",
-			context = context,
-			at = span,
+			position = span,
 		})?;
 
 		Ok(Name {
@@ -55,15 +54,14 @@ impl Parse for Name {
 impl CompileTime for Name {
 	type Output = Expression;
 
-	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
-		let value = context
+	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
+		let value = context()
 			.scope_data
 			.get_variable(self.clone())
 			.ok_or_else(|| anyhow::anyhow!("No variable found with the name {}", self.unmangled_name().bold().cyan()))
 			.map_err(mapped_err! {
 				while = format!("attempting to get the original value of the name \"{}\" to evaluate it at compile-time", self.unmangled_name().bold().cyan()),
-				context = context,
-				at = self.span(context),
+				position = self.span(),
 				details = unindent::unindent(&format!(
 					"
 					Here you reference a variable called \"{name}\", but no variable called \"{name}\" exists at this
@@ -74,7 +72,7 @@ impl CompileTime for Name {
 					{closest}
 					", 
 					name = self.unmangled_name().bold().red(),
-					closest = context
+					closest = context()
 						.scope_data
 						.get_closest_variables(&self, 3)
 						.iter()
@@ -82,15 +80,15 @@ impl CompileTime for Name {
 						.collect::<Vec<_>>()
 						.join("\n")
 						.trim_start()
-				))
+				)),
 			})?;
 
-		Ok(value.try_clone_pointer(context).unwrap_or(Expression::Name(self.clone())))
+		Ok(value.try_clone_pointer().unwrap_or(Expression::Name(self.clone())))
 	}
 }
 
 impl TranspileToC for Name {
-	fn to_c(&self, _context: &mut Context) -> anyhow::Result<String> {
+	fn to_c(&self) -> anyhow::Result<String> {
 		Ok(self.mangled_name())
 	}
 }
@@ -118,7 +116,7 @@ impl AsRef<Name> for Name {
 }
 
 impl Spanned for Name {
-	fn span(&self, _context: &Context) -> Span {
+	fn span(&self) -> Span {
 		self.span.clone()
 	}
 }

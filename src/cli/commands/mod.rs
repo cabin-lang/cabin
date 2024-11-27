@@ -4,7 +4,7 @@ use package::add::AddCommand;
 use run::RunCommand;
 use set::SetCommand;
 
-use crate::api::context::Context;
+use crate::api::context::context;
 
 pub mod new;
 
@@ -32,7 +32,7 @@ pub enum SubCommand {
 #[macro_export]
 macro_rules! step {
 	(
-		$expression: expr, $context: expr, $action: expr, $object: expr $(,)?
+		$expression: expr, $action: expr, $object: expr $(,)?
 	) => {{
 		use colored::Colorize as _;
 		use std::io::Write as _;
@@ -52,8 +52,8 @@ macro_rules! step {
 
 		let here = $crate::here!();
 
-		if !$context.config().options().quiet() {
-			print!("{}{} {}... ", $context.config().options().tabs(1), $action.bold().green(), $object);
+		if !$crate::api::context::context().config().options().quiet() {
+			print!("{}{} {}... ", $crate::api::context::context().config().options().tabs(1), $action.bold().green(), $object);
 			std::io::stdout().flush().unwrap();
 			if $action == "Running" {
 				println!("\n");
@@ -62,17 +62,17 @@ macro_rules! step {
 
 		match $expression {
 			Ok(return_value) => {
-				if !$context.config().options().quiet() {
-					if $object.starts_with("compile-time") && $context.lines_printed != 0 {
-						move_cursor_up_and_over($context.lines_printed, ($context.config().options().tabs(1) + "evaluating abstract syntax tree... ").len());
+				if !$crate::api::context::context().config().options().quiet() {
+					if $object.starts_with("compile-time") && $crate::api::context::context().lines_printed != 0 {
+						move_cursor_up_and_over($crate::api::context::context().lines_printed, ($crate::api::context::context().config().options().tabs(1) + "evaluating abstract syntax tree... ").len());
 					}
 
 					if $action != "Running" {
 						println!("{}", "Done!".bold().green());
 					}
 
-					if $object.starts_with("compile-time") && $context.lines_printed != 0 {
-						move_cursor_down_and_left($context.lines_printed, 0);
+					if $object.starts_with("compile-time") && $crate::api::context::context().lines_printed != 0 {
+						move_cursor_down_and_left($crate::api::context::context().lines_printed, 0);
 					}
 				}
 				return_value
@@ -80,23 +80,23 @@ macro_rules! step {
 
 			// Error during this step of compilation
 			Err(error) => {
-				if $object.starts_with("compile-time") && $context.lines_printed != 0 {
-					move_cursor_up_and_over($context.lines_printed, ($context.config().options().tabs(1) + "evaluating abstract syntax tree... ").len());
+				if $object.starts_with("compile-time") && $crate::api::context::context().lines_printed != 0 {
+					move_cursor_up_and_over($crate::api::context::context().lines_printed, ($crate::api::context::context().config().options().tabs(1) + "evaluating abstract syntax tree... ").len());
 				}
 
 				if $action != "Running" {
 					println!("{}", "Error:".bold().red());
 				}
 
-				if $object.starts_with("compile-time") && $context.lines_printed != 0 {
-					move_cursor_down_and_left($context.lines_printed, 0);
+				if $object.starts_with("compile-time") && $crate::api::context::context().lines_printed != 0 {
+					move_cursor_down_and_left($crate::api::context::context().lines_printed, 0);
 				}
 
 				// Print error message
 				eprintln!(
 					"\n{} {}",
 					"Error:".bold().red(),
-					if $context.config().options().quiet() {
+					if $crate::api::context::context().config().options().quiet() {
 						format!("{}", error).lines().next().unwrap().to_owned()
 					} else {
 						format!("{}\n", error)
@@ -104,33 +104,33 @@ macro_rules! step {
 				);
 
 				// Print the program
-				if let Some(error_position) = $context.error_position() {
-					let (error_line, _column) = $context.line_column(error_position);
+				if let Some(error_position) = $crate::api::context::context().error_position() {
+					let (error_line, _column) = $crate::api::context::context().line_column(error_position);
 
 					eprintln!(
 						"In {}{}:",
-						format!("{}", $context.running_context.entry_point().display()).bold().cyan(),
+						format!("{}", $crate::api::context::context().running_context.entry_point().display()).bold().cyan(),
 						format!(" on {}", format!("line {error_line}").bold().cyan())
 					);
 
-					eprintln!("\n\n{}\n", $context.colored_program());
+					eprintln!("\n\n{}\n", $crate::api::context::context().colored_program());
 				}
 
 				// Print additional error information
-				if !$context.config().options().quiet() && $context.config().options().detailed_errors() {
-					if let Some(error_details) = $context.error_details() {
+				if !$crate::api::context::context().config().options().quiet() && $crate::api::context::context().config().options().detailed_errors() {
+					if let Some(error_details) = $crate::api::context::context().error_details() {
 						eprintln!("{}\n\n{error_details}\n", "More information:".bold().bright_blue().underline());
 					}
 				}
 
 				// Print compiler bug location
-				if $context.config().options().developer_mode() {
+				if $crate::api::context::context().config().options().developer_mode() {
 					println!("{}\n", "Developer Information:".bold().purple().underline());
 					println!("{}\n", "This error occurred in the Cabin compiler with the following stack trace:".bold());
-					for (index, position) in $context.get_compiler_error_position().iter().enumerate() {
+					for (index, position) in $crate::api::context::context().get_compiler_error_position().iter().enumerate() {
 						let trace = format!(
 							"{}in {} at {}",
-							$context.config().options().tabs(if index == 0 { 1 } else { 2 }),
+							$crate::api::context::context().config().options().tabs(if index == 0 { 1 } else { 2 }),
 							position.function_name().cyan(),
 							format!("{}:{}:{}", position.file_name(), position.line(), position.column()).purple()
 						);
@@ -141,13 +141,13 @@ macro_rules! step {
 						"{}",
 						format!(
 							"{}in {} at {}",
-							$context.config().options().tabs(2),
+							$crate::api::context::context().config().options().tabs(2),
 							here.function_name().cyan(),
 							format!("{}:{}:{}", here.file_name(), here.line(), here.column()).purple()
 						)
 						.dimmed()
 					);
-					if !$context.get_compiler_error_position().is_empty() {
+					if !$crate::api::context::context().get_compiler_error_position().is_empty() {
 						println!();
 					}
 
@@ -172,12 +172,12 @@ macro_rules! step {
 	}};
 }
 
-pub fn start(action: &str, context: &Context) {
-	if !context.config().options().quiet() {
+pub fn start(action: &str) {
+	if !context().config().options().quiet() {
 		println!(
 			"\n{} {}...                    {}",
 			action.bold().green(),
-			format!("{}", context.running_context.file_or_project_name().display()).bold(),
+			format!("{}", context().running_context.file_or_project_name().display()).bold(),
 			"(Run with --quiet or -q to silence this output)".dimmed().italic()
 		);
 	}

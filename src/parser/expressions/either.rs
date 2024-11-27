@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-	api::{context::Context, scope::ScopeId},
+	api::{context::context, scope::ScopeId},
 	comptime::{memory::VirtualPointer, CompileTime},
 	lexer::{Span, TokenType},
 	parse_list,
@@ -32,32 +32,32 @@ pub struct Either {
 impl Parse for Either {
 	type Output = VirtualPointer;
 
-	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
+	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
 		let start = tokens.pop(TokenType::KeywordEither)?.span;
 		let mut variants = Vec::new();
 		let end = parse_list!(tokens, ListType::Braced, {
-			let name = Name::parse(tokens, context)?;
-			let span = name.span(context);
-			variants.push((name, LiteralObject::empty(span, context).store_in_memory(context)));
+			let name = Name::parse(tokens)?;
+			let span = name.span();
+			variants.push((name, LiteralObject::empty(span).store_in_memory()));
 		})
 		.span;
 
 		Ok(Either {
 			variants,
-			scope_id: context.scope_data.unique_id(),
-			inner_scope_id: context.scope_data.unique_id(),
+			scope_id: context().scope_data.unique_id(),
+			inner_scope_id: context().scope_data.unique_id(),
 			name: "anonymous_either".into(),
 			span: start.to(&end),
 		}
 		.to_literal()
-		.store_in_memory(context))
+		.store_in_memory())
 	}
 }
 
 impl CompileTime for Either {
 	type Output = Either;
 
-	fn evaluate_at_compile_time(self, _context: &mut Context) -> anyhow::Result<Self::Output> {
+	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
 		Ok(self)
 	}
 }
@@ -90,10 +90,10 @@ impl LiteralConvertible for Either {
 }
 
 impl TranspileToC for Either {
-	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
+	fn to_c(&self) -> anyhow::Result<String> {
 		let mut builder = "{\n".to_owned();
 		for (variant_name, _variant_value) in &self.variants {
-			builder += &format!("\n\t{},", variant_name.to_c(context)?);
+			builder += &format!("\n\t{},", variant_name.to_c()?);
 		}
 
 		builder += "\n}";
@@ -103,7 +103,7 @@ impl TranspileToC for Either {
 }
 
 impl Spanned for Either {
-	fn span(&self, _context: &Context) -> Span {
+	fn span(&self) -> Span {
 		self.span.to_owned()
 	}
 }

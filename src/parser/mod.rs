@@ -13,7 +13,7 @@ use statements::{
 
 use crate::{
 	api::{
-		context::Context,
+		context::context,
 		scope::{ScopeId, ScopeType},
 		traits::TryAs,
 	},
@@ -26,8 +26,8 @@ use crate::{
 pub mod expressions;
 pub mod statements;
 
-pub fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Module> {
-	Module::parse(tokens, context)
+pub fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Module> {
+	Module::parse(tokens)
 }
 
 #[derive(Debug)]
@@ -39,17 +39,16 @@ pub struct Module {
 impl Parse for Module {
 	type Output = Self;
 
-	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
-		context.scope_data.enter_new_unlabeled_scope(ScopeType::File);
-		let inner_scope_id = context.scope_data.unique_id();
+	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
+		context().scope_data.enter_new_unlabeled_scope(ScopeType::File);
+		let inner_scope_id = context().scope_data.unique_id();
 		let mut statements = Vec::new();
 		while !tokens.is_empty() {
-			statements.push(Declaration::parse(tokens, context).map_err(mapped_err! {
+			statements.push(Declaration::parse(tokens).map_err(mapped_err! {
 				while = "parsing the program's top-level declarations",
-				context = context,
 			})?);
 		}
-		context.scope_data.exit_scope()?;
+		context().scope_data.exit_scope()?;
 		Ok(Module {
 			declarations: statements,
 			inner_scope_id,
@@ -60,50 +59,47 @@ impl Parse for Module {
 impl CompileTime for Module {
 	type Output = Module;
 
-	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
-		let previous = context.scope_data.set_current_scope(self.inner_scope_id);
+	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
+		let previous = context().scope_data.set_current_scope(self.inner_scope_id);
 		let evaluated = Self {
 			declarations: self
 				.declarations
 				.into_iter()
-				.map(|statement| statement.evaluate_at_compile_time(context))
+				.map(|statement| statement.evaluate_at_compile_time())
 				.collect::<anyhow::Result<Vec<_>>>()
 				.map_err(mapped_err! {
 					while = "evaluating the program's global statements at compile-time",
-					context = context,
 				})?
 				.into_iter()
 				.collect(),
 			inner_scope_id: self.inner_scope_id,
 		};
-		context.scope_data.set_current_scope(previous);
+		context().scope_data.set_current_scope(previous);
 		Ok(evaluated)
 	}
 }
 
 impl TranspileToC for Module {
-	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
+	fn to_c(&self) -> anyhow::Result<String> {
 		Ok(self
 			.declarations
 			.iter()
 			.map(|declaration| {
 				if declaration.declaration_type() == &DeclarationType::RepresentAs
 					|| declaration
-						.value(context)
+						.value()
 						.map_err(mapped_err! {
 							while = "getting the value of a declaration",
-							context = context,
 						})?
 						.is_pointer()
 				{
 					return Ok(None);
 				}
-				Ok(Some(declaration.to_c(context)?))
+				Ok(Some(declaration.to_c()?))
 			})
 			.collect::<anyhow::Result<Vec<_>>>()
 			.map_err(mapped_err! {
 				while = "transpiling the program's global statements to C",
-				context = context,
 			})?
 			.into_iter()
 			.flatten()
@@ -214,7 +210,7 @@ impl TokenQueueFunctionality for std::collections::VecDeque<Token> {
 }
 
 impl Module {
-	pub fn into_literal(self, context: &mut Context) -> anyhow::Result<LiteralObject> {
+	pub fn into_literal(self) -> anyhow::Result<LiteralObject> {
 		Ok(LiteralObject {
 			type_name: "Object".into(),
 			fields: self
@@ -223,7 +219,7 @@ impl Module {
 				.filter_map(|declaration| {
 					(declaration.declaration_type() != &DeclarationType::RepresentAs).then(|| {
 						let name = declaration.name().to_owned();
-						let value = declaration.value(context).unwrap();
+						let value = declaration.value().unwrap();
 						(name, value.expect_as::<VirtualPointer>().unwrap().to_owned())
 					})
 				})
@@ -239,7 +235,7 @@ impl Module {
 		})
 	}
 
-	pub fn into_object(self, context: &mut Context) -> anyhow::Result<ObjectConstructor> {
+	pub fn into_object(self) -> anyhow::Result<ObjectConstructor> {
 		Ok(ObjectConstructor {
 			type_name: "Object".into(),
 			fields: self
@@ -248,7 +244,7 @@ impl Module {
 				.filter_map(|declaration| {
 					(declaration.declaration_type() != &DeclarationType::RepresentAs).then(|| {
 						let name = declaration.name().to_owned();
-						let value = Some(declaration.value(context).unwrap().clone());
+						let value = Some(declaration.value().unwrap().clone());
 						Field { name, value, field_type: None }
 					})
 				})
@@ -297,7 +293,7 @@ impl ListType {
 pub trait Parse {
 	type Output;
 
-	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output>;
+	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output>;
 }
 
 pub type TokenQueue = VecDeque<Token>;

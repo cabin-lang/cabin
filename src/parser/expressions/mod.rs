@@ -1,11 +1,11 @@
-use crate::parser::expressions::try_as_traits::TryAsMut;
+use crate::{api::context::context, parser::expressions::try_as_traits::TryAsMut};
 use colored::Colorize as _;
 use parameter::Parameter;
 use run::{RunExpression, RuntimeableExpression};
 use try_as::traits as try_as_traits;
 
 use crate::{
-	api::{context::Context, traits::TryAs as _},
+	api::traits::TryAs as _,
 	bail_err,
 	comptime::{memory::VirtualPointer, CompileTime},
 	lexer::Span,
@@ -57,51 +57,48 @@ pub enum Expression {
 impl Parse for Expression {
 	type Output = Expression;
 
-	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
-		BinaryExpression::parse(tokens, context)
+	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
+		BinaryExpression::parse(tokens)
 	}
 }
 
 impl CompileTime for Expression {
 	type Output = Expression;
 
-	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
+	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
 		Ok(match self {
 			Self::Block(block) => block
-				.evaluate_at_compile_time(context)
+				.evaluate_at_compile_time()
 				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a block at compile-time".dimmed()))?,
 			Self::FieldAccess(field_access) => field_access
-				.evaluate_at_compile_time(context)
+				.evaluate_at_compile_time()
 				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a field access at compile-time".dimmed()))?,
 			Self::FunctionCall(function_call) => function_call
-				.evaluate_at_compile_time(context)
+				.evaluate_at_compile_time()
 				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a function call at compile-time".dimmed()))?,
 			Self::If(if_expression) => if_expression
-				.evaluate_at_compile_time(context)
+				.evaluate_at_compile_time()
 				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating an if expression at compile-time".dimmed()))?,
-			Self::Name(name) => name.clone().evaluate_at_compile_time(context).map_err(mapped_err! {
+			Self::Name(name) => name.clone().evaluate_at_compile_time().map_err(mapped_err! {
 				while = format!("evaluating the name \"{}\" at compile-time", name.unmangled_name().bold().cyan()),
-				context = context,
 			})?,
-			Self::ObjectConstructor(constructor) => constructor.evaluate_at_compile_time(context).map_err(mapped_err! {
+			Self::ObjectConstructor(constructor) => constructor.evaluate_at_compile_time().map_err(mapped_err! {
 				while = "evaluating a object constructor expression at compile-time",
-				context = context,
 			})?,
-			Self::Parameter(parameter) => Expression::Parameter(parameter.evaluate_at_compile_time(context).map_err(mapped_err! {
+			Self::Parameter(parameter) => Expression::Parameter(parameter.evaluate_at_compile_time().map_err(mapped_err! {
 				while = "evaluating a parameter expression at compile-time",
-				context = context,
 			})?),
 			Self::ForEachLoop(for_loop) => for_loop
-				.evaluate_at_compile_time(context)
+				.evaluate_at_compile_time()
 				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a for-each loop at compile-time".dimmed()))?,
 			Self::Run(run_expression) => Expression::Run(
 				run_expression
-					.evaluate_at_compile_time(context)
+					.evaluate_at_compile_time()
 					.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a for-each loop at compile-time".dimmed()))?,
 			),
 			Self::Pointer(pointer) => Expression::Pointer(
 				pointer
-					.evaluate_at_compile_time(context)
+					.evaluate_at_compile_time()
 					.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a pointer compile-time".dimmed()))?,
 			),
 			Self::Void(_) => self,
@@ -110,35 +107,32 @@ impl CompileTime for Expression {
 }
 
 impl Expression {
-	pub fn try_as_literal<'a>(&self, context: &'a mut Context) -> anyhow::Result<&'a LiteralObject> {
+	pub fn try_as_literal(&self) -> anyhow::Result<&'static LiteralObject> {
 		Ok(match self {
-			Self::Pointer(pointer) => pointer.virtual_deref(context),
+			Self::Pointer(pointer) => pointer.virtual_deref(),
 			Self::Name(name) => name
 				.clone()
-				.evaluate_at_compile_time(context)
+				.evaluate_at_compile_time()
 				.map_err(mapped_err! {
 					while = format!("evaluating the name \"{}\" at compile-time", name.unmangled_name().bold().cyan()),
-					context = context,
 				})?
-				.try_as_literal(context)?,
+				.try_as_literal()?,
 			_ => bail_err! {
 				base = format!("A value that's not fully known at compile-time was used as a type; It can only be evaluated into a {} at compile-time.", self.kind_name().bold().yellow()),
-				context = context,
 			},
 		})
 	}
 
-	pub fn is_fully_known_at_compile_time(&self, context: &mut Context) -> anyhow::Result<bool> {
+	pub fn is_fully_known_at_compile_time(&self) -> anyhow::Result<bool> {
 		Ok(match self {
 			Self::Pointer(_) => true,
 			Self::Name(name) => name
 				.clone()
-				.evaluate_at_compile_time(context)
+				.evaluate_at_compile_time()
 				.map_err(mapped_err! {
 					while = format!("evaluating the name \"{}\" at compile-time", name.unmangled_name().bold().cyan()),
-					context = context,
 				})?
-				.is_fully_known_at_compile_time(context)?,
+				.is_fully_known_at_compile_time()?,
 			_ => false,
 		})
 	}
@@ -189,35 +183,34 @@ impl Expression {
 	///
 	/// # Performance
 	/// This clone is very cheap; Only the underlying pointer address (a `usize`) is cloned.
-	pub fn try_clone_pointer(&self, context: &Context) -> anyhow::Result<Expression> {
+	pub fn try_clone_pointer(&self) -> anyhow::Result<Expression> {
 		if let Self::Pointer(address) = self {
 			return Ok(Expression::Pointer(*address));
 		}
 
 		bail_err! {
 			base = format!("A value that's not fully known at compile-time was used as a type; It can only be evaluated into a {}", self.kind_name().bold().yellow()),
-			context = context,
 		};
 	}
 
-	pub fn expect_clone_pointer(&self, context: &Context) -> anyhow::Result<Expression> {
-		self.try_clone_pointer(context)
+	pub fn expect_clone_pointer(&self) -> anyhow::Result<Expression> {
+		self.try_clone_pointer()
 	}
 
-	pub fn is_true(&self, context: &Context) -> bool {
+	pub fn is_true(&self) -> bool {
 		let Ok(literal_address) = self.try_as::<VirtualPointer>() else {
 			return false;
 		};
 
-		let true_address = context.scope_data.get_variable("true").unwrap().expect_as().unwrap();
+		let true_address = context().scope_data.get_variable("true").unwrap().expect_as().unwrap();
 
 		literal_address == true_address
 	}
 
-	pub fn set_tags(&mut self, tags: TagList, context: &mut Context) {
+	pub fn set_tags(&mut self, tags: TagList) {
 		match self {
 			Self::ObjectConstructor(constructor) => constructor.tags = tags,
-			Self::Pointer(pointer) => pointer.virtual_deref_mut(context).tags = tags,
+			Self::Pointer(pointer) => pointer.virtual_deref_mut().tags = tags,
 			_ => {},
 		};
 	}
@@ -244,27 +237,27 @@ impl Expression {
 	/// # Returns
 	///
 	/// whether this expression can be assigned to the given type.
-	pub fn is_assignable_to_type(&self, target_type: VirtualPointer, context: &mut Context) -> anyhow::Result<bool> {
-		let this_type = self.get_type(context)?.virtual_deref(context).clone();
-		for (_name, _represent_as) in context.scope_data.get_represent_as_declarations() {
+	pub fn is_assignable_to_type(&self, target_type: VirtualPointer) -> anyhow::Result<bool> {
+		let this_type = self.get_type()?.virtual_deref().clone();
+		for (_name, _represent_as) in context().scope_data.get_represent_as_declarations() {
 			// TODO
 		}
-		this_type.is_type_assignable_to_type(target_type, context)
+		this_type.is_type_assignable_to_type(target_type)
 	}
 }
 
 impl TranspileToC for Expression {
-	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
+	fn to_c(&self) -> anyhow::Result<String> {
 		Ok(match self {
-			Self::If(if_expression) => if_expression.to_c(context)?,
-			Self::Block(block) => block.to_c(context)?,
-			Self::FieldAccess(field_access) => field_access.to_c(context)?,
-			Self::Name(name) => name.to_c(context)?,
-			Self::FunctionCall(function_call) => function_call.to_c(context)?,
-			Self::ForEachLoop(for_each_loop) => for_each_loop.to_c(context)?,
-			Self::Pointer(pointer) => pointer.to_c(context)?,
-			Self::ObjectConstructor(object_constructor) => object_constructor.to_c(context)?,
-			Self::Run(run_expression) => run_expression.to_c(context)?,
+			Self::If(if_expression) => if_expression.to_c()?,
+			Self::Block(block) => block.to_c()?,
+			Self::FieldAccess(field_access) => field_access.to_c()?,
+			Self::Name(name) => name.to_c()?,
+			Self::FunctionCall(function_call) => function_call.to_c()?,
+			Self::ForEachLoop(for_each_loop) => for_each_loop.to_c()?,
+			Self::Pointer(pointer) => pointer.to_c()?,
+			Self::ObjectConstructor(object_constructor) => object_constructor.to_c()?,
+			Self::Run(run_expression) => run_expression.to_c()?,
 			Self::Parameter(_) => todo!(),
 			Self::Void(_) => "void".to_owned(),
 		})
@@ -272,16 +265,15 @@ impl TranspileToC for Expression {
 }
 
 impl Typed for Expression {
-	fn get_type(&self, context: &mut Context) -> anyhow::Result<VirtualPointer> {
+	fn get_type(&self) -> anyhow::Result<VirtualPointer> {
 		Ok(match self {
-			Expression::Pointer(pointer) => pointer.virtual_deref(context).clone().get_type(context)?,
-			Expression::FunctionCall(function_call) => function_call.get_type(context)?,
-			Expression::Run(run_expression) => run_expression.get_type(context)?,
-			Expression::Parameter(parameter) => parameter.get_type(context)?,
+			Expression::Pointer(pointer) => pointer.virtual_deref().clone().get_type()?,
+			Expression::FunctionCall(function_call) => function_call.get_type()?,
+			Expression::Run(run_expression) => run_expression.get_type()?,
+			Expression::Parameter(parameter) => parameter.get_type()?,
 			Expression::Void(()) => bail_err! {
 				base = "Attempted to get the type of a non-existent value",
 				while = "getting the type of a generic expression",
-				context = context,
 			},
 			value => {
 				dbg!(value);
@@ -292,51 +284,43 @@ impl Typed for Expression {
 }
 
 impl Spanned for Expression {
-	fn span(&self, context: &Context) -> Span {
+	fn span(&self) -> Span {
 		match self {
-			Expression::Name(name) => name.span(context),
-			Expression::Run(run_expression) => run_expression.span(context),
-			Expression::Block(block) => block.span(context),
-			Expression::ObjectConstructor(object_constructor) => object_constructor.span(context),
-			Expression::Pointer(virtual_pointer) => virtual_pointer.span(context),
-			Expression::FunctionCall(function_call) => function_call.span(context),
-			Expression::If(if_expression) => if_expression.span(context),
-			Expression::FieldAccess(field_access) => field_access.span(context),
-			Expression::ForEachLoop(for_each_loop) => for_each_loop.span(context),
-			Expression::Parameter(parameter) => parameter.span(context),
+			Expression::Name(name) => name.span(),
+			Expression::Run(run_expression) => run_expression.span(),
+			Expression::Block(block) => block.span(),
+			Expression::ObjectConstructor(object_constructor) => object_constructor.span(),
+			Expression::Pointer(virtual_pointer) => virtual_pointer.span(),
+			Expression::FunctionCall(function_call) => function_call.span(),
+			Expression::If(if_expression) => if_expression.span(),
+			Expression::FieldAccess(field_access) => field_access.span(),
+			Expression::ForEachLoop(for_each_loop) => for_each_loop.span(),
+			Expression::Parameter(parameter) => parameter.span(),
 			Expression::Void(_) => panic!(),
 		}
 	}
 }
 
 pub trait Typed {
-	fn get_type(&self, context: &mut Context) -> anyhow::Result<VirtualPointer>;
+	fn get_type(&self) -> anyhow::Result<VirtualPointer>;
 }
 
 pub trait Spanned {
 	/// Returns the section of the source code that this expression spans. This is used by the compiler to print information about
 	/// errors that occur, such as while line and column the error occurred on.
 	///
-	/// # Parameters
-	///
-	/// - `context` - Global data about the compiler's state. This is currently only used by the implementation of `Spanned` for
-	/// `VirtualPointer`, which uses it to access it's value in virtual memory and return that value's span. See `VirtualPointer::span()`
-	/// for more information.
-	///
 	/// # Returns
 	///
-	///
 	/// The second of the program's source code that this expression spans.
-	fn span(&self, context: &Context) -> Span;
+	fn span(&self) -> Span;
 }
 
 impl RuntimeableExpression for Expression {
-	fn evaluate_subexpressions_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self> {
+	fn evaluate_subexpressions_at_compile_time(self) -> anyhow::Result<Self> {
 		Ok(match self {
-			Self::FunctionCall(function_call) => Expression::FunctionCall(function_call.evaluate_subexpressions_at_compile_time(context)?),
+			Self::FunctionCall(function_call) => Expression::FunctionCall(function_call.evaluate_subexpressions_at_compile_time()?),
 			_ => bail_err! {
 				base = format!("Attempted to use a run-expression on a {}, but forcing this type of expression to run at runtime is pointless.", self.kind_name()),
-				context = context,
 			},
 		})
 	}

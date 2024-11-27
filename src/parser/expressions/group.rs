@@ -2,7 +2,7 @@ use std::collections::{HashMap, VecDeque};
 
 use crate::{
 	api::{
-		context::Context,
+		context::context,
 		scope::{ScopeId, ScopeType},
 	},
 	bail_err,
@@ -37,38 +37,37 @@ pub struct GroupDeclaration {
 impl Parse for GroupDeclaration {
 	type Output = VirtualPointer;
 
-	fn parse(tokens: &mut VecDeque<Token>, context: &mut Context) -> anyhow::Result<Self::Output> {
+	fn parse(tokens: &mut VecDeque<Token>) -> anyhow::Result<Self::Output> {
 		let start = tokens.pop(TokenType::KeywordGroup)?.span;
-		let outer_scope_id = context.scope_data.unique_id();
-		context.scope_data.enter_new_unlabeled_scope(ScopeType::Group);
-		let inner_scope_id = context.scope_data.unique_id();
+		let outer_scope_id = context().scope_data.unique_id();
+		context().scope_data.enter_new_unlabeled_scope(ScopeType::Group);
+		let inner_scope_id = context().scope_data.unique_id();
 
 		// Fields
 		let mut fields = Vec::new();
 		let end = parse_list!(tokens, ListType::Braced, {
 			//  Group field tags
-			let tags = if_then_some!(tokens.next_is(TokenType::TagOpening), TagList::parse(tokens, context)?);
+			let tags = if_then_some!(tokens.next_is(TokenType::TagOpening), TagList::parse(tokens)?);
 
 			// Group field name
-			let name = Name::parse(tokens, context).map_err(mapped_err! {
+			let name = Name::parse(tokens).map_err(mapped_err! {
 				while = "attempting to parse an the type name of object constructor",
-				context = context,
 			})?;
 
 			// Group field type
 			let field_type = if_then_some!(tokens.next_is(TokenType::Colon), {
 				tokens.pop(TokenType::Colon)?;
-				Expression::parse(tokens, context)?
+				Expression::parse(tokens)?
 			});
 
 			// Group field value
 			let value = if_then_some!(tokens.next_is(TokenType::Equal), {
 				tokens.pop(TokenType::Equal)?;
-				let mut value = Expression::parse(tokens, context)?;
+				let mut value = Expression::parse(tokens)?;
 
 				// Set tags
 				if let Some(tags) = tags.clone() {
-					value.set_tags(tags, context);
+					value.set_tags(tags);
 				}
 
 				value
@@ -78,7 +77,7 @@ impl Parse for GroupDeclaration {
 			fields.push(Field { name, value, field_type });
 		})
 		.span;
-		context.scope_data.exit_scope()?;
+		context().scope_data.exit_scope()?;
 
 		Ok(GroupDeclaration {
 			fields,
@@ -88,30 +87,28 @@ impl Parse for GroupDeclaration {
 			span: start.to(&end),
 		}
 		.to_literal()
-		.store_in_memory(context))
+		.store_in_memory())
 	}
 }
 
 impl CompileTime for GroupDeclaration {
 	type Output = GroupDeclaration;
 
-	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
-		let previous = context.scope_data.set_current_scope(self.inner_scope_id);
+	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
+		let previous = context().scope_data.set_current_scope(self.inner_scope_id);
 		let mut fields = Vec::new();
 
 		for field in self.fields {
 			// Field value
 			let value = if let Some(value) = field.value {
-				let evaluated = value.evaluate_at_compile_time(context).map_err(mapped_err! {
+				let evaluated = value.evaluate_at_compile_time().map_err(mapped_err! {
 					while = format!("evaluating the default value of the field \"{}\" of a group declaration at compile-time", field.name.unmangled_name().bold().cyan()),
-					context = context,
 				})?;
 
 				if !evaluated.is_pointer() {
 					bail_err! {
 						base = "Attempted to assign a default value to a group field that's not known at compile-time",
 						while = format!("while checking the default value of the field \"{}\"", field.name.unmangled_name().bold().cyan()),
-						context = context,
 					};
 				}
 
@@ -122,12 +119,11 @@ impl CompileTime for GroupDeclaration {
 
 			// Field type
 			let field_type = if let Some(field_type) = field.field_type {
-				Some(field_type.evaluate_at_compile_time(context).map_err(mapped_err! {
+				Some(field_type.evaluate_at_compile_time().map_err(mapped_err! {
 					while = format!(
 						"evaluating the value of the field \"{}\" of a group declaration at compile-time",
 						field.name.unmangled_name().bold().cyan()
 					),
-					context = context,
 				})?)
 			} else {
 				None
@@ -142,7 +138,7 @@ impl CompileTime for GroupDeclaration {
 		}
 
 		// Store in memory and return a pointer
-		context.scope_data.set_current_scope(previous);
+		context().scope_data.set_current_scope(previous);
 		Ok(GroupDeclaration {
 			fields,
 			inner_scope_id: self.inner_scope_id,
@@ -154,25 +150,18 @@ impl CompileTime for GroupDeclaration {
 }
 
 impl TranspileToC for GroupDeclaration {
-	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
+	fn to_c(&self) -> anyhow::Result<String> {
 		let mut builder = "{".to_owned();
 
 		for field in &self.fields {
 			builder += &format!(
 				"\n\t{}* {};",
 				if let Some(field_type) = &field.field_type {
-					field_type.try_as_literal(context)?.clone().to_c_type(context)?
+					field_type.try_as_literal()?.clone().to_c_type()?
 				} else {
-					field
-						.value
-						.as_ref()
-						.unwrap_or(&Expression::Void(()))
-						.get_type(context)?
-						.virtual_deref(context)
-						.clone()
-						.to_c_type(context)?
+					field.value.as_ref().unwrap_or(&Expression::Void(())).get_type()?.virtual_deref().clone().to_c_type()?
 				},
-				field.name.to_c(context)?
+				field.name.to_c()?
 			);
 		}
 
@@ -217,7 +206,7 @@ impl LiteralConvertible for GroupDeclaration {
 }
 
 impl Spanned for GroupDeclaration {
-	fn span(&self, _context: &Context) -> crate::lexer::Span {
+	fn span(&self) -> crate::lexer::Span {
 		self.span.clone()
 	}
 }

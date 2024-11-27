@@ -4,7 +4,7 @@ use colored::Colorize as _;
 
 use crate::{
 	api::{
-		context::Context,
+		context::context,
 		scope::ScopeId,
 		traits::{TerminalOutput, TryAs as _},
 	},
@@ -64,17 +64,17 @@ pub struct FieldAccess {
 impl Parse for FieldAccess {
 	type Output = Expression;
 
-	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
-		let mut expression = PrimaryExpression::parse(tokens, context)?; // There should be no map_err here
-		let start = expression.span(context);
+	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
+		let mut expression = PrimaryExpression::parse(tokens)?; // There should be no map_err here
+		let start = expression.span();
 		while tokens.next_is_one_of(&[TokenType::Dot, TokenType::Colon]) {
 			let access_type = FieldAccessOperator::try_from(tokens.pop_front().unwrap().token_type)?;
-			let right = Name::parse(tokens, context)?;
-			let end = right.span(context);
+			let right = Name::parse(tokens)?;
+			let end = right.span();
 			expression = Expression::FieldAccess(Self {
 				left: Box::new(expression),
 				right,
-				scope_id: context.scope_data.unique_id(),
+				scope_id: context().scope_data.unique_id(),
 				span: start.to(&end),
 				access_type,
 			});
@@ -87,18 +87,13 @@ impl Parse for FieldAccess {
 impl CompileTime for FieldAccess {
 	type Output = Expression;
 
-	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
-		debug_log!(
-			context,
-			"Evaluating field access {:?}.{} at compile-time",
-			self.left,
-			self.right.unmangled_name().bold().red()
-		);
-		let left_evaluated = self.left.evaluate_at_compile_time(context)?;
+	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
+		debug_log!("Evaluating field access {:?}.{} at compile-time", self.left, self.right.unmangled_name().bold().red());
+		let left_evaluated = self.left.evaluate_at_compile_time()?;
 
 		// Resolvable at compile-time
-		if let Ok(pointer) = left_evaluated.try_as_literal(context).map(|value| value.address.unwrap()) {
-			let literal = pointer.virtual_deref(context);
+		if let Ok(pointer) = left_evaluated.try_as_literal().map(|value| value.address.unwrap()) {
+			let literal = pointer.virtual_deref();
 
 			Ok(match self.access_type {
 				FieldAccessOperator::Dot => match literal.object_type() {
@@ -113,11 +108,11 @@ impl CompileTime for FieldAccess {
 
 						let pointer = field.try_as::<VirtualPointer>();
 						if let Ok(pointer) = pointer {
-							let literal = pointer.virtual_deref(context).clone();
+							let literal = pointer.virtual_deref().clone();
 							if literal.type_name() == &"Function".into() {
 								let mut function_declaration = FunctionDeclaration::from_literal(&literal).unwrap();
 								function_declaration.set_this_object(left_evaluated);
-								context.virtual_memory.replace(pointer.to_owned(), function_declaration.to_literal());
+								context().virtual_memory.replace(pointer.to_owned(), function_declaration.to_literal());
 								Expression::Pointer(pointer.to_owned())
 							} else {
 								field
@@ -145,56 +140,45 @@ impl CompileTime for FieldAccess {
 				},
 				FieldAccessOperator::Colon => match literal.object_type() {
 					FieldAccessType::Normal => {
-						let declaration = context
+						let declaration = context()
 							.scope_data
 							.get_represent_as(&self.right)
 							.ok_or_else(|| {
 								err! {
 									base = "no represent as with this name was found",
-									context = context,
 								}
 							})?
 							.clone();
 
-						if !declaration.can_represent(&left_evaluated, context)? {
+						if !declaration.can_represent(&left_evaluated)? {
 							bail_err! {
 								base = "Attempted to represent an object with a represent-as declaration, but that declaration can't apply to that object.",
-								context = context,
 								details = format!(
 									"
 									Here, you use the colon operator to attempt to represent an object of type \"{}\" using the represent-as declaration
 									\"{}\". However, That represent-as declaration can only represent objects of type \"{}\".
 									",
-									left_evaluated.get_type(context)?.virtual_deref(context).name().unmangled_name().bold().yellow(),
+									left_evaluated.get_type()?.virtual_deref().name().unmangled_name().bold().yellow(),
 									self.right.unmangled_name().bold().yellow(),
-									declaration.can_represent_string(context)?.bold().yellow(),
-								).as_terminal_output()
+									declaration.can_represent_string()?.bold().yellow(),
+								).as_terminal_output(),
 							}
 						}
 
 						Expression::Pointer(
-							LiteralObject::try_from_object_constructor(
-								ObjectConstructor {
-									type_name: declaration
-										.type_to_represent_as()
-										.expect_as::<VirtualPointer>()
-										.unwrap()
-										.virtual_deref(context)
-										.name()
-										.to_owned(),
-									fields: declaration.fields().to_vec(),
-									internal_fields: HashMap::new(),
-									inner_scope_id: context.scope_data.file_id(),
-									field_access_type: FieldAccessType::Normal,
-									name: "anonymous_represent_as_casted".into(),
-									outer_scope_id: context.scope_data.file_id(),
-									tags: TagList::default(),
-									span: declaration.span(context),
-								},
-								context,
-							)
+							LiteralObject::try_from_object_constructor(ObjectConstructor {
+								type_name: declaration.type_to_represent_as().expect_as::<VirtualPointer>().unwrap().virtual_deref().name().to_owned(),
+								fields: declaration.fields().to_vec(),
+								internal_fields: HashMap::new(),
+								inner_scope_id: context().scope_data.file_id(),
+								field_access_type: FieldAccessType::Normal,
+								name: "anonymous_represent_as_casted".into(),
+								outer_scope_id: context().scope_data.file_id(),
+								tags: TagList::default(),
+								span: declaration.span(),
+							})
 							.unwrap()
-							.store_in_memory(context),
+							.store_in_memory(),
 						)
 					},
 					_ => todo!(),
@@ -215,22 +199,18 @@ impl CompileTime for FieldAccess {
 }
 
 impl TranspileToC for FieldAccess {
-	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
+	fn to_c(&self) -> anyhow::Result<String> {
 		let left = if let Ok(name) = self.left.as_ref().try_as::<Name>() {
-			format!(
-				"{}_{}",
-				self.left.to_c(context)?,
-				name.clone().evaluate_at_compile_time(context)?.try_as_literal(context)?.address.unwrap()
-			)
+			format!("{}_{}", self.left.to_c()?, name.clone().evaluate_at_compile_time()?.try_as_literal()?.address.unwrap())
 		} else {
-			self.left.to_c(context)?
+			self.left.to_c()?
 		};
 		Ok(format!("{}->{}", left, self.right.mangled_name()))
 	}
 }
 
 impl Spanned for FieldAccess {
-	fn span(&self, _context: &Context) -> Span {
+	fn span(&self) -> Span {
 		self.span.clone()
 	}
 }

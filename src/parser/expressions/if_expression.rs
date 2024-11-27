@@ -1,5 +1,5 @@
 use crate::{
-	api::context::Context,
+	api::context::context,
 	comptime::CompileTime,
 	lexer::{Span, TokenType},
 	mapped_err,
@@ -23,15 +23,15 @@ pub struct IfExpression {
 impl Parse for IfExpression {
 	type Output = IfExpression;
 
-	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
+	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
 		let start = tokens.pop(TokenType::KeywordIf)?.span;
-		let condition = Box::new(Expression::parse(tokens, context)?);
-		let body = Box::new(Expression::Block(Block::parse(tokens, context)?));
-		let mut end = body.span(context);
+		let condition = Box::new(Expression::parse(tokens)?);
+		let body = Box::new(Expression::Block(Block::parse(tokens)?));
+		let mut end = body.span();
 		let else_body = if tokens.next_is(TokenType::KeywordOtherwise) {
 			tokens.pop(TokenType::KeywordOtherwise).unwrap_or_else(|_| unreachable!());
-			let else_body = Expression::Block(Block::parse(tokens, context)?);
-			end = else_body.span(context);
+			let else_body = Expression::Block(Block::parse(tokens)?);
+			end = else_body.span();
 			Some(Box::new(else_body))
 		} else {
 			None
@@ -48,42 +48,40 @@ impl Parse for IfExpression {
 impl CompileTime for IfExpression {
 	type Output = Expression;
 
-	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
+	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
 		// Check condition
-		let condition = self.condition.evaluate_at_compile_time(context).map_err(mapped_err! {
+		let condition = self.condition.evaluate_at_compile_time().map_err(mapped_err! {
 			while = "evaluating the condition of an if-expression at compile-time",
-			context = context,
 		})?;
-		let condition_is_true = condition.is_true(context);
+		let condition_is_true = condition.is_true();
 
 		// Evaluate body
-		context.toggle_side_effects(condition_is_true);
+		context().toggle_side_effects(condition_is_true);
 		let body = self
 			.body
-			.evaluate_at_compile_time(context)
-			.map_err(mapped_err! { while = "evaluating the body of an if-expression at compile-time", context = context, })?;
-		context.untoggle_side_effects();
+			.evaluate_at_compile_time()
+			.map_err(mapped_err! { while = "evaluating the body of an if-expression at compile-time", })?;
+		context().untoggle_side_effects();
 
 		// Evaluate else body
-		context.toggle_side_effects(!condition_is_true);
+		context().toggle_side_effects(!condition_is_true);
 		let else_body = self
 			.else_body
 			.map(|else_body| {
-				anyhow::Ok(Box::new(else_body.evaluate_at_compile_time(context).map_err(mapped_err! {
+				anyhow::Ok(Box::new(else_body.evaluate_at_compile_time().map_err(mapped_err! {
 					while = "evaluating the otherwise-body of an if-expression at compile-time",
-					context = context,
 				})?))
 			})
 			.transpose()?;
-		context.untoggle_side_effects();
+		context().untoggle_side_effects();
 
 		// Fully evaluated: return the value (only if true)
 		if condition_is_true {
-			if let Ok(literal) = body.try_clone_pointer(context) {
+			if let Ok(literal) = body.try_clone_pointer() {
 				return Ok(literal);
 			}
 		} else if let Some(else_body) = &else_body {
-			if let Ok(literal) = else_body.try_clone_pointer(context) {
+			if let Ok(literal) = else_body.try_clone_pointer() {
 				return Ok(literal);
 			}
 		}
@@ -99,15 +97,15 @@ impl CompileTime for IfExpression {
 }
 
 impl TranspileToC for IfExpression {
-	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
-		let mut builder = format!("({}) ? (", self.condition.to_c(context)?);
-		for line in self.body.to_c(context)?.lines() {
+	fn to_c(&self) -> anyhow::Result<String> {
+		let mut builder = format!("({}) ? (", self.condition.to_c()?);
+		for line in self.body.to_c()?.lines() {
 			builder += &format!("\n\t{line}");
 		}
 		builder += "\n) : (";
 
 		if let Some(else_body) = &self.else_body {
-			for line in else_body.to_c(context)?.lines() {
+			for line in else_body.to_c()?.lines() {
 				builder += &format!("\n\t{line}");
 			}
 		} else {
@@ -121,7 +119,7 @@ impl TranspileToC for IfExpression {
 }
 
 impl Spanned for IfExpression {
-	fn span(&self, _context: &Context) -> Span {
+	fn span(&self) -> Span {
 		self.span.clone()
 	}
 }

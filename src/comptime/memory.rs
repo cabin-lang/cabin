@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-	api::context::Context,
+	api::context::context,
 	lexer::Span,
 	parser::expressions::{literal::LiteralObject, Spanned, Typed},
 	transpiler::TranspileToC,
@@ -43,21 +43,21 @@ impl VirtualPointer {
 	/// # Returns
 	///
 	/// A reference to the `LiteralObject` that this `VirtualPointer` points to.
-	pub fn virtual_deref<'a>(&self, context: &'a Context) -> &'a LiteralObject {
-		context.virtual_memory.get(self)
+	pub fn virtual_deref(&self) -> &'static LiteralObject {
+		context().virtual_memory.get(self)
 	}
 
-	pub fn virtual_deref_mut<'a>(&self, context: &'a mut Context) -> &'a mut LiteralObject {
-		context.virtual_memory.memory.get_mut(&self.0).unwrap()
+	pub fn virtual_deref_mut(&self) -> &'static mut LiteralObject {
+		context().virtual_memory.memory.get_mut(&self.0).unwrap()
 	}
 }
 
 impl CompileTime for VirtualPointer {
 	type Output = VirtualPointer;
 
-	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
-		let evaluated = self.virtual_deref(context).clone().evaluate_at_compile_time(context)?;
-		context.virtual_memory.memory.insert(self.0, evaluated);
+	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
+		let evaluated = self.virtual_deref().clone().evaluate_at_compile_time()?;
+		context().virtual_memory.memory.insert(self.0, evaluated);
 		Ok(self)
 	}
 }
@@ -76,20 +76,20 @@ impl std::fmt::Display for VirtualPointer {
 }
 
 impl TranspileToC for VirtualPointer {
-	fn to_c(&self, context: &mut Context) -> anyhow::Result<String> {
-		Ok(format!("{}_{}", self.virtual_deref(context).clone().name.to_c(context)?, self))
+	fn to_c(&self) -> anyhow::Result<String> {
+		Ok(format!("{}_{}", self.virtual_deref().clone().name.to_c()?, self))
 	}
 }
 
 impl Typed for VirtualPointer {
-	fn get_type(&self, context: &mut Context) -> anyhow::Result<VirtualPointer> {
-		self.virtual_deref(context).clone().get_type(context)
+	fn get_type(&self) -> anyhow::Result<VirtualPointer> {
+		self.virtual_deref().clone().get_type()
 	}
 }
 
 impl Spanned for VirtualPointer {
-	fn span(&self, context: &Context) -> Span {
-		self.virtual_deref(context).span(context)
+	fn span(&self) -> Span {
+		self.virtual_deref().span()
 	}
 }
 

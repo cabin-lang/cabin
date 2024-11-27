@@ -1,9 +1,10 @@
 use crate::{
-	api::context::Context,
 	comptime::CompileTime,
 	lexer::Span,
 	parser::expressions::{object::ObjectConstructor, Expression},
 };
+
+use super::context::context;
 
 /// Returns a `err!()` from the current function, wrapped in a `Result::Err()`.
 #[macro_export]
@@ -15,13 +16,14 @@ macro_rules! bail_err {
 	};
 }
 
+/// If someone could make it so that this doesn't require a trailing comma I will actually serve you for life
 #[macro_export]
 macro_rules! err {
 	(
         base = $base: expr,
         $(while = $process: expr,)?
-        context = $context: expr,
-        $($field_name: ident = $field_value: expr),* $(,)?
+        $(position = $position: expr,)?
+        $(details = $details: expr,)?
     ) => {{
         use colored::Colorize as _;
 
@@ -29,19 +31,20 @@ macro_rules! err {
 		let error = $crate::api::macros::CabinError {
             base: Some(anyhow::anyhow!($base)),
             $(process: Some("while ".to_owned() + &$process),)?
-            $($field_name: Some($field_value),)*
+            $(at: Some($position),)?
+            $(details: Some($details),)?
             .. Default::default()
         };
 
         if let Some(position) = error.at {
-            $context.set_error_position(&position);
+            $crate::api::context::context().set_error_position(&position);
         }
 
         if let Some(details) = error.details {
-            $context.set_error_details(&details);
+            $crate::api::context::context().set_error_details(&details);
         }
 
-		$context.set_compiler_error_position($crate::here!());
+		$crate::api::context::context().set_compiler_error_position($crate::here!());
 
         anyhow::anyhow!("{}{}", error.base.unwrap(), if let Some(process) = error.process { format!("\n\t{}", process).dimmed() } else { String::new().bold() })
 	}}
@@ -89,20 +92,20 @@ macro_rules! function {
 	}};
 }
 
-pub fn string(value: &str, span: Span, context: &mut Context) -> Expression {
-	let number = ObjectConstructor::string(value, span, context).evaluate_at_compile_time(context).unwrap();
+pub fn string(value: &str, span: Span) -> Expression {
+	let number = ObjectConstructor::string(value, span).evaluate_at_compile_time().unwrap();
 	if !number.is_pointer() {
 		panic!("Internal error: Number literal isn't a pointer");
 	}
 	number
 }
 
-pub fn cabin_true(context: &Context) -> anyhow::Result<Expression> {
-	context.scope_data.get_variable("true").unwrap().expect_clone_pointer(context)
+pub fn cabin_true() -> anyhow::Result<Expression> {
+	context().scope_data.get_variable("true").unwrap().expect_clone_pointer()
 }
 
-pub fn number(number: f64, span: Span, context: &mut Context) -> Expression {
-	let number = ObjectConstructor::number(number, span, context).evaluate_at_compile_time(context).unwrap();
+pub fn number(number: f64, span: Span) -> Expression {
+	let number = ObjectConstructor::number(number, span).evaluate_at_compile_time().unwrap();
 	if !number.is_pointer() {
 		panic!("Internal error: Number literal isn't a pointer");
 	}
@@ -177,9 +180,9 @@ pub struct CabinError {
 #[macro_export]
 macro_rules! debug_log {
 	(
-		$context: expr, $($tokens: tt)*
+		$($tokens: tt)*
 	) => {
-		if $context.config().options().debug_mode() {
+		if $crate::api::context::context().config().options().debug_mode() {
 			println!($($tokens)*)
 		}
 	};

@@ -1,7 +1,6 @@
 use std::ops::Deref;
 
 use crate::{
-	api::context::Context,
 	comptime::CompileTime,
 	mapped_err, parse_list,
 	parser::{expressions::Expression, ListType, Parse, TokenQueue},
@@ -15,10 +14,10 @@ pub struct TagList {
 impl Parse for TagList {
 	type Output = TagList;
 
-	fn parse(tokens: &mut TokenQueue, context: &mut Context) -> anyhow::Result<Self::Output> {
+	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
 		let mut tags = Vec::new();
 		parse_list!(tokens, ListType::Tag, {
-			tags.push(Expression::parse(tokens, context)?);
+			tags.push(Expression::parse(tokens)?);
 		});
 		Ok(TagList { values: tags })
 	}
@@ -27,12 +26,11 @@ impl Parse for TagList {
 impl CompileTime for TagList {
 	type Output = TagList;
 
-	fn evaluate_at_compile_time(self, context: &mut Context) -> anyhow::Result<Self::Output> {
+	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
 		let mut values = Vec::new();
 		for value in self.values {
-			let evaluated = value.evaluate_at_compile_time(context).map_err(mapped_err! {
+			let evaluated = value.evaluate_at_compile_time().map_err(mapped_err! {
 				while = "evaluating a tag at compile-time",
-				context = context,
 			})?;
 			values.push(evaluated);
 		}

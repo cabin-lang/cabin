@@ -1,8 +1,4 @@
-use std::{
-	cell::RefCell,
-	path::PathBuf,
-	sync::{Arc, LazyLock, Mutex},
-};
+use std::sync::{LazyLock, RwLock};
 
 use colored::{ColoredString, Colorize};
 
@@ -32,9 +28,9 @@ pub struct Context {
 
 	// Privately mutable
 	side_effects_stack: Vec<bool>,
-	error_location: RefCell<Option<Span>>,
-	error_details: RefCell<Option<String>>,
-	compiler_error_position: RefCell<Vec<SourceFilePosition>>,
+	error_location: RwLock<Option<Span>>,
+	error_details: RwLock<Option<String>>,
+	compiler_error_position: RwLock<Vec<SourceFilePosition>>,
 	options: CabinToml,
 }
 
@@ -46,9 +42,9 @@ impl Default for Context {
 			scope_label: None,
 			virtual_memory: VirtualMemory::empty(),
 			side_effects_stack: Vec::new(),
-			error_location: RefCell::new(None),
-			error_details: RefCell::new(None),
-			compiler_error_position: RefCell::new(Vec::new()),
+			error_location: RwLock::new(None),
+			error_details: RwLock::new(None),
+			compiler_error_position: RwLock::new(Vec::new()),
 			lines_printed: 0,
 			running_context: RunningContext::try_from(std::env::current_dir().unwrap()).unwrap(),
 			theme: CATPPUCCIN_MOCHA,
@@ -58,23 +54,6 @@ impl Default for Context {
 }
 
 impl Context {
-	pub fn new(path: &PathBuf) -> anyhow::Result<Context> {
-		Ok(Context {
-			options: CabinToml::default(),
-			scope_data: ScopeData::global(),
-			scope_label: None,
-			virtual_memory: VirtualMemory::empty(),
-			side_effects_stack: Vec::new(),
-			error_location: RefCell::new(None),
-			error_details: RefCell::new(None),
-			compiler_error_position: RefCell::new(Vec::new()),
-			lines_printed: 0,
-			running_context: RunningContext::try_from(path.to_owned())?,
-			theme: CATPPUCCIN_MOCHA,
-			colored_program: Vec::new(),
-		})
-	}
-
 	pub fn toggle_side_effects(&mut self, side_effects: bool) {
 		self.side_effects_stack.push(side_effects);
 	}
@@ -93,11 +72,10 @@ impl Context {
 				.get_variable("nothing")
 				.unwrap()
 				.clone()
-				.try_as_literal(self)
+				.try_as_literal()
 				.cloned()
 				.map_err(mapped_err! {
 					while = format!("interpreting the value of the global variable {} as a literal", "nothing".bold().yellow()),
-					context = self,
 				})?
 				.address
 				.unwrap(),
@@ -105,31 +83,31 @@ impl Context {
 	}
 
 	pub fn set_error_position(&self, position: &Span) {
-		if self.error_location.borrow().is_none() {
-			*self.error_location.borrow_mut() = Some(position.clone());
+		if self.error_location.try_read().unwrap().is_none() {
+			*self.error_location.try_write().unwrap() = Some(position.clone());
 		}
 	}
 
 	pub fn set_error_details(&self, error_details: &str) {
-		if self.error_details.borrow().is_none() {
-			*self.error_details.borrow_mut() = Some(error_details.to_owned());
+		if self.error_details.try_read().unwrap().is_none() {
+			*self.error_details.try_write().unwrap() = Some(error_details.to_owned());
 		}
 	}
 
 	pub fn error_details(&self) -> Option<String> {
-		self.error_details.borrow().clone()
+		self.error_details.try_read().unwrap().to_owned()
 	}
 
 	pub fn error_position(&self) -> Option<Span> {
-		self.error_location.borrow().clone()
+		self.error_location.try_read().unwrap().to_owned()
 	}
 
 	pub fn set_compiler_error_position(&self, position: SourceFilePosition) {
-		self.compiler_error_position.borrow_mut().push(position);
+		self.compiler_error_position.try_write().unwrap().push(position);
 	}
 
 	pub fn get_compiler_error_position(&self) -> Vec<SourceFilePosition> {
-		self.compiler_error_position.borrow().clone()
+		self.compiler_error_position.try_read().unwrap().clone()
 	}
 
 	pub fn colored_program(&self) -> String {
@@ -280,12 +258,8 @@ macro_rules! here {
 	};
 }
 
-pub static CONTEXT: LazyLock<Arc<Mutex<Context>>> = LazyLock::new(|| Arc::new(Mutex::new(Context::default())));
+static CONTEXT: LazyLock<Box<Context>> = LazyLock::new(|| Box::new(Context::default()));
 
-#[macro_export]
-macro_rules! context {
-	() => {{
-		let binding = $crate::api::context::CONTEXT.clone();
-		binding.lock().unwrap()
-	}};
+pub fn context() -> &'static mut Context {
+	unsafe { (&**crate::api::context::CONTEXT as *const Context as *mut Context).as_mut().unwrap() }
 }

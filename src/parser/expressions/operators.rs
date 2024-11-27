@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 
 use crate::{
-	api::context::Context,
 	lexer::{Token, TokenType},
 	mapped_err,
 	parser::{
@@ -45,11 +44,11 @@ impl BinaryOperation {
 	/// - `tokens` - The token stream to parse
 	/// - `current_scope` - The current scope
 	/// - `debug_info` - The debug information
-	fn parse_precedent(&self, tokens: &mut VecDeque<Token>, context: &mut Context) -> anyhow::Result<Expression> {
+	fn parse_precedent(&self, tokens: &mut VecDeque<Token>) -> anyhow::Result<Expression> {
 		if let Some(precedent) = self.precedent {
-			parse_binary_expression(precedent, tokens, context)
+			parse_binary_expression(precedent, tokens)
 		} else {
-			PostfixOperators::parse(tokens, context)
+			PostfixOperators::parse(tokens)
 		}
 	}
 }
@@ -58,15 +57,14 @@ impl BinaryOperation {
 #[derive(Clone, Debug)]
 pub struct BinaryExpression;
 
-fn parse_binary_expression(operation: &BinaryOperation, tokens: &mut VecDeque<Token>, context: &mut Context) -> anyhow::Result<Expression> {
-	let mut expression = operation.parse_precedent(tokens, context)?;
+fn parse_binary_expression(operation: &BinaryOperation, tokens: &mut VecDeque<Token>) -> anyhow::Result<Expression> {
+	let mut expression = operation.parse_precedent(tokens)?;
 
 	while tokens.next_is_one_of(operation.token_types) {
 		let operator_token = tokens.pop(tokens.peek_type()?.clone())?;
-		let right = operation.parse_precedent(tokens, context)?;
-		expression = Expression::FunctionCall(FunctionCall::from_binary_operation(expression, right, operator_token, context).map_err(mapped_err! {
+		let right = operation.parse_precedent(tokens)?;
+		expression = Expression::FunctionCall(FunctionCall::from_binary_operation(expression, right, operator_token).map_err(mapped_err! {
 			while = "converting a binary operation into a function call expression",
-			context = context,
 		})?);
 	}
 
@@ -76,8 +74,8 @@ fn parse_binary_expression(operation: &BinaryOperation, tokens: &mut VecDeque<To
 impl Parse for BinaryExpression {
 	type Output = Expression;
 
-	fn parse(tokens: &mut VecDeque<Token>, context: &mut Context) -> anyhow::Result<Self::Output> {
-		parse_binary_expression(&ASSIGNMENT, tokens, context)
+	fn parse(tokens: &mut VecDeque<Token>) -> anyhow::Result<Self::Output> {
+		parse_binary_expression(&ASSIGNMENT, tokens)
 	}
 }
 
@@ -86,66 +84,59 @@ pub struct PrimaryExpression;
 impl Parse for PrimaryExpression {
 	type Output = Expression;
 
-	fn parse(tokens: &mut VecDeque<Token>, context: &mut Context) -> anyhow::Result<Self::Output> {
+	fn parse(tokens: &mut VecDeque<Token>) -> anyhow::Result<Self::Output> {
 		Ok(match tokens.peek_type()? {
 			TokenType::LeftParenthesis => {
 				tokens.pop(TokenType::LeftParenthesis).unwrap_or_else(|_| unreachable!());
-				let expression = Expression::parse(tokens, context)?;
+				let expression = Expression::parse(tokens)?;
 				tokens.pop(TokenType::RightParenthesis)?;
 				expression
 				// TODO: this needs to be its own expression type
 			},
 
 			// Parse function declaration expression
-			TokenType::KeywordAction => Expression::Pointer(FunctionDeclaration::parse(tokens, context).map_err(mapped_err! {
+			TokenType::KeywordAction => Expression::Pointer(FunctionDeclaration::parse(tokens).map_err(mapped_err! {
 				while = "attempting to parse a function declaration expression",
-				context = context,
 			})?),
 
 			// Parse block expression
-			TokenType::LeftBrace => Expression::Block(Block::parse(tokens, context)?),
+			TokenType::LeftBrace => Expression::Block(Block::parse(tokens)?),
 
 			// Parse variable name expression
-			TokenType::Identifier => Expression::Name(Name::parse(tokens, context).map_err(mapped_err! {
+			TokenType::Identifier => Expression::Name(Name::parse(tokens).map_err(mapped_err! {
 				while = "attempting to parse a variable name expression",
-				context = context,
 			})?),
 
 			// Parse object constructor
-			TokenType::KeywordNew => Expression::ObjectConstructor(ObjectConstructor::parse(tokens, context).map_err(mapped_err! {
+			TokenType::KeywordNew => Expression::ObjectConstructor(ObjectConstructor::parse(tokens).map_err(mapped_err! {
 				while = "attempting to parse an object constructor expression",
-				context = context,
 			})?),
 
 			// Parse group declaration expression
-			TokenType::KeywordGroup => Expression::Pointer(GroupDeclaration::parse(tokens, context).map_err(mapped_err! {
+			TokenType::KeywordGroup => Expression::Pointer(GroupDeclaration::parse(tokens).map_err(mapped_err! {
 				while = "attempting to parse a group declaration expression",
-				context = context,
 			})?),
 
 			// Parse one-of declaration expression
-			TokenType::KeywordOneOf => Expression::Pointer(OneOf::parse(tokens, context).map_err(mapped_err! {
+			TokenType::KeywordOneOf => Expression::Pointer(OneOf::parse(tokens).map_err(mapped_err! {
 				while = "attempting to parse a one-of declaration expression",
-				context = context,
 			})?),
 
-			TokenType::KeywordEither => Expression::Pointer(Either::parse(tokens, context)?),
-			TokenType::KeywordIf => Expression::If(IfExpression::parse(tokens, context)?),
-			TokenType::KeywordForEach => Expression::ForEachLoop(ForEachLoop::parse(tokens, context)?),
+			TokenType::KeywordEither => Expression::Pointer(Either::parse(tokens)?),
+			TokenType::KeywordIf => Expression::If(IfExpression::parse(tokens)?),
+			TokenType::KeywordForEach => Expression::ForEachLoop(ForEachLoop::parse(tokens)?),
 
 			// Parse run expression
-			TokenType::KeywordRuntime => Expression::Run(RunExpression::parse(tokens, context).map_err(mapped_err! {
+			TokenType::KeywordRuntime => Expression::Run(RunExpression::parse(tokens).map_err(mapped_err! {
 				while = "attempting to parse a run-expression",
-				context = context,
 			})?),
 
 			// Syntactic sugar: These below handle cases where syntactic sugar exists for initializing objects of certain types, such as
 			// strings, numbers, lists, etc.:
 
 			// Parse list literal into a list object
-			TokenType::LeftBracket => List::parse(tokens, context).map_err(mapped_err! {
+			TokenType::LeftBracket => List::parse(tokens).map_err(mapped_err! {
 				while = "attempting to parse a list literal",
-				context = context,
 			})?,
 
 			// Parse string literal into a string object
@@ -154,9 +145,9 @@ impl Parse for PrimaryExpression {
 				let with_quotes = token.value;
 				let without_quotes = with_quotes.get(1..with_quotes.len() - 1).unwrap().to_owned();
 				Expression::Pointer(
-					LiteralObject::try_from_object_constructor(ObjectConstructor::string(&without_quotes, token.span, context), context)
+					LiteralObject::try_from_object_constructor(ObjectConstructor::string(&without_quotes, token.span))
 						.unwrap()
-						.store_in_memory(context),
+						.store_in_memory(),
 				)
 			},
 
@@ -164,9 +155,9 @@ impl Parse for PrimaryExpression {
 			TokenType::Number => {
 				let number_token = tokens.pop(TokenType::Number).unwrap();
 				Expression::Pointer(
-					LiteralObject::try_from_object_constructor(ObjectConstructor::number(number_token.value.parse().unwrap(), number_token.span, context), context)
+					LiteralObject::try_from_object_constructor(ObjectConstructor::number(number_token.value.parse().unwrap(), number_token.span))
 						.unwrap()
-						.store_in_memory(context),
+						.store_in_memory(),
 				)
 			},
 

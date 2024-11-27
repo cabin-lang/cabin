@@ -3,7 +3,7 @@ use std::{collections::HashMap, path::PathBuf};
 use colored::Colorize;
 
 use crate::{
-	api::context::Context,
+	api::context::context,
 	cli::{
 		commands::{start, CabinCommand},
 		RunningContext,
@@ -11,7 +11,7 @@ use crate::{
 	comptime::CompileTime as _,
 	debug_log,
 	lexer::{tokenize, tokenize_without_prelude, Span},
-	mapped_err, object,
+	mapped_err,
 	parser::{
 		expressions::{
 			field_access::FieldAccessType,
@@ -34,33 +34,30 @@ pub struct RunCommand {
 impl CabinCommand for RunCommand {
 	fn execute(self) -> anyhow::Result<()> {
 		let path = self.path.map(PathBuf::from).unwrap_or_else(|| std::env::current_dir().unwrap());
-		let mut context = Context::new(&path)?;
 
 		// Standard Library
 		{
-			debug_log!(&mut context, "{} stdlib module...", "Adding".bold().green());
-			let mut stdlib_tokens = tokenize_without_prelude(STDLIB, &mut context)?;
-			let stdlib_ast = parse(&mut stdlib_tokens, &mut context)?;
-			let evaluated_stdlib = stdlib_ast.evaluate_at_compile_time(&mut context)?;
-			let stdlib_module = evaluated_stdlib.into_literal(&mut context)?.store_in_memory(&mut context);
-			context.scope_data.declare_new_variable("cabin", Expression::Pointer(stdlib_module))?;
+			debug_log!("{} stdlib module...", "Adding".bold().green());
+			let mut stdlib_tokens = tokenize_without_prelude(STDLIB)?;
+			let stdlib_ast = parse(&mut stdlib_tokens)?;
+			let evaluated_stdlib = stdlib_ast.evaluate_at_compile_time()?;
+			let stdlib_module = evaluated_stdlib.into_literal()?.store_in_memory();
+			context().scope_data.declare_new_variable("cabin", Expression::Pointer(stdlib_module))?;
 		}
 
 		// User code
-		start("Running", &context);
+		start("Running");
 
 		// Project
-		if let RunningContext::Project(project) = &context.running_context {
-			let root = step!(get_source_code_directory(&project.root_directory().join("src")), context, "Reading", "source files");
-			let tokenized = step!(tokenize_directory(root, &mut context), context, "Tokenizing", "source code");
-			let module_ast = step!(parse_directory(tokenized, &mut context), context, "Parsing", "token streams");
-			let root_module = add_modules_to_scope(module_ast, &mut context)?;
+		if let RunningContext::Project(project) = &context().running_context {
+			let root = step!(get_source_code_directory(&project.root_directory().join("src")), "Reading", "source files");
+			let tokenized = step!(tokenize_directory(root), "Tokenizing", "source code");
+			let module_ast = step!(parse_directory(tokenized), "Parsing", "token streams");
+			let root_module = add_modules_to_scope(module_ast)?;
 			let compile_time_evaluated_module = step!(
-				root_module.evaluate_at_compile_time(&mut context).map_err(mapped_err! {
+				root_module.evaluate_at_compile_time().map_err(mapped_err! {
 					while = "evaluating the project's root module at compile-time",
-					context = context,
 				}),
-				context,
 				"Running",
 				"compile-time code"
 			);
@@ -97,22 +94,22 @@ fn get_source_code_directory(root_dir: &PathBuf) -> anyhow::Result<CabinDirector
 	Ok(CabinDirectory { source_files, sub_directories })
 }
 
-fn add_modules_to_scope(directory: CabinDirectory<Module>, context: &mut Context) -> anyhow::Result<ObjectConstructor> {
+fn add_modules_to_scope(directory: CabinDirectory<Module>) -> anyhow::Result<ObjectConstructor> {
 	let mut fields = Vec::new();
 
 	for (file_name, file_module) in directory.source_files {
 		fields.push(Field {
 			name: file_name.into(),
-			value: Some(Expression::ObjectConstructor(file_module.into_object(context).unwrap())),
+			value: Some(Expression::ObjectConstructor(file_module.into_object().unwrap())),
 			field_type: None,
 		});
 	}
 
 	for (sub_directory_name, sub_directory_module) in directory.sub_directories {
-		let constructor = add_modules_to_scope(sub_directory_module, context)?;
-		let previous = context.scope_data.set_current_scope(constructor.inner_scope_id);
+		let constructor = add_modules_to_scope(sub_directory_module)?;
+		let previous = context().scope_data.set_current_scope(constructor.inner_scope_id);
 
-		context
+		context()
 			.scope_data
 			.declare_new_variable(sub_directory_name.clone(), Expression::ObjectConstructor(constructor))?;
 
@@ -122,7 +119,7 @@ fn add_modules_to_scope(directory: CabinDirectory<Module>, context: &mut Context
 			field_type: None,
 		});
 
-		context.scope_data.set_current_scope(previous);
+		context().scope_data.set_current_scope(previous);
 	}
 
 	let constructor = ObjectConstructor {
@@ -130,8 +127,8 @@ fn add_modules_to_scope(directory: CabinDirectory<Module>, context: &mut Context
 		internal_fields: HashMap::new(),
 		fields,
 		span: Span::unknown(),
-		inner_scope_id: context.scope_data.unique_id(),
-		outer_scope_id: context.scope_data.unique_id(),
+		inner_scope_id: context().scope_data.unique_id(),
+		outer_scope_id: context().scope_data.unique_id(),
 		field_access_type: FieldAccessType::Normal,
 		name: "root_module".into(),
 		tags: TagList::default(),
@@ -149,17 +146,17 @@ macro_rules! directory_actions {
 	) => {
 		$(
 			$(#[$annotations])?
-			fn $name(directory: CabinDirectory<$input_type>, context: &mut Context) -> anyhow::Result<CabinDirectory<$output_type>> {
+			fn $name(directory: CabinDirectory<$input_type>) -> anyhow::Result<CabinDirectory<$output_type>> {
 				Ok(CabinDirectory {
 					source_files: directory
 						.source_files
 						.into_iter()
-						.map(|(file_name, contents)| Ok((file_name.clone(), $mapping_function(file_name, contents, context)?)))
+						.map(|(file_name, contents)| Ok((file_name.clone(), $mapping_function(file_name, contents)?)))
 						.collect::<anyhow::Result<HashMap<_, _>>>()?,
 					sub_directories: directory
 						.sub_directories
 						.into_iter()
-						.map(|(name, sub_directory)| Ok((name, $name(sub_directory, context)?)))
+						.map(|(name, sub_directory)| Ok((name, $name(sub_directory)?)))
 						.collect::<anyhow::Result<HashMap<_, _>>>()?,
 				})
 			}
@@ -168,6 +165,6 @@ macro_rules! directory_actions {
 }
 
 directory_actions! {
-	tokenize_directory(|_file_name, source_code: String, context| tokenize(&source_code, context)): String => TokenQueue;
-	parse_directory(|_file_name, mut tokens, context| parse(&mut tokens, context)): TokenQueue => Module;
+	tokenize_directory(|_file_name, source_code: String| tokenize(&source_code)): String => TokenQueue;
+	parse_directory(|_file_name, mut tokens| parse(&mut tokens)): TokenQueue => Module;
 }
