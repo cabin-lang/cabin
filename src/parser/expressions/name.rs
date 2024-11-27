@@ -5,6 +5,7 @@ use colored::Colorize;
 use crate::{
 	api::context::context,
 	comptime::CompileTime,
+	debug_log,
 	lexer::{Span, TokenType},
 	mapped_err,
 	parser::{expressions::Expression, Parse, ToCabin, TokenQueue, TokenQueueFunctionality as _},
@@ -55,6 +56,7 @@ impl CompileTime for Name {
 	type Output = Expression;
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
+		debug_log!("{} the name {} at compile-time...", "Evaluating".bold().green(), self.unmangled_name().bold().red());
 		let value = context()
 			.scope_data
 			.get_variable(self.clone())

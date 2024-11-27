@@ -53,7 +53,9 @@ impl CabinCommand for RunCommand {
 			let root = step!(get_source_code_directory(&project.root_directory().join("src")), "Reading", "source files");
 			let tokenized = step!(tokenize_directory(root), "Tokenizing", "source code");
 			let module_ast = step!(parse_directory(tokenized), "Parsing", "token streams");
-			let root_module = add_modules_to_scope(module_ast)?;
+			let root_module = add_modules_to_scope(module_ast).map_err(mapped_err! {
+				while = "adding the program's modules into scope",
+			})?;
 			let compile_time_evaluated_module = step!(
 				root_module.evaluate_at_compile_time().map_err(mapped_err! {
 					while = "evaluating the project's root module at compile-time",

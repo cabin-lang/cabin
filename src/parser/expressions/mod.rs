@@ -1,4 +1,4 @@
-use crate::{api::context::context, parser::expressions::try_as_traits::TryAsMut};
+use crate::{api::context::context, debug_log, parser::expressions::try_as_traits::TryAsMut};
 use colored::Colorize as _;
 use parameter::Parameter;
 use run::{RunExpression, RuntimeableExpression};
@@ -108,6 +108,7 @@ impl CompileTime for Expression {
 
 impl Expression {
 	pub fn try_as_literal(&self) -> anyhow::Result<&'static LiteralObject> {
+		debug_log!("{} to interpret {} as a literal: {self:?}", "Attempting".green().bold(), self.kind_name().cyan().bold());
 		Ok(match self {
 			Self::Pointer(pointer) => pointer.virtual_deref(),
 			Self::Name(name) => name

@@ -187,3 +187,10 @@ macro_rules! debug_log {
 		}
 	};
 }
+
+#[macro_export]
+macro_rules! here {
+	() => {
+		$crate::api::context::SourceFilePosition::new(std::line!(), std::column!(), std::file!(), $crate::function!())
+	};
+}

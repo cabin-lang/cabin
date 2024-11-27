@@ -226,6 +226,9 @@ pub struct SourceFilePosition {
 	line: u32,
 	column: u32,
 	name: &'static str,
+
+	/// The fully qualified path name of the Rust function this location takes place in. This is
+	/// generally obtained via the `function!()` macro.
 	function: String,
 }
 
@@ -251,15 +254,24 @@ impl SourceFilePosition {
 	}
 }
 
-#[macro_export]
-macro_rules! here {
-	() => {
-		$crate::api::context::SourceFilePosition::new(std::line!(), std::column!(), std::file!(), $crate::function!())
-	};
-}
+// forgive me father for i have sinned - The Great Context Refactor (tm) - violet, 11/27/24 @ 5:33AM (no i havent slept yet)
 
-static CONTEXT: LazyLock<Box<Context>> = LazyLock::new(|| Box::new(Context::default()));
+/// Global, mutable, stateful data about the compiler. This can be accessed from anywhere via the `context()` function,
+/// which returns a non-borrow-checked mutable reference to the value inside this `LazyLocked`. The context is
+/// used for *numerous* things all throughout the program, such as holding scope data, storing error traces, virtual
+/// memory, and more.
+///
+/// Yes, yes, I know, global mutable state bad. But I've experienced the alternative first-hand, and it was worse.
+/// Originally, `context` wasn't global, and it was passed around as a parameter to like, every function. No like,
+/// seriously, like, *all* of them. it sucked, like a lot, and the fact that EVERYTHING relied on having context
+/// made a lot of things impossible &mdash; like implementing `Drop` or `Debug` for things that need to reference
+/// the context. Not to mention an excessive amount of cloning to make the borrow checker happy &mdash; overall,
+/// it was a poor syntactic layer over what was essentially just global mutable state anyway. Sue me.
+///
+static CONTEXT: LazyLock<Context> = LazyLock::new(Context::default);
 
+/// Returns a non-borrow-checked static mutable reference to the program's `Context`, which holds global state
+/// data about the compiler.
 pub fn context() -> &'static mut Context {
-	unsafe { (&**crate::api::context::CONTEXT as *const Context as *mut Context).as_mut().unwrap() }
+	unsafe { (&*CONTEXT as *const Context as *mut Context).as_mut().unwrap() }
 }
