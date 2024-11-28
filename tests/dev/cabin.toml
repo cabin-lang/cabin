@@ -5,7 +5,6 @@ version = "0.1.0"
 
 [options]
 quiet = false
-debug_mode = true
 developer_mode = false
 detailed_errors = true
 tab_size = 4

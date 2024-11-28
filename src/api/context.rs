@@ -298,6 +298,8 @@ pub struct DebugDropper;
 impl Drop for DebugDropper {
 	fn drop(&mut self) {
 		let message = context().end_debug_sequence();
-		println!("{}{} {}", "│\t".repeat(context().debug_indent()).dimmed(), "Finished".green().bold(), message);
+		if context().config().options().debug_info() == "some" {
+			println!("{}{} {}", "│\t".repeat(context().debug_indent()).dimmed(), "Finished".green().bold(), message);
+		}
 	}
 }

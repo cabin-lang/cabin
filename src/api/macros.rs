@@ -178,17 +178,6 @@ pub struct CabinError {
 }
 
 #[macro_export]
-macro_rules! debug_verbose {
-	(
-		$($tokens: tt)*
-	) => {
-		if $crate::api::context::context().config().options().debug_info() == "full" {
-			println!("{}{}", "\t".repeat($crate::api::context::context().debug_indent()), format!($($tokens)*));
-		}
-	};
-}
-
-#[macro_export]
 macro_rules! debug_log {
 	(
 		$($tokens: tt)*
