@@ -24,7 +24,7 @@ let Anything = group {
 
 let Object = group {};
 
-let Metadata = represent<T: Anything> T as Anything {
+let AsAnything = represent<T: Anything> T as Anything {
 
 	#[builtin<"Anything.to_string">]
 	to_text = action(this: Anything): Text

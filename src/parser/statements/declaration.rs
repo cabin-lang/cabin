@@ -1,11 +1,11 @@
 use crate::{
 	api::{context::context, scope::ScopeId},
 	comptime::CompileTime,
-	err,
+	debug_start, err,
 	lexer::TokenType,
 	mapped_err,
 	parser::{
-		expressions::{name::Name, represent_as::RepresentAs, Expression},
+		expressions::{name::Name, Expression},
 		statements::tag::TagList,
 		Parse, TokenQueue, TokenQueueFunctionality as _,
 	},
@@ -43,6 +43,7 @@ impl Parse for Declaration {
 	type Output = Declaration;
 
 	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
+		let debug_section = debug_start!("{} a {}", "Parsing".bold().green(), "declaration".cyan());
 		// Tags
 		let tags = if tokens.next_is(TokenType::TagOpening) { Some(TagList::parse(tokens)?) } else { None };
 
@@ -53,20 +54,6 @@ impl Parse for Declaration {
 
 		// Value
 		tokens.pop(TokenType::Equal)?;
-
-		// Represent-As declarations
-		if tokens.next_is_one_of(&[TokenType::KeywordRepresent, TokenType::KeywordDefault]) {
-			let represent_as = RepresentAs::parse(tokens).map_err(mapped_err! {
-				while = "parsing a represent-as declaration",
-			})?;
-			context().scope_data.add_represent_as_declaration(name.clone(), represent_as);
-			tokens.pop(TokenType::Semicolon)?;
-			return Ok(Declaration {
-				name,
-				scope_id: context().scope_data.unique_id(),
-				declaration_type: DeclarationType::RepresentAs,
-			});
-		}
 
 		let mut value = Expression::parse(tokens)?;
 
@@ -86,6 +73,7 @@ impl Parse for Declaration {
 		tokens.pop(TokenType::Semicolon)?;
 
 		// Return the declaration
+		debug_section.finish();
 		Ok(Declaration {
 			name,
 			scope_id: context().scope_data.unique_id(),
@@ -98,16 +86,11 @@ impl CompileTime for Declaration {
 	type Output = Declaration;
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
-		// Represent as
-		if self.declaration_type == DeclarationType::RepresentAs {
-			let represent = context().scope_data.get_represent_from_id(self.name.clone(), self.scope_id).unwrap().clone();
-			let evaluated = represent.evaluate_at_compile_time().map_err(mapped_err! {
-				while = "evaluating a represent-as declaration at compile-time",
-			})?;
-			context().scope_data.reassign_represent_from_id(&self.name, evaluated, self.scope_id)?;
-			return Ok(self);
-		}
-
+		let debug_section = debug_start!(
+			"{} the declaration for the variable {}",
+			"Compile-Time Evaluating".bold().green(),
+			self.name.unmangled_name().red()
+		);
 		let evaluated = self
 			.value()
 			.map_err(mapped_err! {
@@ -118,6 +101,7 @@ impl CompileTime for Declaration {
 		context().scope_data.reassign_variable_from_id(&self.name, evaluated, self.scope_id)?;
 
 		// Return the declaration
+		debug_section.finish();
 		Ok(self)
 	}
 }

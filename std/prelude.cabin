@@ -3,6 +3,7 @@
 
 // Anything
 let Anything = cabin.Anything;
+let AsAnything = cabin.AsAnything;
 
 // Primitives
 let Text = cabin.Text;

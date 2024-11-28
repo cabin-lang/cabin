@@ -7,7 +7,6 @@ use crate::{
 		scope::{ScopeId, ScopeType},
 		traits::{TryAs as _, TupleOption},
 	},
-	bail_err,
 	comptime::{memory::VirtualPointer, CompileTime},
 	debug_log, debug_start, if_then_else_default, if_then_some,
 	lexer::{Span, TokenType},
@@ -26,13 +25,13 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
-use super::field_access::FieldAccessType;
+use super::{field_access::FieldAccessType, parameter::Parameter};
 
 #[derive(Debug, Clone)]
 pub struct FunctionDeclaration {
 	tags: TagList,
-	compile_time_parameters: Vec<(Name, Expression)>,
-	parameters: Vec<(Name, Expression)>,
+	compile_time_parameters: Vec<Parameter>,
+	parameters: Vec<Parameter>,
 	return_type: Option<Expression>,
 	body: Option<Expression>,
 	outer_scope_id: ScopeId,
@@ -46,31 +45,40 @@ impl Parse for FunctionDeclaration {
 	type Output = VirtualPointer;
 
 	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
+		let debug_section = debug_start!("{} a {}", "Parsing".bold().green(), "function declaration".cyan());
 		// "function" keyword
 		let start = tokens.pop(TokenType::KeywordAction)?.span;
 		let mut end = start.clone();
 
 		// Compile-time parameters
+		debug_log!("Parsing the compile-time parameters of {}", "function declaration".cyan());
 		let compile_time_parameters = if_then_else_default!(tokens.next_is(TokenType::LeftAngleBracket), {
 			let mut compile_time_parameters = Vec::new();
 			end = parse_list!(tokens, ListType::AngleBracketed, {
-				let name = Name::parse(tokens)?;
-				tokens.pop(TokenType::Colon)?;
-				let parameter_type = Expression::parse(tokens)?;
-				compile_time_parameters.push((name, parameter_type));
+				let parameter = Parameter::from_literal(Parameter::parse(tokens)?.virtual_deref()).unwrap();
+				debug_log!(
+					"Parsed compile-time parameter {} of type {:?} in a function declaration",
+					parameter.name().unmangled_name().red(),
+					parameter.parameter_type()
+				);
+				compile_time_parameters.push(parameter);
 			})
 			.span;
 			compile_time_parameters
 		});
 
 		// Parameters
+		debug_log!("{} the parameters of {}", "Parsing".bold().green(), "function declaration".cyan());
 		let parameters = if_then_else_default!(tokens.next_is(TokenType::LeftParenthesis), {
 			let mut parameters = Vec::new();
 			end = parse_list!(tokens, ListType::Parenthesized, {
-				let name = Name::parse(tokens)?;
-				tokens.pop(TokenType::Colon)?;
-				let parameter_type = Expression::parse(tokens)?;
-				parameters.push((name, parameter_type));
+				let parameter = Parameter::from_literal(Parameter::parse(tokens)?.virtual_deref()).unwrap();
+				debug_log!(
+					"Parsed parameter {} of type {:?} in a function declaration",
+					parameter.name().unmangled_name().red(),
+					parameter.parameter_type()
+				);
+				parameters.push(parameter);
 			})
 			.span;
 			parameters
@@ -88,10 +96,15 @@ impl Parse for FunctionDeclaration {
 		let (body, inner_scope_id) = if_then_some!(tokens.next_is(TokenType::LeftBrace), {
 			let block = Block::parse_type(tokens, ScopeType::Function)?;
 			let inner_scope_id = block.inner_scope_id;
-			for (parameter_name, _parameter_type) in &compile_time_parameters {
+			for parameter in &compile_time_parameters {
 				context()
 					.scope_data
-					.declare_new_variable_from_id(parameter_name.clone(), Expression::Void(()), block.inner_scope_id)?;
+					.declare_new_variable_from_id(parameter.name().clone(), Expression::Void(()), block.inner_scope_id)?;
+			}
+			for parameter in &parameters {
+				context()
+					.scope_data
+					.declare_new_variable_from_id(parameter.name().clone(), Expression::Void(()), block.inner_scope_id)?;
 			}
 			end = block.span();
 			(Expression::Block(block), inner_scope_id)
@@ -99,6 +112,7 @@ impl Parse for FunctionDeclaration {
 		.deconstruct();
 
 		// Return
+		debug_section.finish();
 		Ok(Self {
 			tags: TagList::default(),
 			parameters,
@@ -120,7 +134,7 @@ impl CompileTime for FunctionDeclaration {
 	type Output = FunctionDeclaration;
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
-		let _dropper = debug_start!(
+		let debug_section = debug_start!(
 			"{} a {} called {}",
 			"Compile-Time Evaluating".bold().green(),
 			"function declaration".cyan(),
@@ -130,39 +144,30 @@ impl CompileTime for FunctionDeclaration {
 		// Compile-time parameters
 		let compile_time_parameters = {
 			let mut compile_time_parameters = Vec::new();
-			for (parameter_name, parameter_type) in self.compile_time_parameters {
-				let parameter_type = parameter_type.evaluate_as_type()?;
-				if !parameter_type.is_fully_known_at_compile_time()? {
-					anyhow::bail!("A value that's not fully known at compile-time was used as a function parameter type");
-				}
-				compile_time_parameters.push((parameter_name, parameter_type));
+			for parameter in self.compile_time_parameters {
+				compile_time_parameters.push(parameter.evaluate_at_compile_time()?);
 			}
 			compile_time_parameters
 		};
 
 		// Parameters
 		let parameters = {
-			let _dropper = debug_start!("{} the parameters of a {}", "Compile-Time Evaluating".green().bold(), "function declaration".cyan());
+			let debug_section = debug_start!("{} the parameters of a {}", "Compile-Time Evaluating".green().bold(), "function declaration".cyan());
 			let mut parameters = Vec::new();
-			for (parameter_name, parameter_type) in self.parameters {
-				debug_log!(
+			for parameter in self.parameters {
+				let debug_section = debug_start!(
 					"{} a parameter called {} of type {:?} on a {}",
 					"Compile-Time Evaluating".bold().green(),
-					parameter_name.unmangled_name().red(),
-					parameter_type,
+					parameter.name().unmangled_name().red(),
+					parameter.parameter_type(),
 					"function declaration".cyan()
 				);
-				let parameter_type = parameter_type.evaluate_as_type().map_err(mapped_err! {
-					while = format!("evaluating the type of the parameter \"{}\" of a function at compile-time", parameter_name.unmangled_name().bold().cyan()),
-				})?;
-				if !parameter_type.is_fully_known_at_compile_time()? {
-					bail_err!(
-						base = "A value that's not fully known at compile-time was used as a function parameter type",
-						while = format!("checking the type of the parameter \"{}\"", parameter_name.unmangled_name().bold().cyan()),
-					);
-				}
-				parameters.push((parameter_name, parameter_type));
+				parameters.push(parameter.evaluate_at_compile_time().map_err(mapped_err! {
+					while = "evaluating a parameter at compile-time",
+				})?);
+				debug_section.finish();
 			}
+			debug_section.finish();
 			parameters
 		};
 
@@ -171,17 +176,21 @@ impl CompileTime for FunctionDeclaration {
 		let return_type = self.return_type.map(|return_type| return_type.evaluate_as_type()).transpose()?;
 
 		// Body
+		debug_log!("Compile-Time Evaluating the body of a {}", "function declaration".cyan());
 		let body = {
-			let _dropper = debug_start!("{} the body of a {}", "Compile-Time Evaluating".green().bold(), "function declaration".cyan());
-			self.body.map(|body| body.evaluate_at_compile_time()).transpose().map_err(mapped_err! {
+			let debug_section = debug_start!("{} the body of a {}", "Compile-Time Evaluating".green().bold(), "function declaration".cyan());
+			let result = self.body.map(|body| body.evaluate_at_compile_time()).transpose().map_err(mapped_err! {
 				while = "evaluating the body of a function declaration at compile-time",
-			})?
+			})?;
+			debug_section.finish();
+			result
 		};
 
 		debug_log!("{} the \"this object\" of a {}", "Compile-Time Evaluating".green().bold(), "function declaration".cyan());
 		let this_object = self.this_object.map(|this| this.evaluate_at_compile_time()).transpose()?;
 
 		// Return
+		debug_section.finish();
 		let function = FunctionDeclaration {
 			compile_time_parameters,
 			parameters,
@@ -212,7 +221,7 @@ impl TranspileToC for FunctionDeclaration {
 			if let Ok(object) = tag.try_as_literal().cloned() {
 				if object.type_name() == &Name::from("BuiltinTag") {
 					let builtin_name = object.get_field_literal("internal_name").unwrap().expect_as::<String>()?.to_owned();
-					let mut parameters = self.parameters.iter().map(|(parameter_name, _)| parameter_name.to_c().unwrap()).collect::<Vec<_>>();
+					let mut parameters = self.parameters.iter().map(|parameter| parameter.name().to_c().unwrap()).collect::<Vec<_>>();
 					parameters.push("return_address".to_string());
 					builtin_body = Some(transpile_builtin_to_c(&builtin_name, &parameters).map_err(mapped_err! {
 						while = format!("transpiling the body of the built-in function {}()", builtin_name.bold().blue()),
@@ -236,7 +245,11 @@ impl TranspileToC for FunctionDeclaration {
 			"({}{}) {{\n{}\n}}",
 			self.parameters
 				.iter()
-				.map(|(name, parameter_type)| Ok(format!("{}* {}", parameter_type.try_as_literal()?.clone().to_c_type()?, name.to_c()?)))
+				.map(|parameter| Ok(format!(
+					"{}* {}",
+					parameter.parameter_type().try_as_literal()?.clone().to_c_type()?,
+					parameter.name().to_c()?
+				)))
 				.collect::<anyhow::Result<Vec<_>>>()?
 				.join(", "),
 			return_type_c,
@@ -279,8 +292,8 @@ impl LiteralConvertible for FunctionDeclaration {
 
 	fn from_literal(literal: &LiteralObject) -> anyhow::Result<Self> {
 		Ok(FunctionDeclaration {
-			compile_time_parameters: literal.get_internal_field::<Vec<(Name, Expression)>>("compile_time_parameters")?.to_owned(),
-			parameters: literal.get_internal_field::<Vec<(Name, Expression)>>("parameters")?.to_owned(),
+			compile_time_parameters: literal.get_internal_field::<Vec<Parameter>>("compile_time_parameters")?.to_owned(),
+			parameters: literal.get_internal_field::<Vec<Parameter>>("parameters")?.to_owned(),
 			body: literal.get_internal_field::<Option<Expression>>("body")?.to_owned(),
 			return_type: literal.get_internal_field::<Option<Expression>>("return_type")?.to_owned(),
 			this_object: literal.get_internal_field::<Option<Expression>>("this_object")?.to_owned(),
@@ -308,7 +321,7 @@ impl FunctionDeclaration {
 		self.return_type.as_ref()
 	}
 
-	pub fn parameters(&self) -> &[(Name, Expression)] {
+	pub fn parameters(&self) -> &[Parameter] {
 		&self.parameters
 	}
 
@@ -328,7 +341,11 @@ impl FunctionDeclaration {
 		self.this_object = Some(this_object);
 	}
 
-	pub fn compile_time_parameters(&self) -> &[(Name, Expression)] {
+	pub fn compile_time_parameters(&self) -> &[Parameter] {
 		&self.compile_time_parameters
+	}
+
+	pub fn set_name(&mut self, name: Name) {
+		self.name = name;
 	}
 }

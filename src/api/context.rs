@@ -114,9 +114,9 @@ impl Context {
 	}
 
 	#[must_use]
-	pub fn start_debug_sequence(&mut self, message: &str) -> DebugDropper {
+	pub fn start_debug_sequence(&mut self, message: &str) -> DebugSection {
 		self.debug_indent.push(message.to_owned());
-		DebugDropper
+		DebugSection
 	}
 
 	#[must_use]
@@ -293,10 +293,10 @@ pub fn context() -> &'static mut Context {
 	unsafe { (&*CONTEXT as *const Context as *mut Context).as_mut().unwrap() }
 }
 
-pub struct DebugDropper;
+pub struct DebugSection;
 
-impl Drop for DebugDropper {
-	fn drop(&mut self) {
+impl DebugSection {
+	pub fn finish(self) {
 		let message = context().end_debug_sequence();
 		if context().config().options().debug_info() == "some" {
 			println!("{}{} {}", "│\t".repeat(context().debug_indent()).dimmed(), "Finished".green().bold(), message);

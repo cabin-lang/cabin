@@ -62,7 +62,7 @@ impl CompileTime for Name {
 	type Output = Expression;
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
-		let _dropper = debug_start!("{} the name {}", "Compile-Time Evaluating".bold().green(), self.unmangled_name().red());
+		let debug_section = debug_start!("{} the name {}", "Compile-Time Evaluating".bold().green(), self.unmangled_name().red());
 		let value = context()
 			.scope_data
 			.get_variable(self.clone())
@@ -92,6 +92,7 @@ impl CompileTime for Name {
 
 		debug_log!("Name {} evaluated to a {}", self.unmangled_name().red(), value.kind_name().cyan());
 
+		debug_section.finish();
 		Ok(value.try_clone_pointer().unwrap_or(Expression::Name(self.clone())))
 	}
 }

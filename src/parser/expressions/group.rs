@@ -97,7 +97,7 @@ impl CompileTime for GroupDeclaration {
 	type Output = GroupDeclaration;
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
-		let _dropper = debug_start!(
+		let debug_section = debug_start!(
 			"{} a {} called {}",
 			"Compile-Time Evaluating".bold().green(),
 			"group".cyan(),
@@ -107,7 +107,7 @@ impl CompileTime for GroupDeclaration {
 		let mut fields = Vec::new();
 
 		for field in self.fields {
-			let _dropper = debug_start!(
+			let debug_section = debug_start!(
 				"{} the {} field {}",
 				"Compile-Time Evaluating".bold().green(),
 				"group".cyan(),
@@ -157,10 +157,12 @@ impl CompileTime for GroupDeclaration {
 				value,
 				field_type,
 			});
+			debug_section.finish();
 		}
 
 		// Store in memory and return a pointer
 		context().scope_data.set_current_scope(previous);
+		debug_section.finish();
 		Ok(GroupDeclaration {
 			fields,
 			inner_scope_id: self.inner_scope_id,

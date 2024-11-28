@@ -1,1 +1,1 @@
-run print("Hello world");
+print("Hello world":AsAnything);

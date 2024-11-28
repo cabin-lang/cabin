@@ -77,7 +77,7 @@ impl CompileTime for FunctionCall {
 	type Output = Expression;
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
-		let _dropper = debug_start!("{} a {} at compile-time", "Compile-Time Evaluating".bold().green(), "function call".cyan());
+		let debug_section = debug_start!("{} a {} at compile-time", "Compile-Time Evaluating".bold().green(), "function call".cyan());
 
 		debug_log!("Evaluating the function to call in a {}", "function call".cyan());
 		let function = self.function.evaluate_at_compile_time().map_err(mapped_err! {
@@ -86,7 +86,7 @@ impl CompileTime for FunctionCall {
 
 		// Compile-time arguments
 		let compile_time_arguments = {
-			debug_start!(
+			let debug_section = debug_start!(
 				"{} a {} compile-time arguments at compile-time",
 				"Compile-Time Evaluating".bold().green(),
 				"function call's".cyan()
@@ -98,11 +98,13 @@ impl CompileTime for FunctionCall {
 				})?;
 				evaluated_compile_time_arguments.push(evaluated);
 			}
+			debug_section.finish();
 			evaluated_compile_time_arguments
 		};
 
 		// Arguments
 		let mut arguments = {
+			let debug_section = debug_start!("{} a {} arguments at compile-time", "Compile-Time Evaluating".bold().green(), "function call's".cyan());
 			let mut evaluated_arguments = Vec::new();
 			for argument in self.arguments {
 				let evaluated = argument.evaluate_at_compile_time().map_err(mapped_err! {
@@ -110,6 +112,7 @@ impl CompileTime for FunctionCall {
 				})?;
 				evaluated_arguments.push(evaluated);
 			}
+			debug_section.finish();
 			evaluated_arguments
 		};
 
@@ -122,6 +125,7 @@ impl CompileTime for FunctionCall {
 			.iter()
 			.any(|value| !value)
 		{
+			debug_section.finish();
 			return Ok(Expression::FunctionCall(FunctionCall {
 				function: Box::new(function),
 				compile_time_arguments,
@@ -146,16 +150,16 @@ impl CompileTime for FunctionCall {
 
 			// Set this object
 			if let Some(this_object) = function_declaration.this_object() {
-				if let Some((parameter_name, _)) = function_declaration.parameters().first() {
-					if parameter_name.unmangled_name() == "this" {
+				if let Some(parameter) = function_declaration.parameters().first() {
+					if parameter.name().unmangled_name() == "this" {
 						arguments.insert(0, this_object.clone());
 					}
 				}
 			}
 
 			// Validate compile-time arguments
-			for (argument, (_parameter_name, parameter_type)) in compile_time_arguments.iter().zip(function_declaration.compile_time_parameters().iter()) {
-				let parameter_type_pointer = parameter_type.try_as_literal()?.address.as_ref().unwrap().to_owned();
+			for (argument, parameter) in compile_time_arguments.iter().zip(function_declaration.compile_time_parameters().iter()) {
+				let parameter_type_pointer = parameter.parameter_type().try_as_literal()?.address.as_ref().unwrap().to_owned();
 				if !argument.is_assignable_to_type(parameter_type_pointer)? {
 					bail_err! {
 						base = format!(
@@ -172,8 +176,8 @@ impl CompileTime for FunctionCall {
 			}
 
 			// Validate arguments
-			for (argument, (_parameter_name, parameter_type)) in arguments.iter().zip(function_declaration.parameters().iter()) {
-				let parameter_type_pointer = parameter_type.try_as_literal()?.address.as_ref().unwrap().to_owned();
+			for (argument, parameter) in arguments.iter().zip(function_declaration.parameters().iter()) {
+				let parameter_type_pointer = parameter.parameter_type().try_as_literal()?.address.as_ref().unwrap().to_owned();
 				if !argument.is_assignable_to_type(parameter_type_pointer)? {
 					bail_err! {
 						base = format!(
@@ -189,15 +193,16 @@ impl CompileTime for FunctionCall {
 
 			// Non-builtin
 			if let Some(body) = function_declaration.body() {
+				let inner_debug_section = debug_start!("{} a {} body", "Compile-Time Evaluating".bold().green(), "function call".cyan());
 				if let Expression::Block(block) = body {
 					// Validate and add compile-time arguments
-					for (argument, (parameter_name, _parameter_type)) in compile_time_arguments.iter().zip(function_declaration.compile_time_parameters().iter()) {
-						context().scope_data.reassign_variable_from_id(parameter_name, argument.clone(), block.inner_scope_id)?;
+					for (argument, parameter) in compile_time_arguments.iter().zip(function_declaration.compile_time_parameters().iter()) {
+						context().scope_data.reassign_variable_from_id(parameter.name(), argument.clone(), block.inner_scope_id)?;
 					}
 
 					// Validate and add arguments
-					for (argument, (parameter_name, _parameter_type)) in arguments.iter().zip(function_declaration.parameters().iter()) {
-						context().scope_data.reassign_variable_from_id(parameter_name, argument.clone(), block.inner_scope_id)?;
+					for (argument, parameter) in arguments.iter().zip(function_declaration.parameters().iter()) {
+						context().scope_data.reassign_variable_from_id(parameter.name(), argument.clone(), block.inner_scope_id)?;
 					}
 				}
 
@@ -206,12 +211,26 @@ impl CompileTime for FunctionCall {
 					while = "calling a function at compile-time",
 				})?;
 
+				inner_debug_section.finish();
 				if return_value.try_as_literal().is_ok() {
+					debug_log!(
+						"{} compile-time evaluated into it's return value, which is a {}",
+						"function call".cyan(),
+						return_value.kind_name().cyan()
+					);
+					debug_section.finish();
 					return Ok(return_value);
+				} else {
+					debug_log!(
+						"{} compile-time couldn't be evaluated into it's non-literal return value, which is a {}",
+						"function call".cyan(),
+						return_value.kind_name().cyan()
+					);
 				}
 			}
 			// Builtin function
 			else {
+				let inner_debug_section = debug_start!("{} a built-in {}", "Compile-Time Evaluating", "function call".cyan());
 				let mut builtin_name = None;
 				let mut system_side_effects = false;
 
@@ -255,8 +274,12 @@ impl CompileTime for FunctionCall {
 							while = format!("calling the built-in function {} at compile-time", internal_name.bold().purple()),
 						});
 
+						inner_debug_section.finish();
+						debug_section.finish();
 						return return_value;
 					} else {
+						inner_debug_section.finish();
+						debug_section.finish();
 						return Ok(Expression::Void(()));
 					}
 				}
@@ -265,6 +288,7 @@ impl CompileTime for FunctionCall {
 			}
 		}
 
+		debug_section.finish();
 		Ok(Expression::FunctionCall(FunctionCall {
 			function: Box::new(function),
 			compile_time_arguments,
@@ -311,7 +335,7 @@ impl TranspileToC for FunctionCall {
 				let mut parameters = function
 					.parameters()
 					.iter()
-					.map(|parameter| Ok(format!("{}*", parameter.1.try_as_literal()?.clone().to_c_type()?)))
+					.map(|parameter| Ok(format!("{}*", parameter.parameter_type().try_as_literal()?.clone().to_c_type()?)))
 					.collect::<anyhow::Result<Vec<_>>>()?
 					.join(", ");
 				if let Some(return_type) = function.return_type().as_ref() {
@@ -324,7 +348,7 @@ impl TranspileToC for FunctionCall {
 			},
 			function_to_call = self.function.to_c()?,
 			this_object = if let Some(object) = function.this_object() {
-				if function.parameters().first().is_some_and(|param| param.0 == "this".into()) {
+				if function.parameters().first().is_some_and(|param| param.name() == &"this".into()) {
 					format!("{}, ", object.to_c()?)
 				} else {
 					String::new()

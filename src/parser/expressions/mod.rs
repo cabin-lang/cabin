@@ -2,9 +2,11 @@ use std::fmt::Debug;
 
 use crate::{api::context::context, cli::theme::Styled, debug_log, parser::expressions::try_as_traits::TryAsMut};
 use colored::Colorize as _;
+use field_access::FieldAccessType;
 use group::GroupDeclaration;
 use literal::LiteralConvertible;
 use parameter::Parameter;
+use represent_as::RepresentAs;
 use run::{RunExpression, RuntimeableExpression};
 use try_as::traits as try_as_traits;
 
@@ -55,6 +57,7 @@ pub enum Expression {
 	Pointer(VirtualPointer),
 	Run(RunExpression),
 	Parameter(Parameter),
+	RepresentAs(RepresentAs),
 	Void(()),
 }
 
@@ -83,6 +86,9 @@ impl CompileTime for Expression {
 			Self::If(if_expression) => if_expression
 				.evaluate_at_compile_time()
 				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating an if expression at compile-time".dimmed()))?,
+			Self::RepresentAs(represent_as) => Expression::RepresentAs(represent_as.evaluate_at_compile_time().map_err(mapped_err! {
+				while = "evaluating a represent-as expression at compile-time",
+			})?),
 			Self::Name(name) => name.clone().evaluate_at_compile_time().map_err(mapped_err! {
 				while = format!("evaluating the name \"{}\" at compile-time", name.unmangled_name().bold().cyan()),
 			})?,
@@ -131,6 +137,7 @@ impl Expression {
 	pub fn is_fully_known_at_compile_time(&self) -> anyhow::Result<bool> {
 		Ok(match self {
 			Self::Pointer(_) => true,
+			Self::Parameter(_) => true,
 			Self::Name(name) => name
 				.clone()
 				.evaluate_at_compile_time()
@@ -175,6 +182,7 @@ impl Expression {
 			Self::ForEachLoop(_) => "for-each loop",
 			Self::Run(_) => "run expression",
 			Self::Parameter(_) => "parameter",
+			Self::RepresentAs(_) => "represent-as expression",
 		}
 	}
 
@@ -233,9 +241,18 @@ impl Expression {
 			Self::Pointer(pointer) => {
 				let value = pointer.virtual_deref_mut();
 				let address = value.address;
-				if let Ok(mut group) = GroupDeclaration::from_literal(value) {
+				if value.field_access_type == FieldAccessType::Group {
+					let mut group = GroupDeclaration::from_literal(value).unwrap();
 					group.set_name(name);
 					*value = group.to_literal();
+					value.address = address;
+					return;
+				}
+
+				if value.type_name() == &"RepresentAs".into() {
+					let mut represent_as = RepresentAs::from_literal(value).unwrap();
+					represent_as.set_name(name);
+					*value = represent_as.to_literal();
 					value.address = address;
 					return;
 				}
@@ -259,9 +276,7 @@ impl Expression {
 	/// whether this expression can be assigned to the given type.
 	pub fn is_assignable_to_type(&self, target_type: VirtualPointer) -> anyhow::Result<bool> {
 		let this_type = self.get_type()?.virtual_deref().clone();
-		for (_name, _represent_as) in context().scope_data.get_represent_as_declarations() {
-			// TODO
-		}
+		// TODO:
 		this_type.is_type_assignable_to_type(target_type)
 	}
 }
@@ -278,6 +293,7 @@ impl TranspileToC for Expression {
 			Self::Pointer(pointer) => pointer.to_c()?,
 			Self::ObjectConstructor(object_constructor) => object_constructor.to_c()?,
 			Self::Run(run_expression) => run_expression.to_c()?,
+			Self::RepresentAs(_) => todo!(),
 			Self::Parameter(_) => todo!(),
 			Self::Void(_) => "void".to_owned(),
 		})
@@ -316,6 +332,7 @@ impl Spanned for Expression {
 			Expression::FieldAccess(field_access) => field_access.span(),
 			Expression::ForEachLoop(for_each_loop) => for_each_loop.span(),
 			Expression::Parameter(parameter) => parameter.span(),
+			Expression::RepresentAs(represent_as) => represent_as.span(),
 			Expression::Void(_) => panic!(),
 		}
 	}
@@ -359,6 +376,7 @@ impl Debug for Expression {
 			Self::Parameter(parameter) => parameter.fmt(formatter),
 			Self::Pointer(pointer) => pointer.fmt(formatter),
 			Self::Run(run) => run.fmt(formatter),
+			Self::RepresentAs(represent_as) => represent_as.fmt(formatter),
 			Self::Void(()) => write!(formatter, "{}", "<void>".style(context().theme.keyword())),
 		}
 	}

@@ -38,12 +38,13 @@ impl CabinCommand for RunCommand {
 
 		// Standard Library
 		{
-			let _dropper = debug_start!("{} stdlib module...", "Adding".bold().green());
+			let debug_section = debug_start!("{} stdlib module", "Adding".bold().green());
 			let mut stdlib_tokens = tokenize_without_prelude(STDLIB)?;
 			let stdlib_ast = parse(&mut stdlib_tokens)?;
 			let evaluated_stdlib = stdlib_ast.evaluate_at_compile_time()?;
 			let stdlib_module = evaluated_stdlib.into_literal()?.store_in_memory();
 			context().scope_data.declare_new_variable("cabin", Expression::Pointer(stdlib_module))?;
+			debug_section.finish();
 		}
 
 		// User code
@@ -51,13 +52,12 @@ impl CabinCommand for RunCommand {
 
 		// Project
 		if let RunningContext::Project(project) = &context().running_context {
-			let _dropper = debug_start!("\n{} project...", "Running".bold().green());
+			let debug_section = debug_start!("\n{} project", "Running".bold().green());
 			let root = step!(get_source_code_directory(&project.root_directory().join("src")), "Reading", "source files");
 			let tokenized = step!(tokenize_directory(root), "Tokenizing", "source code");
 			let module_ast = step!(parse_directory(tokenized), "Parsing", "token streams");
-			let root_module = add_modules_to_scope(module_ast).map_err(mapped_err! {
-				while = "adding the program's modules into scope",
-			})?;
+			let root_module = step!(add_modules_to_scope(module_ast), "Linking", "source files");
+
 			let Expression::ObjectConstructor(compile_time_evaluated_root_module) = step!(
 				root_module.evaluate_at_compile_time().map_err(mapped_err! {
 					while = "evaluating the project's root module at compile-time",
@@ -76,7 +76,14 @@ impl CabinCommand for RunCommand {
 			};
 			let main_function = main_module.get_field("main_function").unwrap().try_clone_pointer().unwrap();
 			debug_log!("{} main function...", "Calling".bold().green());
-			FunctionCall::call_main(main_function, compile_time_evaluated_root_module.inner_scope_id)?;
+
+			step!(
+				FunctionCall::call_main(main_function, compile_time_evaluated_root_module.inner_scope_id),
+				"Running",
+				"main file"
+			);
+
+			debug_section.finish();
 		}
 
 		// let c_code = step!(transpile(&comptime_ast, &mut context), &context, "Transpiling", "evaluated AST to C");

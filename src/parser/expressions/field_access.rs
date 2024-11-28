@@ -20,7 +20,7 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
-use super::{literal::LiteralObject, object::ObjectConstructor};
+use super::{literal::LiteralObject, object::ObjectConstructor, represent_as::RepresentAs};
 
 /// A type describing how fields are accessed on this type of objects via the dot operator.
 /// For example, on a normal object, the dot operator just gets a field with the given name,
@@ -134,15 +134,18 @@ impl CompileTime for FieldAccess {
 				},
 				FieldAccessOperator::Colon => match literal.object_type() {
 					FieldAccessType::Normal => {
-						let declaration = context()
-							.scope_data
-							.get_represent_as(&self.right)
-							.ok_or_else(|| {
-								err! {
-									base = "no represent as with this name was found",
-								}
-							})?
-							.clone();
+						let declaration = RepresentAs::from_literal(
+							context()
+								.scope_data
+								.get_variable(&self.right)
+								.ok_or_else(|| {
+									err! {
+										base = "no represent as with this name was found",
+									}
+								})?
+								.try_as::<VirtualPointer>()?
+								.virtual_deref(),
+						)?;
 
 						if !declaration.can_represent(&left_evaluated)? {
 							bail_err! {

@@ -9,7 +9,7 @@ use crate::{
 		traits::TryAs as _,
 	},
 	comptime::{memory::VirtualPointer, CompileTime},
-	err,
+	debug_start, err,
 	lexer::Span,
 	mapped_err,
 	parser::expressions::{object::ObjectConstructor, Expression, Spanned, Typed},
@@ -25,6 +25,7 @@ pub struct BuiltinFunction {
 static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 	"terminal.print" => BuiltinFunction {
 		evaluate_at_compile_time: |caller_scope_id, arguments, span| {
+			let debug_section = debug_start!("{} built-in function {}.{}", "Calling".green().bold(), "terminal".red(), "print".blue());
 			let pointer = VecDeque::from(arguments).pop_front().ok_or_else(|| anyhow::anyhow!("Missing argument to print"))?;
 			let returned_object = call_builtin_at_compile_time("Anything.to_string", caller_scope_id, vec![pointer], span)?;
 			let string_value = returned_object.try_as_literal()?.try_as::<String>()?.to_owned();
@@ -47,6 +48,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 				context().lines_printed += 1;
 			}
 
+			debug_section.finish();
 			Ok(Expression::Void(()))
 		},
 		to_c: |parameter_names| {

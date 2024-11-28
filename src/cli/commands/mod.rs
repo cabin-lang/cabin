@@ -52,6 +52,10 @@ macro_rules! step {
 
 		let here = $crate::here!();
 
+		let debug_section = $crate::if_then_some!($crate::api::context::context().config().options().debug_info() == "some", {
+			$crate::debug_start!("{} {}", $action.bold().green(), $object)
+		});
+
 		if !$crate::api::context::context().config().options().quiet() && $crate::api::context::context().config().options().debug_info() == "none" {
 			print!("{}{} {}... ", $crate::api::context::context().config().options().tabs(1), $action.bold().green(), $object);
 			std::io::stdout().flush().unwrap();
@@ -69,6 +73,9 @@ macro_rules! step {
 					if $object.starts_with("compile-time") && $crate::api::context::context().lines_printed != 0 {
 						move_cursor_down_and_left($crate::api::context::context().lines_printed, 0);
 					}
+				}
+				if let Some(debug_section) = debug_section {
+					debug_section.finish();
 				}
 				return_value
 			},

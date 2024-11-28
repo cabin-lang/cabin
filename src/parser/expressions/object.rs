@@ -21,7 +21,7 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
-use super::{field_access::FieldAccessType, Spanned};
+use super::{field_access::FieldAccessType, parameter::Parameter, Spanned};
 
 #[derive(Debug, Clone)]
 pub struct ObjectConstructor {
@@ -195,7 +195,7 @@ impl CompileTime for ObjectConstructor {
 	type Output = Expression;
 
 	fn evaluate_at_compile_time(mut self) -> anyhow::Result<Self::Output> {
-		let _dropper = debug_start!(
+		let debug_section = debug_start!(
 			"{} an object of type {}",
 			"Compile-Time Evaluating".green().bold(),
 			self.type_name.unmangled_name().yellow()
@@ -259,13 +259,16 @@ impl CompileTime for ObjectConstructor {
 
 		context().scope_data.set_current_scope(previous);
 
-		if self.is_literal() {
+		let result = if self.is_literal() {
 			let literal = LiteralObject::try_from_object_constructor(self)?;
 			let address = context().virtual_memory.store(literal);
 			Ok(Expression::Pointer(address))
 		} else {
 			Ok(Expression::ObjectConstructor(self))
-		}
+		};
+
+		debug_section.finish();
+		result
 	}
 }
 
@@ -280,7 +283,8 @@ pub enum InternalFieldValue {
 	FieldList(Vec<Field>),
 	NameList(Vec<Name>),
 	LiteralMap(Vec<(Name, VirtualPointer)>),
-	ParameterList(Vec<(Name, Expression)>),
+	ParameterList(Vec<Parameter>),
+	PointerList(Vec<VirtualPointer>),
 }
 
 impl TranspileToC for ObjectConstructor {

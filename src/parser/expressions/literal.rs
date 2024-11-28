@@ -12,7 +12,7 @@ use crate::{
 	bail_err,
 	cli::theme::Styled,
 	comptime::{memory::VirtualPointer, CompileTime},
-	debug_start,
+	debug_start, err,
 	lexer::Span,
 	parser::{
 		expressions::{
@@ -26,7 +26,7 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
-use super::{either::Either, field_access::FieldAccessType, function_declaration::FunctionDeclaration, oneof::OneOf, Spanned};
+use super::{either::Either, field_access::FieldAccessType, function_declaration::FunctionDeclaration, oneof::OneOf, parameter::Parameter, represent_as::RepresentAs, Spanned};
 
 /// A "literal object". Literal objects can be thought of as simple associative arrays, similar to a JSON object or similar.
 /// Specifically, a literal object is a collection of fields where each field's value is another literal object.
@@ -244,7 +244,7 @@ impl Debug for LiteralObject {
 				function
 					.parameters()
 					.iter()
-					.map(|parameter| format!("{}: {:?}", parameter.0.unmangled_name().red(), parameter.1))
+					.map(|parameter| format!("{}: {:?}", parameter.name().unmangled_name().red(), parameter.parameter_type()))
 					.collect::<Vec<_>>()
 					.join(", "),
 				"...".dimmed()
@@ -317,8 +317,12 @@ impl Typed for LiteralObject {
 	fn get_type(&self) -> anyhow::Result<VirtualPointer> {
 		let result = context()
 			.scope_data
-			.get_variable_from_id(self.type_name.clone(), self.outer_scope_id())
-			.unwrap()
+			.get_variable(self.type_name.clone())
+			.ok_or_else(|| {
+				err! {
+					base = format!("No variable found with the name {}", self.type_name().unmangled_name().red()),
+				}
+			})?
 			.expect_as::<VirtualPointer>()?
 			.to_owned();
 
@@ -330,7 +334,7 @@ impl CompileTime for LiteralObject {
 	type Output = LiteralObject;
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
-		let _dropper = debug_start!(
+		let debug_section = debug_start!(
 			"{} {} of type {}",
 			"Compile-Time Evaluating".green().bold(),
 			"literal".cyan(),
@@ -342,10 +346,13 @@ impl CompileTime for LiteralObject {
 			"Group" => GroupDeclaration::from_literal(&self)?.evaluate_at_compile_time()?.to_literal(),
 			"Either" => Either::from_literal(&self)?.evaluate_at_compile_time()?.to_literal(),
 			"OneOf" => OneOf::from_literal(&self)?.evaluate_at_compile_time()?.to_literal(),
+			"RepresentAs" => RepresentAs::from_literal(&self)?.evaluate_at_compile_time()?.to_literal(),
+			"Parameter" => Parameter::from_literal(&self)?.evaluate_at_compile_time()?.to_literal(),
 			_ => self,
 		};
 		literal.address = address;
 
+		debug_section.finish();
 		Ok(literal)
 	}
 }

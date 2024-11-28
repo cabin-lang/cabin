@@ -2,7 +2,10 @@ use colored::Colorize as _;
 
 use std::{collections::HashMap, fmt::Debug};
 
-use crate::parser::expressions::{name::Name, represent_as::RepresentAs, Expression};
+use crate::{
+	bail_err, debug_log,
+	parser::expressions::{name::Name, Expression},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScopeId(usize);
@@ -67,8 +70,6 @@ pub struct Scope {
 	scope_type: ScopeType,
 
 	label: Option<Name>,
-
-	represent_as_declarations: HashMap<Name, RepresentAs>,
 }
 
 impl Scope {
@@ -107,13 +108,6 @@ impl Scope {
 			.or_else(|| self.parent.and_then(|parent| scopes.get(parent).unwrap().get_variable(name, scopes)))
 	}
 
-	#[must_use]
-	pub fn get_represent_as<'scopes>(&'scopes self, name: impl Into<Name> + Clone, scopes: &'scopes [Self]) -> Option<&RepresentAs> {
-		self.represent_as_declarations
-			.get(&name.clone().into())
-			.or_else(|| self.parent.and_then(|parent| scopes.get(parent).unwrap().get_represent_as(name, scopes)))
-	}
-
 	/// Returns all variables that are available in this scope, including variables declared in ancestor scopes.
 	/// This traverses up the scope tree up to and including the global scope, and returns all variables declared
 	/// in those scopes.
@@ -137,22 +131,6 @@ impl Scope {
 		variables
 	}
 
-	#[must_use]
-	pub fn get_represent_as_declarations<'scopes>(&'scopes self, scopes: &'scopes [Self]) -> Vec<(&'scopes Name, &'scopes RepresentAs)> {
-		let mut declarations = self.represent_as_declarations.iter().collect::<Vec<_>>();
-		if let Some(parent) = self.parent {
-			for variable in scopes.get(parent).unwrap().get_represent_as_declarations(scopes) {
-				declarations.push(variable);
-			}
-		}
-
-		declarations
-	}
-
-	fn add_represent_as_declaration(&mut self, name: Name, declaration: RepresentAs) {
-		self.represent_as_declarations.insert(name, declaration);
-	}
-
 	/// Reassigns a variable in this scope. This will NOT traverse up the scope tree through the current scope's parents to find the declaration for the given
 	/// variable name; it will only reassign a variable declared in this scope. This is only to be used to reassign an existing variable. To add a new variable,
 	/// use `declare_new_variable_direct()`. If no variable with the given name is found, an error is returned.
@@ -166,15 +144,6 @@ impl Scope {
 	fn reassign_variable_direct(&mut self, name: &Name, value: Expression) -> Result<(), Expression> {
 		if let Some(variable) = self.variables.get_mut(name) {
 			*variable = value;
-			Ok(())
-		} else {
-			Err(value)
-		}
-	}
-
-	fn reassign_represent_direct(&mut self, name: &Name, value: RepresentAs) -> Result<(), RepresentAs> {
-		if let Some(declaration) = self.represent_as_declarations.get_mut(name) {
-			*declaration = value;
 			Ok(())
 		} else {
 			Err(value)
@@ -250,7 +219,6 @@ impl ScopeData {
 				variables: HashMap::new(),
 				parent: None,
 				label: None,
-				represent_as_declarations: HashMap::new(),
 			}],
 			current_scope: 0,
 		}
@@ -304,11 +272,6 @@ impl ScopeData {
 		self.current().get_variable(name, &self.scopes)
 	}
 
-	#[must_use]
-	pub fn get_represent_as(&self, name: impl Into<Name> + Clone) -> Option<&RepresentAs> {
-		self.current().get_represent_as(name, &self.scopes)
-	}
-
 	/// Returns the declaration information about a variable that exists in the scope with the given id. The variable may be declared in this scope, or any one
 	/// of its parents; As long as it exists in the current scope, the information will be retrieved. If no variable exists in the scope with the given id
 	/// with the given name, `None` is returned.
@@ -323,11 +286,6 @@ impl ScopeData {
 		self.get_scope_from_id(id).and_then(|scope| scope.get_variable(name, &self.scopes))
 	}
 
-	#[must_use]
-	pub fn get_represent_from_id(&self, name: impl Into<Name> + Clone, id: ScopeId) -> Option<&RepresentAs> {
-		self.get_scope_from_id(id).and_then(|scope| scope.get_represent_as(name, &self.scopes))
-	}
-
 	/// Enters a new scope. This creates a new scope with the given scope type, and sets the current scope to be that one. The newly created scope is added
 	/// to the children of this scope, and its parent will be this scope. When you're done with this scope, use `exit_scope()`.
 	pub fn enter_new_unlabeled_scope(&mut self, scope_type: ScopeType) {
@@ -338,7 +296,6 @@ impl ScopeData {
 			children: Vec::new(),
 			scope_type,
 			label: None,
-			represent_as_declarations: HashMap::new(),
 		});
 
 		let new_id = self.scopes.len() - 1;
@@ -354,7 +311,6 @@ impl ScopeData {
 			children: Vec::new(),
 			scope_type,
 			label: Some(label),
-			represent_as_declarations: HashMap::new(),
 		});
 
 		let new_id = self.scopes.len() - 1;
@@ -419,6 +375,11 @@ impl ScopeData {
 	/// An error if a variable already exists with the given name in the scope with the given id.
 	pub fn declare_new_variable_from_id(&mut self, name: impl Into<Name>, value: Expression, id: ScopeId) -> anyhow::Result<()> {
 		let name = name.into();
+		debug_log!(
+			"Declaring a new variable called {} in a scope of type {:?}",
+			name.unmangled_name().red(),
+			self.get_scope_from_id(id).unwrap().scope_type
+		);
 		if self.get_variable_from_id(name.clone(), id).is_some() {
 			anyhow::bail!(
 				"\nError declaring new variable \"{name}\": The variable \"{name}\" already exists in the current scope, and Cabin doesn't allow shadowing.",
@@ -482,29 +443,9 @@ impl ScopeData {
 		}
 
 		// No variable found
-		anyhow::bail!(
-			"Attempted to reassign the variable \"{name}\", but no variable with the name \"{name}\" exists in this scope",
-			name = name.unmangled_name()
-		);
-	}
-
-	pub fn reassign_represent_from_id(&mut self, name: &Name, mut value: RepresentAs, id: ScopeId) -> anyhow::Result<()> {
-		// Traverse up the parent tree looking for the declaration and reassign it
-		let mut current = Some(id.0);
-		while let Some(current_index) = current {
-			// If we find it, we're done (return Ok), if not, we continue
-			match self.scopes.get_mut(current_index).unwrap().reassign_represent_direct(name, value) {
-				Ok(()) => return Ok(()),
-				Err(returned_value) => value = returned_value,
-			}
-			current = self.scopes.get(current_index).unwrap().parent;
-		}
-
-		// No variable found
-		anyhow::bail!(
-			"Attempted to reassign the variable \"{name}\", but no variable with the name \"{name}\" exists in this scope",
-			name = name.unmangled_name()
-		);
+		bail_err! {
+			base = format!("attempting to reassign the variable \"{name}\", but no variable with the name \"{name}\" exists in this scope", name = name.unmangled_name().cyan()),
+		};
 	}
 
 	/// Reassigns a variable in the current scope. This will traverse up the scope tree through the current scope's parents to find the declaration for the given
@@ -534,11 +475,6 @@ impl ScopeData {
 		self.current().get_variables(&self.scopes)
 	}
 
-	#[must_use]
-	pub fn get_represent_as_declarations(&self) -> Vec<(&Name, &RepresentAs)> {
-		self.current().get_represent_as_declarations(&self.scopes)
-	}
-
 	/// Returns the variables in the current scope which have the closest names to the given name. This is
 	/// used by the compiler to suggest variables with close names when the user attempts to reference a variable
 	/// that can't be found.
@@ -565,10 +501,6 @@ impl ScopeData {
 		} else {
 			all_variables.get(0..max).unwrap().to_vec()
 		}
-	}
-
-	pub fn add_represent_as_declaration(&mut self, name: Name, declaration: RepresentAs) {
-		self.current_mut().add_represent_as_declaration(name, declaration);
 	}
 
 	/// Returns the unique ID of the scope of the current file.

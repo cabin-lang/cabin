@@ -1,22 +1,32 @@
+use std::collections::HashMap;
+
 use crate::{
-	api::context::context,
+	api::{context::context, scope::ScopeId},
 	bail_err,
 	comptime::{memory::VirtualPointer, CompileTime},
+	debug_log, debug_start,
 	lexer::{Span, TokenType},
-	parser::{Parse, TokenQueue, TokenQueueFunctionality},
+	parser::{statements::tag::TagList, Parse, TokenQueue, TokenQueueFunctionality},
 };
 
-use super::{name::Name, Expression, Spanned, Typed};
+use super::{
+	field_access::FieldAccessType,
+	literal::{LiteralConvertible, LiteralObject},
+	name::Name,
+	object::InternalFieldValue,
+	Expression, Spanned, Typed,
+};
 
 #[derive(Debug, Clone)]
 pub struct Parameter {
 	name: Name,
 	parameter_type: Box<Expression>,
 	span: Span,
+	scope_id: ScopeId,
 }
 
 impl Parse for Parameter {
-	type Output = Parameter;
+	type Output = VirtualPointer;
 
 	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
 		let name = Name::parse(tokens)?;
@@ -26,7 +36,10 @@ impl Parse for Parameter {
 			span: name.span().to(&parameter_type.span()),
 			name,
 			parameter_type: Box::new(parameter_type),
-		})
+			scope_id: context().scope_data.unique_id(),
+		}
+		.to_literal()
+		.store_in_memory())
 	}
 }
 
@@ -34,7 +47,9 @@ impl CompileTime for Parameter {
 	type Output = Parameter;
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
-		let evaluated = self.parameter_type.evaluate_at_compile_time()?;
+		let debug_section = debug_start!("{} a {}", "Compile-Time Evaluating".bold().green(), "parameter".cyan());
+		debug_log!("Compile-Time Evaluating the type of a parameter");
+		let evaluated = self.parameter_type.evaluate_as_type()?;
 
 		if let Expression::Pointer(_) = &evaluated {
 			// nothing to see here...
@@ -48,10 +63,10 @@ impl CompileTime for Parameter {
 			name: self.name.clone(),
 			parameter_type: Box::new(evaluated),
 			span: self.span,
+			scope_id: self.scope_id,
 		};
 
-		context().scope_data.reassign_variable(&self.name, Expression::Parameter(parameter.clone()))?;
-
+		debug_section.finish();
 		Ok(parameter)
 	}
 }
@@ -75,5 +90,31 @@ impl Parameter {
 
 	pub fn parameter_type(&self) -> &Expression {
 		&self.parameter_type
+	}
+}
+
+impl LiteralConvertible for Parameter {
+	fn to_literal(self) -> LiteralObject {
+		LiteralObject {
+			address: None,
+			fields: HashMap::from([]),
+			internal_fields: HashMap::from([("type".to_owned(), InternalFieldValue::Expression(*self.parameter_type))]),
+			name: self.name,
+			field_access_type: FieldAccessType::Group,
+			outer_scope_id: self.scope_id,
+			inner_scope_id: Some(self.scope_id),
+			span: self.span,
+			type_name: "Parameter".into(),
+			tags: TagList::default(),
+		}
+	}
+
+	fn from_literal(literal: &LiteralObject) -> anyhow::Result<Self> {
+		Ok(Parameter {
+			name: literal.name().to_owned(),
+			parameter_type: Box::new(literal.get_internal_field::<Expression>("type")?.to_owned()),
+			scope_id: literal.outer_scope_id(),
+			span: literal.span(),
+		})
 	}
 }
