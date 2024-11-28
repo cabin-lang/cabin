@@ -1,6 +1,6 @@
 use crate::{
-	api::{context::context, scope::ScopeId, traits::TryAsRefMut},
-	comptime::{memory::VirtualPointer, CompileTime},
+	api::{context::context, scope::ScopeId},
+	comptime::CompileTime,
 	err,
 	lexer::TokenType,
 	mapped_err,
@@ -76,9 +76,7 @@ impl Parse for Declaration {
 		}
 
 		// Set name
-		if let Ok(literal) = value.try_as_ref_mut::<VirtualPointer>().map(|pointer| pointer.virtual_deref_mut()) {
-			literal.name = name.clone();
-		}
+		value.try_set_name(name.clone());
 
 		// Add the name declaration to the scope
 		context().scope_data.declare_new_variable(name.clone(), value).map_err(mapped_err! {

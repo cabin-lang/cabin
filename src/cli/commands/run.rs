@@ -1,7 +1,5 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use colored::Colorize;
-
 use crate::{
 	api::{context::context, scope::ScopeType},
 	cli::{
@@ -9,7 +7,7 @@ use crate::{
 		RunningContext,
 	},
 	comptime::CompileTime as _,
-	debug_log,
+	debug_log, debug_start,
 	lexer::{tokenize, tokenize_main, tokenize_without_prelude, Span},
 	mapped_err,
 	parser::{
@@ -40,7 +38,7 @@ impl CabinCommand for RunCommand {
 
 		// Standard Library
 		{
-			debug_log!("{} stdlib module...", "Adding".bold().green());
+			let _dropper = debug_start!("{} stdlib module...", "Adding".bold().green());
 			let mut stdlib_tokens = tokenize_without_prelude(STDLIB)?;
 			let stdlib_ast = parse(&mut stdlib_tokens)?;
 			let evaluated_stdlib = stdlib_ast.evaluate_at_compile_time()?;
@@ -53,6 +51,7 @@ impl CabinCommand for RunCommand {
 
 		// Project
 		if let RunningContext::Project(project) = &context().running_context {
+			let _dropper = debug_start!("\n{} project...", "Running".bold().green());
 			let root = step!(get_source_code_directory(&project.root_directory().join("src")), "Reading", "source files");
 			let tokenized = step!(tokenize_directory(root), "Tokenizing", "source code");
 			let module_ast = step!(parse_directory(tokenized), "Parsing", "token streams");
@@ -76,6 +75,7 @@ impl CabinCommand for RunCommand {
 				unreachable!()
 			};
 			let main_function = main_module.get_field("main_function").unwrap().try_clone_pointer().unwrap();
+			debug_log!("{} main function...", "Calling".bold().green());
 			FunctionCall::call_main(main_function, compile_time_evaluated_root_module.inner_scope_id)?;
 		}
 

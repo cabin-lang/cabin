@@ -7,7 +7,7 @@ use crate::{
 	},
 	bail_err,
 	comptime::{memory::VirtualPointer, CompileTime},
-	if_then_some,
+	debug_log, debug_start, if_then_some,
 	lexer::{Span, Token, TokenType},
 	mapped_err, parse_list,
 	parser::{
@@ -70,6 +70,8 @@ impl Parse for GroupDeclaration {
 					value.set_tags(tags);
 				}
 
+				value.try_set_name(format!("anonymous_group_{}", name.unmangled_name()).into());
+
 				value
 			});
 
@@ -95,11 +97,30 @@ impl CompileTime for GroupDeclaration {
 	type Output = GroupDeclaration;
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
+		let _dropper = debug_start!(
+			"{} a {} called {}",
+			"Compile-Time Evaluating".bold().green(),
+			"group".cyan(),
+			self.name.unmangled_name().yellow()
+		);
 		let previous = context().scope_data.set_current_scope(self.inner_scope_id);
 		let mut fields = Vec::new();
 
 		for field in self.fields {
+			let _dropper = debug_start!(
+				"{} the {} field {}",
+				"Compile-Time Evaluating".bold().green(),
+				"group".cyan(),
+				field.name.unmangled_name().red()
+			);
+
 			// Field value
+			debug_log!(
+				"{} the value of the {} field {}",
+				"Compile-Time Evaluating".bold().green(),
+				"group".cyan(),
+				field.name.unmangled_name().red()
+			);
 			let value = if let Some(value) = field.value {
 				let evaluated = value.evaluate_at_compile_time().map_err(mapped_err! {
 					while = format!("evaluating the default value of the field \"{}\" of a group declaration at compile-time", field.name.unmangled_name().bold().cyan()),
@@ -118,6 +139,7 @@ impl CompileTime for GroupDeclaration {
 			};
 
 			// Field type
+			debug_log!("{} the type of the field {}", "Compile-Time Evaluating".bold().green(), field.name.unmangled_name().red());
 			let field_type = if let Some(field_type) = field.field_type {
 				Some(field_type.evaluate_at_compile_time().map_err(mapped_err! {
 					while = format!(
@@ -195,6 +217,12 @@ impl LiteralConvertible for GroupDeclaration {
 	}
 
 	fn from_literal(literal: &LiteralObject) -> anyhow::Result<Self> {
+		if literal.field_access_type != FieldAccessType::Group {
+			bail_err! {
+				base = "attempted to convert a non-group literal into a group",
+			};
+		}
+
 		Ok(GroupDeclaration {
 			fields: literal.get_internal_field::<Vec<Field>>("fields")?.to_owned(),
 			outer_scope_id: literal.outer_scope_id(),
@@ -214,5 +242,15 @@ impl Spanned for GroupDeclaration {
 impl GroupDeclaration {
 	pub fn fields(&self) -> &[Field] {
 		&self.fields
+	}
+
+	pub fn set_name(&mut self, name: Name) {
+		self.name = name.clone();
+		self.fields.iter_mut().for_each(|field| {
+			field.name = format!("{}_{}", name.unmangled_name(), field.name.unmangled_name()).into();
+			if let Some(value) = &mut field.value {
+				value.try_set_name(field.name.clone());
+			}
+		});
 	}
 }

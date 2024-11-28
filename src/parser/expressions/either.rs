@@ -107,3 +107,13 @@ impl Spanned for Either {
 		self.span.to_owned()
 	}
 }
+
+impl Either {
+	pub fn variants(&self) -> &[(Name, VirtualPointer)] {
+		&self.variants
+	}
+
+	pub fn variant_names(&self) -> Vec<&Name> {
+		self.variants.iter().map(|variant| &variant.0).collect()
+	}
+}

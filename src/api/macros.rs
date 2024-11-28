@@ -178,14 +178,41 @@ pub struct CabinError {
 }
 
 #[macro_export]
-macro_rules! debug_log {
+macro_rules! debug_verbose {
 	(
 		$($tokens: tt)*
 	) => {
-		if $crate::api::context::context().config().options().debug_mode() {
-			println!($($tokens)*)
+		if $crate::api::context::context().config().options().debug_info() == "full" {
+			println!("{}{}", "\t".repeat($crate::api::context::context().debug_indent()), format!($($tokens)*));
 		}
 	};
+}
+
+#[macro_export]
+macro_rules! debug_log {
+	(
+		$($tokens: tt)*
+	) => {{
+		use colored::Colorize as _;
+		if $crate::api::context::context().config().options().debug_info() == "some" {
+			println!("{}{}", "│\t".repeat($crate::api::context::context().debug_indent()).dimmed(), format!($($tokens)*));
+		}
+	}};
+}
+
+#[macro_export]
+macro_rules! debug_start {
+	(
+		$($tokens: tt)*
+	) => {{
+		let message = format!($($tokens)*);
+		use colored::Colorize as _;
+		if $crate::api::context::context().config().options().debug_info() == "some" {
+			println!("{}{}", "│\t".repeat($crate::api::context::context().debug_indent()).dimmed(), message);
+		}
+		let dropper = context().start_debug_sequence(&message);
+		dropper
+	}};
 }
 
 #[macro_export]
@@ -193,4 +220,9 @@ macro_rules! here {
 	() => {
 		$crate::api::context::SourceFilePosition::new(std::line!(), std::column!(), std::file!(), $crate::function!())
 	};
+}
+
+#[macro_export]
+macro_rules! warn {
+	() => {};
 }

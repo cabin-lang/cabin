@@ -33,6 +33,7 @@ pub struct Context {
 	error_details: Option<String>,
 	compiler_error_position: Vec<SourceFilePosition>,
 	options: CabinToml,
+	debug_indent: Vec<String>,
 }
 
 impl Default for Context {
@@ -50,6 +51,7 @@ impl Default for Context {
 			running_context: RunningContext::try_from(std::env::current_dir().unwrap()).unwrap(),
 			theme: Theme::default(),
 			colored_program: Vec::new(),
+			debug_indent: Vec::new(),
 		}
 	}
 }
@@ -109,6 +111,21 @@ impl Context {
 
 	pub fn get_compiler_error_position(&self) -> Vec<SourceFilePosition> {
 		self.compiler_error_position.clone()
+	}
+
+	#[must_use]
+	pub fn start_debug_sequence(&mut self, message: &str) -> DebugDropper {
+		self.debug_indent.push(message.to_owned());
+		DebugDropper
+	}
+
+	#[must_use]
+	fn end_debug_sequence(&mut self) -> String {
+		self.debug_indent.pop().unwrap()
+	}
+
+	pub fn debug_indent(&self) -> usize {
+		self.debug_indent.len()
 	}
 
 	pub fn colored_program(&self) -> String {
@@ -274,4 +291,13 @@ static CONTEXT: LazyLock<Context> = LazyLock::new(Context::default);
 /// data about the compiler.
 pub fn context() -> &'static mut Context {
 	unsafe { (&*CONTEXT as *const Context as *mut Context).as_mut().unwrap() }
+}
+
+pub struct DebugDropper;
+
+impl Drop for DebugDropper {
+	fn drop(&mut self) {
+		let message = context().end_debug_sequence();
+		println!("{}{} {}", "│\t".repeat(context().debug_indent()).dimmed(), "Finished".green().bold(), message);
+	}
 }

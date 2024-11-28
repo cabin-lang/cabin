@@ -1,5 +1,6 @@
 use std::{collections::HashMap, fmt::Debug};
 
+use colored::Colorize;
 use try_as::traits::TryAsRef;
 
 use crate::{
@@ -9,7 +10,9 @@ use crate::{
 		traits::{TerminalOutput as _, TryAs as _},
 	},
 	bail_err,
+	cli::theme::Styled,
 	comptime::{memory::VirtualPointer, CompileTime},
+	debug_start,
 	lexer::Span,
 	parser::{
 		expressions::{
@@ -228,58 +231,53 @@ impl LiteralObject {
 	pub fn is_type_assignable_to_type(&self, target_type: VirtualPointer) -> anyhow::Result<bool> {
 		Ok(self.address.unwrap() == target_type) // TODO: check for polymorphism
 	}
-
-	/// Prints this literal object as a JSON-like string, with it's virtual pointers dereferenced into their literal values,
-	/// recursively. Handy tool for debugging literals.
-	///
-	/// This isn't an `impl Debug` because it requires the program's context to access virtual memory to dereference pointers.
-	///
-	/// # Parameters
-	///
-	/// - `context` - Global data about the compiler's state; In this case, it's used to access virtual memory to dereference
-	/// the pointer values in this literal.
-	///
-	/// # Returns
-	/// This literal as a pretty-printed JSON-like string.
-	pub fn debug(&self) -> String {
-		let mut builder = format!("{} {{", self.type_name.unmangled_name());
-
-		for (field_name, field_pointer) in &self.fields {
-			builder += &format!(
-				"\n\t{} = {},",
-				field_name.unmangled_name(),
-				field_pointer
-					.virtual_deref()
-					.debug()
-					.lines()
-					.map(|line| format!("\t{line}"))
-					.collect::<Vec<_>>()
-					.join("\n")
-					.trim()
-			)
-		}
-
-		if !self.fields.is_empty() {
-			builder += "\n";
-		}
-
-		builder += "}";
-
-		builder
-	}
 }
 
 impl Debug for LiteralObject {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let mut builder = format!("{} {{", self.type_name.unmangled_name());
+		if self.type_name() == &"Function".into() {
+			let function = FunctionDeclaration::from_literal(self).unwrap();
+			return write!(
+				f,
+				"{}({}) {{ {} }}",
+				"action".style(context().theme.keyword()),
+				function
+					.parameters()
+					.iter()
+					.map(|parameter| format!("{}: {:?}", parameter.0.unmangled_name().red(), parameter.1))
+					.collect::<Vec<_>>()
+					.join(", "),
+				"...".dimmed()
+			);
+		}
+
+		if self.type_name() == &"Either".into() {
+			let function = Either::from_literal(self).unwrap();
+			return write!(
+				f,
+				"{} {{\n{}\n}}",
+				"either".style(context().theme.keyword()),
+				function
+					.variant_names()
+					.iter()
+					.map(|variant_name| format!("\t{}", variant_name.unmangled_name().red()))
+					.collect::<Vec<_>>()
+					.join(", ")
+			);
+		}
+
+		let mut builder = format!("{} {{", self.type_name.unmangled_name().yellow());
 
 		for (field_name, field_pointer) in &self.fields {
 			builder += &format!(
-				"\n\t{} = (Pointer): {},",
-				field_name.unmangled_name(),
-				field_pointer
-					.virtual_deref()
-					.debug()
+				"\n\t{} = {}{},",
+				match field_pointer.virtual_deref().type_name.unmangled_name().as_str() {
+					"Group" => field_name.unmangled_name().yellow(),
+					"OneOf" => field_name.unmangled_name().yellow(),
+					_ => field_name.unmangled_name().red(),
+				},
+				"&".dimmed(),
+				format!("{:?}", field_pointer.virtual_deref())
 					.lines()
 					.map(|line| format!("\t{line}"))
 					.collect::<Vec<_>>()
@@ -332,6 +330,12 @@ impl CompileTime for LiteralObject {
 	type Output = LiteralObject;
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
+		let _dropper = debug_start!(
+			"{} {} of type {}",
+			"Compile-Time Evaluating".green().bold(),
+			"literal".cyan(),
+			self.type_name.unmangled_name().yellow()
+		);
 		let address = self.address;
 		let mut literal = match self.type_name().unmangled_name().as_str() {
 			"Function" => FunctionDeclaration::from_literal(&self)?.evaluate_at_compile_time()?.to_literal(),
@@ -341,6 +345,7 @@ impl CompileTime for LiteralObject {
 			_ => self,
 		};
 		literal.address = address;
+
 		Ok(literal)
 	}
 }

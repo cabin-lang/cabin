@@ -1,5 +1,7 @@
 use std::{collections::HashMap, fmt::Debug};
 
+use colored::Colorize;
+
 use crate::{
 	api::context::context,
 	lexer::Span,
@@ -29,7 +31,11 @@ pub struct VirtualPointer(usize);
 
 impl Debug for VirtualPointer {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "(Pointer): {:?}", self.virtual_deref())
+		let value = self.virtual_deref();
+		if value.type_name() == &"Group".into() {
+			return write!(f, "{}{}", "&".dimmed(), value.name().unmangled_name().yellow());
+		}
+		write!(f, "{}{:?}", "&".dimmed(), self.virtual_deref())
 	}
 }
 

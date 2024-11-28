@@ -1,10 +1,10 @@
-use std::{collections::VecDeque, thread::Scope};
+use std::collections::VecDeque;
 
 use crate::{
 	api::{builtin::call_builtin_at_compile_time, context::context, scope::ScopeId, traits::TryAs as _},
 	bail_err,
 	comptime::{memory::VirtualPointer, CompileTime},
-	if_then_else_default,
+	debug_log, debug_start, if_then_else_default,
 	lexer::{Span, Token, TokenType},
 	mapped_err, parse_list,
 	parser::{
@@ -77,12 +77,20 @@ impl CompileTime for FunctionCall {
 	type Output = Expression;
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
+		let _dropper = debug_start!("{} a {} at compile-time", "Compile-Time Evaluating".bold().green(), "function call".cyan());
+
+		debug_log!("Evaluating the function to call in a {}", "function call".cyan());
 		let function = self.function.evaluate_at_compile_time().map_err(mapped_err! {
 			while = "evaluating the function to call on a function-call expression at compile-time",
 		})?;
 
 		// Compile-time arguments
 		let compile_time_arguments = {
+			debug_start!(
+				"{} a {} compile-time arguments at compile-time",
+				"Compile-Time Evaluating".bold().green(),
+				"function call's".cyan()
+			);
 			let mut evaluated_compile_time_arguments = Vec::new();
 			for compile_time_argument in self.compile_time_arguments {
 				let evaluated = compile_time_argument.evaluate_at_compile_time().map_err(mapped_err! {
@@ -243,9 +251,11 @@ impl CompileTime for FunctionCall {
 				// Call builtin function
 				if let Some(internal_name) = builtin_name {
 					if !system_side_effects || context().has_side_effects() {
-						return call_builtin_at_compile_time(&internal_name, self.scope_id, arguments, self.span).map_err(mapped_err! {
+						let return_value = call_builtin_at_compile_time(&internal_name, self.scope_id, arguments, self.span).map_err(mapped_err! {
 							while = format!("calling the built-in function {} at compile-time", internal_name.bold().purple()),
 						});
+
+						return return_value;
 					} else {
 						return Ok(Expression::Void(()));
 					}

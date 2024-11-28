@@ -1,11 +1,11 @@
-use std::hash::Hash;
+use std::{fmt::Debug, hash::Hash};
 
-use colored::Colorize;
+use colored::Colorize as _;
 
 use crate::{
 	api::context::context,
 	comptime::CompileTime,
-	debug_log,
+	debug_log, debug_start,
 	lexer::{Span, TokenType},
 	mapped_err,
 	parser::{expressions::Expression, Parse, ToCabin, TokenQueue, TokenQueueFunctionality as _},
@@ -14,7 +14,7 @@ use crate::{
 
 use super::Spanned;
 
-#[derive(Debug, Clone, Eq)]
+#[derive(Clone, Eq)]
 pub struct Name {
 	/// The internal string value of this name. This is the value as it appears in the Cabin source code; In other words,
 	/// it's unmangled.
@@ -31,6 +31,12 @@ pub struct Name {
 	/// For regular identifiers in the language, this is always `true`; But some special exceptions are made when the
 	/// compiler needs to insert names into the program.
 	should_mangle: bool,
+}
+
+impl Debug for Name {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", self.unmangled_name().red())
+	}
 }
 
 impl Parse for Name {
@@ -56,7 +62,7 @@ impl CompileTime for Name {
 	type Output = Expression;
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
-		debug_log!("{} the name {} at compile-time...", "Evaluating".bold().green(), self.unmangled_name().bold().red());
+		let _dropper = debug_start!("{} the name {}", "Compile-Time Evaluating".bold().green(), self.unmangled_name().red());
 		let value = context()
 			.scope_data
 			.get_variable(self.clone())
@@ -83,6 +89,8 @@ impl CompileTime for Name {
 						.join("\n")
 				)),
 			})?;
+
+		debug_log!("Name {} evaluated to a {}", self.unmangled_name().red(), value.kind_name().cyan());
 
 		Ok(value.try_clone_pointer().unwrap_or(Expression::Name(self.clone())))
 	}

@@ -1,5 +1,6 @@
 use crate::{
 	comptime::CompileTime,
+	debug_log,
 	lexer::{Span, TokenType},
 	parser::{
 		expressions::{Expression, Spanned, Typed},
@@ -53,6 +54,7 @@ impl CompileTime for RunExpression {
 	type Output = RunExpression;
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
+		debug_log!("{} a run expression", "Compile-Time Evaluating".bold().green());
 		Ok(RunExpression {
 			expression: Box::new(self.expression.evaluate_subexpressions_at_compile_time()?),
 			span: self.span,

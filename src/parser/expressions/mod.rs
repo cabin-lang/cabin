@@ -1,5 +1,9 @@
-use crate::{api::context::context, debug_log, parser::expressions::try_as_traits::TryAsMut};
+use std::fmt::Debug;
+
+use crate::{api::context::context, cli::theme::Styled, debug_log, parser::expressions::try_as_traits::TryAsMut};
 use colored::Colorize as _;
+use group::GroupDeclaration;
+use literal::LiteralConvertible;
 use parameter::Parameter;
 use run::{RunExpression, RuntimeableExpression};
 use try_as::traits as try_as_traits;
@@ -39,7 +43,7 @@ pub mod represent_as;
 pub mod run;
 pub mod sugar;
 
-#[derive(Debug, Clone, try_as::macros::From, try_as::macros::TryInto, try_as::macros::TryAsRef, try_as::macros::TryAsMut)]
+#[derive(Clone, try_as::macros::From, try_as::macros::TryInto, try_as::macros::TryAsRef, try_as::macros::TryAsMut)]
 pub enum Expression {
 	Block(Block),
 	FieldAccess(FieldAccess),
@@ -108,7 +112,7 @@ impl CompileTime for Expression {
 
 impl Expression {
 	pub fn try_as_literal(&self) -> anyhow::Result<&'static LiteralObject> {
-		debug_log!("{} to interpret {} as a literal: {self:?}", "Attempting".green().bold(), self.kind_name().cyan().bold());
+		debug_log!("Interpreting {} as a literal", self.kind_name().cyan());
 		Ok(match self {
 			Self::Pointer(pointer) => pointer.virtual_deref(),
 			Self::Name(name) => name
@@ -135,6 +139,13 @@ impl Expression {
 				})?
 				.is_fully_known_at_compile_time()?,
 			_ => false,
+		})
+	}
+
+	pub fn evaluate_as_type(self) -> anyhow::Result<Expression> {
+		Ok(match self {
+			Self::Pointer(pointer) => Expression::Pointer(pointer),
+			_ => self.evaluate_at_compile_time()?,
 		})
 	}
 
@@ -216,14 +227,22 @@ impl Expression {
 		};
 	}
 
-	/// This function should only be called during parse-time.
-	pub fn name_mut(&mut self) -> Option<&mut Name> {
+	pub fn try_set_name(&mut self, name: Name) {
 		match self {
-			// Self::FunctionDeclaration(function) => Some(&mut function.name),
-			// Self::Group(group) => Some(&mut group.name),
-			// Self::Either(either) => Some(&mut either.name),
-			Self::ObjectConstructor(object) => Some(&mut object.name),
-			_ => None,
+			Self::ObjectConstructor(object) => object.name = name,
+			Self::Pointer(pointer) => {
+				let value = pointer.virtual_deref_mut();
+				let address = value.address;
+				if let Ok(mut group) = GroupDeclaration::from_literal(value) {
+					group.set_name(name);
+					*value = group.to_literal();
+					value.address = address;
+					return;
+				}
+
+				value.name = name;
+			},
+			_ => {},
 		}
 	}
 
@@ -324,5 +343,23 @@ impl RuntimeableExpression for Expression {
 				base = format!("Attempted to use a run-expression on a {}, but forcing this type of expression to run at runtime is pointless.", self.kind_name()),
 			},
 		})
+	}
+}
+
+impl Debug for Expression {
+	fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::Block(block) => block.fmt(formatter),
+			Self::FieldAccess(field_access) => field_access.fmt(formatter),
+			Self::FunctionCall(function_call) => function_call.fmt(formatter),
+			Self::ForEachLoop(for_loop) => for_loop.fmt(formatter),
+			Self::If(if_expression) => if_expression.fmt(formatter),
+			Self::Name(name) => name.fmt(formatter),
+			Self::ObjectConstructor(object) => object.fmt(formatter),
+			Self::Parameter(parameter) => parameter.fmt(formatter),
+			Self::Pointer(pointer) => pointer.fmt(formatter),
+			Self::Run(run) => run.fmt(formatter),
+			Self::Void(()) => write!(formatter, "{}", "<void>".style(context().theme.keyword())),
+		}
 	}
 }

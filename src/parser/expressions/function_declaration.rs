@@ -9,7 +9,7 @@ use crate::{
 	},
 	bail_err,
 	comptime::{memory::VirtualPointer, CompileTime},
-	if_then_else_default, if_then_some,
+	debug_log, debug_start, if_then_else_default, if_then_some,
 	lexer::{Span, TokenType},
 	mapped_err, parse_list,
 	parser::{
@@ -120,12 +120,19 @@ impl CompileTime for FunctionDeclaration {
 	type Output = FunctionDeclaration;
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
+		let _dropper = debug_start!(
+			"{} a {} called {}",
+			"Compile-Time Evaluating".bold().green(),
+			"function declaration".cyan(),
+			self.name.unmangled_name().blue()
+		);
+
 		// Compile-time parameters
 		let compile_time_parameters = {
 			let mut compile_time_parameters = Vec::new();
 			for (parameter_name, parameter_type) in self.compile_time_parameters {
-				let parameter_type = parameter_type.evaluate_at_compile_time()?;
-				if !parameter_type.is_pointer() {
+				let parameter_type = parameter_type.evaluate_as_type()?;
+				if !parameter_type.is_fully_known_at_compile_time()? {
 					anyhow::bail!("A value that's not fully known at compile-time was used as a function parameter type");
 				}
 				compile_time_parameters.push((parameter_name, parameter_type));
@@ -135,12 +142,20 @@ impl CompileTime for FunctionDeclaration {
 
 		// Parameters
 		let parameters = {
+			let _dropper = debug_start!("{} the parameters of a {}", "Compile-Time Evaluating".green().bold(), "function declaration".cyan());
 			let mut parameters = Vec::new();
 			for (parameter_name, parameter_type) in self.parameters {
-				let parameter_type = parameter_type.evaluate_at_compile_time().map_err(mapped_err! {
+				debug_log!(
+					"{} a parameter called {} of type {:?} on a {}",
+					"Compile-Time Evaluating".bold().green(),
+					parameter_name.unmangled_name().red(),
+					parameter_type,
+					"function declaration".cyan()
+				);
+				let parameter_type = parameter_type.evaluate_as_type().map_err(mapped_err! {
 					while = format!("evaluating the type of the parameter \"{}\" of a function at compile-time", parameter_name.unmangled_name().bold().cyan()),
 				})?;
-				if !parameter_type.is_pointer() {
+				if !parameter_type.is_fully_known_at_compile_time()? {
 					bail_err!(
 						base = "A value that's not fully known at compile-time was used as a function parameter type",
 						while = format!("checking the type of the parameter \"{}\"", parameter_name.unmangled_name().bold().cyan()),
@@ -152,13 +167,18 @@ impl CompileTime for FunctionDeclaration {
 		};
 
 		// Return type
-		let return_type = self.return_type.map(|return_type| anyhow::Ok(return_type.evaluate_at_compile_time()?)).transpose()?;
+		debug_log!("Compile-Time Evaluating the return type of a {}", "function declaration".cyan());
+		let return_type = self.return_type.map(|return_type| return_type.evaluate_as_type()).transpose()?;
 
 		// Body
-		let body = self.body.map(|body| body.evaluate_at_compile_time()).transpose().map_err(mapped_err! {
-			while = "evaluating the body of a function declaration at compile-time",
-		})?;
+		let body = {
+			let _dropper = debug_start!("{} the body of a {}", "Compile-Time Evaluating".green().bold(), "function declaration".cyan());
+			self.body.map(|body| body.evaluate_at_compile_time()).transpose().map_err(mapped_err! {
+				while = "evaluating the body of a function declaration at compile-time",
+			})?
+		};
 
+		debug_log!("{} the \"this object\" of a {}", "Compile-Time Evaluating".green().bold(), "function declaration".cyan());
 		let this_object = self.this_object.map(|this| this.evaluate_at_compile_time()).transpose()?;
 
 		// Return

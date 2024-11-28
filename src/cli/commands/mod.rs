@@ -52,14 +52,14 @@ macro_rules! step {
 
 		let here = $crate::here!();
 
-		if !$crate::api::context::context().config().options().quiet() {
+		if !$crate::api::context::context().config().options().quiet() && $crate::api::context::context().config().options().debug_info() == "none" {
 			print!("{}{} {}... ", $crate::api::context::context().config().options().tabs(1), $action.bold().green(), $object);
 			std::io::stdout().flush().unwrap();
 		}
 
 		match $expression {
 			Ok(return_value) => {
-				if !$crate::api::context::context().config().options().quiet() {
+				if !$crate::api::context::context().config().options().quiet() && $crate::api::context::context().config().options().debug_info() == "none" {
 					if $object.starts_with("compile-time") && $crate::api::context::context().lines_printed != 0 {
 						move_cursor_up_and_over($crate::api::context::context().lines_printed, ($crate::api::context::context().config().options().tabs(1) + "evaluating abstract syntax tree... ").len());
 					}
@@ -168,7 +168,7 @@ macro_rules! step {
 }
 
 pub fn start(action: &str) {
-	if !context().config().options().quiet() {
+	if !context().config().options().quiet() && context().config().options().debug_info() == "none" {
 		println!(
 			"\n{} {}...                    {}",
 			action.bold().green(),

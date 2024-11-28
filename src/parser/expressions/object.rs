@@ -1,12 +1,11 @@
 use std::collections::HashMap;
 
-use colored::Colorize;
 use try_as::traits as try_as_traits;
 
 use crate::{
 	api::{context::context, scope::ScopeId},
 	comptime::{memory::VirtualPointer, CompileTime},
-	debug_log, if_then_some,
+	debug_log, debug_start, if_then_some,
 	lexer::{Span, TokenType},
 	mapped_err, parse_list,
 	parser::{
@@ -196,7 +195,11 @@ impl CompileTime for ObjectConstructor {
 	type Output = Expression;
 
 	fn evaluate_at_compile_time(mut self) -> anyhow::Result<Self::Output> {
-		debug_log!("Evaluating an object of type {} at compile-time", self.type_name.unmangled_name().bold().yellow());
+		let _dropper = debug_start!(
+			"{} an object of type {}",
+			"Compile-Time Evaluating".green().bold(),
+			self.type_name.unmangled_name().yellow()
+		);
 		let previous = context().scope_data.set_current_scope(self.inner_scope_id);
 
 		// Get object type
@@ -235,6 +238,7 @@ impl CompileTime for ObjectConstructor {
 
 		// Explicit fields
 		for field in self.fields.clone() {
+			debug_log!("{} the object field {}", "Compile-Time Evaluating".green().bold(), field.name.unmangled_name().red());
 			let field_value = field.value.clone().unwrap();
 
 			let field_value = field_value.evaluate_at_compile_time().map_err(mapped_err! {
@@ -254,6 +258,7 @@ impl CompileTime for ObjectConstructor {
 		}
 
 		context().scope_data.set_current_scope(previous);
+
 		if self.is_literal() {
 			let literal = LiteralObject::try_from_object_constructor(self)?;
 			let address = context().virtual_memory.store(literal);

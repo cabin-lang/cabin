@@ -18,7 +18,7 @@ toml! {
 
 	[options]
 	quiet: bool = false;
-	debug_mode: bool = false;
+	debug_info: String = "some";
 	developer_mode: bool = true;
 	detailed_errors: bool = true;
 	tab_size: i64 = 4;
