@@ -35,6 +35,9 @@ impl Debug for VirtualPointer {
 		if value.type_name() == &"Group".into() {
 			return write!(f, "{}{}", "&".dimmed(), value.name().unmangled_name().yellow());
 		}
+		if value.type_name() == &"Text".into() {
+			return write!(f, "{}\"{}\"", "&".dimmed(), value.get_internal_field::<String>("internal_value").unwrap().green());
+		}
 		write!(f, "{}{:?}", "&".dimmed(), self.virtual_deref())
 	}
 }

@@ -199,7 +199,7 @@ macro_rules! debug_start {
 		if $crate::api::context::context().config().options().debug_info() == "some" {
 			println!("{}{}", "│\t".repeat($crate::api::context::context().debug_indent()).dimmed(), message);
 		}
-		let dropper = context().start_debug_sequence(&message);
+		let dropper = $crate::api::context::context().start_debug_sequence(&message);
 		dropper
 	}};
 }

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Debug};
 
 use crate::{
 	api::{context::context, scope::ScopeId},
@@ -17,7 +17,7 @@ use super::{
 	Expression, Spanned, Typed,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Parameter {
 	name: Name,
 	parameter_type: Box<Expression>,
@@ -116,5 +116,11 @@ impl LiteralConvertible for Parameter {
 			scope_id: literal.outer_scope_id(),
 			span: literal.span(),
 		})
+	}
+}
+
+impl Debug for Parameter {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{:?}: {:?}", self.name, self.parameter_type)
 	}
 }

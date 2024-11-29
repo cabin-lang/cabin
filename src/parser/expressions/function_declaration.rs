@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Debug};
 
 use crate::{
 	api::{
@@ -7,6 +7,7 @@ use crate::{
 		scope::{ScopeId, ScopeType},
 		traits::{TryAs as _, TupleOption},
 	},
+	cli::theme::Styled,
 	comptime::{memory::VirtualPointer, CompileTime},
 	debug_log, debug_start, if_then_else_default, if_then_some,
 	lexer::{Span, TokenType},
@@ -27,7 +28,7 @@ use crate::{
 
 use super::{field_access::FieldAccessType, parameter::Parameter};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct FunctionDeclaration {
 	tags: TagList,
 	compile_time_parameters: Vec<Parameter>,
@@ -39,6 +40,35 @@ pub struct FunctionDeclaration {
 	this_object: Option<Expression>,
 	name: Name,
 	span: Span,
+}
+
+impl Debug for FunctionDeclaration {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
+			"{}{}{}{}{}",
+			if_then_else_default!(!self.tags().is_empty(), format!("{:?} ", self.tags())),
+			"action".style(context().theme.keyword()),
+			if_then_else_default!(!self.compile_time_parameters().is_empty(), {
+				format!(
+					"<{}>",
+					self.compile_time_parameters()
+						.iter()
+						.map(|parameter| format!("{parameter:?}"))
+						.collect::<Vec<_>>()
+						.join(", ")
+				)
+			}),
+			if_then_else_default!(!self.parameters().is_empty(), {
+				format!("({})", self.parameters().iter().map(|parameter| format!("{parameter:?}")).collect::<Vec<_>>().join(", "))
+			}),
+			if let Some(return_type) = self.return_type() {
+				format!(": {return_type:?}")
+			} else {
+				String::new()
+			}
+		)
+	}
 }
 
 impl Parse for FunctionDeclaration {
@@ -175,28 +205,24 @@ impl CompileTime for FunctionDeclaration {
 		debug_log!("Compile-Time Evaluating the return type of a {}", "function declaration".cyan());
 		let return_type = self.return_type.map(|return_type| return_type.evaluate_as_type()).transpose()?;
 
-		// Body
-		debug_log!("Compile-Time Evaluating the body of a {}", "function declaration".cyan());
-		let body = {
-			let debug_section = debug_start!("{} the body of a {}", "Compile-Time Evaluating".green().bold(), "function declaration".cyan());
-			let result = self.body.map(|body| body.evaluate_at_compile_time()).transpose().map_err(mapped_err! {
-				while = "evaluating the body of a function declaration at compile-time",
-			})?;
-			debug_section.finish();
-			result
-		};
-
 		debug_log!("{} the \"this object\" of a {}", "Compile-Time Evaluating".green().bold(), "function declaration".cyan());
 		let this_object = self.this_object.map(|this| this.evaluate_at_compile_time()).transpose()?;
+
+		let tags = {
+			let debug_section = debug_start!("Evaluating the tags on a {}", "function declaration".cyan());
+			let evaluated = self.tags.evaluate_at_compile_time()?;
+			debug_section.finish();
+			evaluated
+		};
 
 		// Return
 		debug_section.finish();
 		let function = FunctionDeclaration {
 			compile_time_parameters,
 			parameters,
-			body,
+			body: self.body,
 			return_type,
-			tags: self.tags.evaluate_at_compile_time()?,
+			tags,
 			this_object,
 			name: self.name,
 			span: self.span,

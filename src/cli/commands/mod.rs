@@ -65,7 +65,7 @@ macro_rules! step {
 			Ok(return_value) => {
 				if !$crate::api::context::context().config().options().quiet() && $crate::api::context::context().config().options().debug_info() == "none" {
 					if $object.starts_with("compile-time") && $crate::api::context::context().lines_printed != 0 {
-						move_cursor_up_and_over($crate::api::context::context().lines_printed, ($crate::api::context::context().config().options().tabs(1) + "evaluating abstract syntax tree... ").len());
+						move_cursor_up_and_over($crate::api::context::context().lines_printed, ($crate::api::context::context().config().options().tabs(1) + $action + $object + "...  ").len());
 					}
 
 					println!("{}", "Done!".bold().green());
@@ -177,7 +177,7 @@ macro_rules! step {
 pub fn start(action: &str) {
 	if !context().config().options().quiet() && context().config().options().debug_info() == "none" {
 		println!(
-			"\n{} {}...                    {}",
+			"\n{} {}...    {}",
 			action.bold().green(),
 			format!("{}", context().running_context.file_or_project_name().display()).bold(),
 			"(Run with --quiet or -q to silence this output)".dimmed().italic()

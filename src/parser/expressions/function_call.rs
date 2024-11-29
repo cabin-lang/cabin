@@ -284,7 +284,7 @@ impl CompileTime for FunctionCall {
 					}
 				}
 
-				anyhow::bail!("Attempted to call a function that doesn't have a body.");
+				bail_err!(base = "Attempted to call a function that doesn't have a body.",);
 			}
 		}
 

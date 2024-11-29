@@ -1,12 +1,12 @@
-use std::ops::Deref;
+use std::{fmt::Debug, ops::Deref};
 
 use crate::{
 	comptime::CompileTime,
-	mapped_err, parse_list,
+	debug_log, debug_start, mapped_err, parse_list,
 	parser::{expressions::Expression, ListType, Parse, TokenQueue},
 };
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct TagList {
 	pub values: Vec<Expression>,
 }
@@ -27,13 +27,16 @@ impl CompileTime for TagList {
 	type Output = TagList;
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
+		let debug_section = debug_start!("{} a {}", "Compile-Time Evaluating".green().bold(), "tag list".cyan());
 		let mut values = Vec::new();
 		for value in self.values {
 			let evaluated = value.evaluate_at_compile_time().map_err(mapped_err! {
 				while = "evaluating a tag at compile-time",
 			})?;
+			debug_log!("Evaluated tag into {}", evaluated.kind_name().cyan());
 			values.push(evaluated);
 		}
+		debug_section.finish();
 		Ok(TagList { values })
 	}
 }
@@ -49,5 +52,17 @@ impl Deref for TagList {
 impl From<Vec<Expression>> for TagList {
 	fn from(values: Vec<Expression>) -> Self {
 		Self { values }
+	}
+}
+
+impl Debug for TagList {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
+			"{}",
+			format!("#[{}]", self.values.iter().map(|value| format!("{value:?}")).collect::<Vec<_>>().join(", "))
+				.replace("\n", " ")
+				.replace("\t", "")
+		)
 	}
 }

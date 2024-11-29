@@ -106,22 +106,6 @@ let system = new Object {
 		#[builtin<"terminal.input">, system_side_effects] 
 		input = action: Text
 	},
-
-	files = new Object {
-		read_file = action(path: Text): Text,
-		file_exists = action(path: Text): Boolean,
-		directory_exists = action(path: Text): Boolean,
-		create_file = action(path: Text),
-		create_directory = action(path: Text),
-		delete_file = action(path: Text),
-		delete_directory = action(path: Text),
-		delete = action(path: Text),
-	},
-
-	environment_variables = new Object {
-		get = action(name: Text): Text,
-		set = action(name: Text, value: Text),
-	},
 };
 
 let Map = group {

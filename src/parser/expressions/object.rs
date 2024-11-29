@@ -257,6 +257,8 @@ impl CompileTime for ObjectConstructor {
 			self.fields.add_or_overwrite_field(evaluated_field);
 		}
 
+		self.tags = self.tags.evaluate_at_compile_time()?;
+
 		context().scope_data.set_current_scope(previous);
 
 		let result = if self.is_literal() {
@@ -285,6 +287,7 @@ pub enum InternalFieldValue {
 	LiteralMap(Vec<(Name, VirtualPointer)>),
 	ParameterList(Vec<Parameter>),
 	PointerList(Vec<VirtualPointer>),
+	Name(Name),
 }
 
 impl TranspileToC for ObjectConstructor {

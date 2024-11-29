@@ -431,6 +431,11 @@ impl ScopeData {
 	/// # Returns
 	/// An `Err` if no variable with the given name exists in the current scope.
 	pub fn reassign_variable_from_id(&mut self, name: &Name, mut value: Expression, id: ScopeId) -> anyhow::Result<()> {
+		debug_log!(
+			"Reassigning the variable called {} in a scope of type {:?} to be {value:?}",
+			name.unmangled_name().red(),
+			self.get_scope_from_id(id).unwrap().scope_type
+		);
 		// Traverse up the parent tree looking for the declaration and reassign it
 		let mut current = Some(id.0);
 		while let Some(current_index) = current {

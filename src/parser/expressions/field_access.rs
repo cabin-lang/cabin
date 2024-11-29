@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use colored::Colorize as _;
 
 use crate::{
@@ -20,7 +18,11 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
-use super::{literal::LiteralObject, object::ObjectConstructor, represent_as::RepresentAs};
+use super::{
+	literal::LiteralObject,
+	object::{Field, InternalFieldValue, ObjectConstructor},
+	represent_as::RepresentAs,
+};
 
 /// A type describing how fields are accessed on this type of objects via the dot operator.
 /// For example, on a normal object, the dot operator just gets a field with the given name,
@@ -95,7 +97,7 @@ impl CompileTime for FieldAccess {
 			let literal = pointer.virtual_deref();
 
 			Ok(match self.access_type {
-				FieldAccessOperator::Dot => match literal.object_type() {
+				FieldAccessOperator::Dot => match literal.field_access_type() {
 					// Object fields
 					FieldAccessType::Normal => {
 						let field = literal.get_field(self.right.clone()).ok_or_else(|| {
@@ -132,7 +134,7 @@ impl CompileTime for FieldAccess {
 					},
 					_value => todo!("{literal:?} {}", self.right.unmangled_name()),
 				},
-				FieldAccessOperator::Colon => match literal.object_type() {
+				FieldAccessOperator::Colon => match literal.field_access_type() {
 					FieldAccessType::Normal => {
 						let declaration = RepresentAs::from_literal(
 							context()
@@ -162,11 +164,27 @@ impl CompileTime for FieldAccess {
 							}
 						}
 
+						let mut fields = declaration.fields().to_vec();
+						let mut original_fields = literal
+							.fields
+							.clone()
+							.into_iter()
+							.map(|(name, pointer)| Field {
+								name,
+								field_type: None,
+								value: Some(Expression::Pointer(pointer)),
+							})
+							.collect::<Vec<_>>();
+						fields.append(&mut original_fields);
+
+						let mut internal_fields = literal.internal_fields.clone();
+						internal_fields.insert("representing_type_name".to_owned(), InternalFieldValue::Name(literal.type_name().clone()));
+
 						Expression::Pointer(
 							LiteralObject::try_from_object_constructor(ObjectConstructor {
 								type_name: declaration.type_to_represent_as().expect_as::<VirtualPointer>().unwrap().virtual_deref().name().to_owned(),
-								fields: declaration.fields().to_vec(),
-								internal_fields: HashMap::new(),
+								fields,
+								internal_fields,
 								inner_scope_id: context().scope_data.file_id(),
 								field_access_type: FieldAccessType::Normal,
 								name: "anonymous_represent_as_casted".into(),

@@ -12,7 +12,7 @@ use crate::{
 	debug_start, err,
 	lexer::Span,
 	mapped_err,
-	parser::expressions::{object::ObjectConstructor, Expression, Spanned, Typed},
+	parser::expressions::{name::Name, object::ObjectConstructor, Expression, Spanned, Typed},
 };
 
 use super::scope::ScopeId;
@@ -116,7 +116,8 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 					while = format!("Interpreting the first argument to {} as a literal", format!("{}.{}()", "Anything".yellow(), "to_string".blue()).bold()),
 				})?;
 
-			Ok(string(&match this.type_name().unmangled_name().as_str() {
+			let type_name = this.get_internal_field::<Name>("representing_type_name").unwrap_or(this.type_name());
+			Ok(string(&match type_name.unmangled_name().as_str() {
 				"Number" => this.expect_as::<f64>()?.to_string(),
 				"Text" => this.expect_as::<String>()?.to_owned(),
 				_ => {

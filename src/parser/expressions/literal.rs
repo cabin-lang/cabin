@@ -143,7 +143,7 @@ impl LiteralObject {
 			name: object.name,
 			address: None,
 			span: object.span,
-			tags: object.tags,
+			tags: object.tags.evaluate_at_compile_time()?,
 		})
 	}
 
@@ -151,7 +151,7 @@ impl LiteralObject {
 		&self.type_name
 	}
 
-	pub fn object_type(&self) -> &FieldAccessType {
+	pub fn field_access_type(&self) -> &FieldAccessType {
 		&self.field_access_type
 	}
 
@@ -269,6 +269,16 @@ impl Debug for LiteralObject {
 		let mut builder = format!("{} {{", self.type_name.unmangled_name().yellow());
 
 		for (field_name, field_pointer) in &self.fields {
+			let value = field_pointer.virtual_deref();
+			if value.type_name() == &"Text".into() {
+				builder += &format!(
+					"\n\t{} = {}{},",
+					field_name.unmangled_name().red(),
+					"&".dimmed(),
+					format!("\"{}\"", value.get_internal_field::<String>("internal_value").unwrap()).green()
+				);
+				continue;
+			}
 			builder += &format!(
 				"\n\t{} = {}{},",
 				match field_pointer.virtual_deref().type_name.unmangled_name().as_str() {

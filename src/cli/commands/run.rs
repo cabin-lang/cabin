@@ -7,9 +7,8 @@ use crate::{
 		RunningContext,
 	},
 	comptime::CompileTime as _,
-	debug_log, debug_start,
+	debug_start,
 	lexer::{tokenize, tokenize_main, tokenize_without_prelude, Span},
-	mapped_err,
 	parser::{
 		expressions::{
 			field_access::FieldAccessType,
@@ -57,30 +56,23 @@ impl CabinCommand for RunCommand {
 			let tokenized = step!(tokenize_directory(root), "Tokenizing", "source code");
 			let module_ast = step!(parse_directory(tokenized), "Parsing", "token streams");
 			let root_module = step!(add_modules_to_scope(module_ast), "Linking", "source files");
-
-			let Expression::ObjectConstructor(compile_time_evaluated_root_module) = step!(
-				root_module.evaluate_at_compile_time().map_err(mapped_err! {
-					while = "evaluating the project's root module at compile-time",
-				}),
+			step!(
+				(|| {
+					let Expression::ObjectConstructor(compile_time_evaluated_root_module) = root_module.evaluate_at_compile_time()? else {
+						unreachable!()
+					};
+					let Expression::ObjectConstructor(main_module) = context()
+						.scope_data
+						.get_variable_from_id("main", compile_time_evaluated_root_module.inner_scope_id)
+						.unwrap()
+					else {
+						unreachable!()
+					};
+					let main_function = main_module.get_field("main_function").unwrap().try_clone_pointer().unwrap();
+					FunctionCall::call_main(main_function, compile_time_evaluated_root_module.inner_scope_id)
+				})(),
 				"Running",
 				"compile-time code"
-			) else {
-				unreachable!();
-			};
-			let Expression::ObjectConstructor(main_module) = context()
-				.scope_data
-				.get_variable_from_id("main", compile_time_evaluated_root_module.inner_scope_id)
-				.unwrap()
-			else {
-				unreachable!()
-			};
-			let main_function = main_module.get_field("main_function").unwrap().try_clone_pointer().unwrap();
-			debug_log!("{} main function...", "Calling".bold().green());
-
-			step!(
-				FunctionCall::call_main(main_function, compile_time_evaluated_root_module.inner_scope_id),
-				"Running",
-				"main file"
 			);
 
 			debug_section.finish();
