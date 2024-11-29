@@ -23,7 +23,7 @@ use crate::{
 	},
 };
 
-use super::{literal::LiteralObject, represent_as::RepresentAs};
+use super::represent_as::RepresentAs;
 
 /// A binary operation. More specifically, this represents not one operation, but a group of operations that share the same precedence.
 /// For example, the `+` and `-` operators share the same precedence, so they are grouped together in the `ADDITIVE` constant.
@@ -145,21 +145,13 @@ impl Parse for PrimaryExpression {
 				let token = tokens.pop(TokenType::String)?;
 				let with_quotes = token.value;
 				let without_quotes = with_quotes.get(1..with_quotes.len() - 1).unwrap().to_owned();
-				Expression::Pointer(
-					LiteralObject::try_from_object_constructor(ObjectConstructor::string(&without_quotes, token.span))
-						.unwrap()
-						.store_in_memory(),
-				)
+				Expression::ObjectConstructor(ObjectConstructor::string(&without_quotes, token.span))
 			},
 
 			// Parse number literal into a number object
 			TokenType::Number => {
 				let number_token = tokens.pop(TokenType::Number).unwrap();
-				Expression::Pointer(
-					LiteralObject::try_from_object_constructor(ObjectConstructor::number(number_token.value.parse().unwrap(), number_token.span))
-						.unwrap()
-						.store_in_memory(),
-				)
+				Expression::ObjectConstructor(ObjectConstructor::number(number_token.value.parse().unwrap(), number_token.span))
 			},
 
 			// bad :<

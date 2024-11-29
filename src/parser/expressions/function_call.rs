@@ -93,6 +93,11 @@ impl CompileTime for FunctionCall {
 			);
 			let mut evaluated_compile_time_arguments = Vec::new();
 			for compile_time_argument in self.compile_time_arguments {
+				debug_log!(
+					"Evaluating compile-time argument {} of a {}",
+					evaluated_compile_time_arguments.len() + 1,
+					"function call".cyan()
+				);
 				let evaluated = compile_time_argument.evaluate_at_compile_time().map_err(mapped_err! {
 					while = "evaluating a function call's compile-time argument at compile-time",
 				})?;
@@ -152,7 +157,8 @@ impl CompileTime for FunctionCall {
 			if let Some(this_object) = function_declaration.this_object() {
 				if let Some(parameter) = function_declaration.parameters().first() {
 					if parameter.name().unmangled_name() == "this" {
-						arguments.insert(0, this_object.clone());
+						debug_log!("{} the \"this object\" of a {}", "Compile-Time Evaluating".green().bold(), "function call".cyan());
+						arguments.insert(0, this_object.clone().evaluate_at_compile_time()?);
 					}
 				}
 			}

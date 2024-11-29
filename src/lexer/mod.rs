@@ -230,6 +230,7 @@ pub enum TokenType {
 	/// identifiers, which will cause issues when parsing. Please be careful when moving around this keyword or the `Identifier` token type!
 	KeywordWhile,
 	KeywordDefault,
+	KeywordWith,
 
 	KeywordEither,
 
@@ -359,6 +360,7 @@ impl TokenType {
 			Self::KeywordRepresent => regex_macro::regex!(r"^represent\b"),
 			Self::KeywordAs => regex_macro::regex!(r"^as\b"),
 			Self::KeywordDefault => regex_macro::regex!(r"^default\b"),
+			Self::KeywordWith => regex_macro::regex!(r"^with\b"),
 
 			// Left opening groupings
 			Self::LeftAngleBracket => regex_macro::regex!("^<"),
@@ -397,7 +399,7 @@ impl TokenType {
 
 			// Ignored tokens
 			Self::Whitespace => regex_macro::regex!(r"^\s"),
-			Self::LineComment => regex_macro::regex!(r"^//[^\n\r]*"),
+			Self::LineComment => regex_macro::regex!(r"^#[^\n\r]*"),
 		}
 	}
 
@@ -476,6 +478,8 @@ impl Token {
 			| TokenType::KeywordForEach
 			| TokenType::KeywordIn
 			| TokenType::KeywordWhile
+			| TokenType::KeywordWith
+			| TokenType::KeywordDefault
 			| TokenType::KeywordEither => context().theme.keyword(),
 
 			// Identifiers

@@ -24,7 +24,7 @@ use crate::{
 	step, STDLIB,
 };
 
-/// Run a cabin file or project without outputting any permanent files.
+/// Run a cabin file or project.
 #[derive(clap::Parser)]
 pub struct RunCommand {
 	path: Option<String>,

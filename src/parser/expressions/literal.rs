@@ -255,12 +255,12 @@ impl Debug for LiteralObject {
 			let function = Either::from_literal(self).unwrap();
 			return write!(
 				f,
-				"{} {{\n{}\n}}",
+				"{} {{ {} }}",
 				"either".style(context().theme.keyword()),
 				function
 					.variant_names()
 					.iter()
-					.map(|variant_name| format!("\t{}", variant_name.unmangled_name().red()))
+					.map(|variant_name| format!("{}", variant_name.unmangled_name().red()))
 					.collect::<Vec<_>>()
 					.join(", ")
 			);

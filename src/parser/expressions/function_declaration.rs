@@ -205,9 +205,6 @@ impl CompileTime for FunctionDeclaration {
 		debug_log!("Compile-Time Evaluating the return type of a {}", "function declaration".cyan());
 		let return_type = self.return_type.map(|return_type| return_type.evaluate_as_type()).transpose()?;
 
-		debug_log!("{} the \"this object\" of a {}", "Compile-Time Evaluating".green().bold(), "function declaration".cyan());
-		let this_object = self.this_object.map(|this| this.evaluate_at_compile_time()).transpose()?;
-
 		let tags = {
 			let debug_section = debug_start!("Evaluating the tags on a {}", "function declaration".cyan());
 			let evaluated = self.tags.evaluate_at_compile_time()?;
@@ -223,7 +220,7 @@ impl CompileTime for FunctionDeclaration {
 			body: self.body,
 			return_type,
 			tags,
-			this_object,
+			this_object: self.this_object,
 			name: self.name,
 			span: self.span,
 			outer_scope_id: self.outer_scope_id,

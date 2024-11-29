@@ -1,6 +1,6 @@
 let This = group {};
 
-// Optionals -----------------------------------------------------------------------------------------------------------------
+# Optionals -----------------------------------------------------------------------------------------------------------------
 
 let Nothing = either {
 	nothing
@@ -11,7 +11,10 @@ let Optional = oneof<Data> {
 	Nothing
 };
 
-let Text = group {};
+let Text = group {
+	#[builtin<"Text.length">]
+	length = action(this: Anything): Number
+};
 
 let Anything = group {
 
@@ -67,8 +70,8 @@ let Boolean = either {
 	false
 };
 
-// The tag for a built-in function. Functions that are built into the Cabin compiler and run with native code are marked with this, usually
-// via the `builtin<>` function.
+# The tag for a built-in function. Functions that are built into the Cabin compiler and run with native code are marked with this, usually
+# via the `builtin<>` function.
 let BuiltinTag = group {
 	internal_name: Text
 };

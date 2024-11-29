@@ -1,33 +1,34 @@
-// The Cabin prelude. This code is placed implicitly at the beginning of all Cabin files, aside from the standard library.
-// It just brings some commonly used names into scope.
+# The Cabin prelude. This code is placed implicitly at the beginning of all Cabin files, aside from the standard library.
+# It just brings some commonly used names into scope.
 
-// Anything
+# Anything
 let Anything = cabin.Anything;
 let AsAnything = cabin.AsAnything;
+# default represent<T: Anything> T as Anything with AsAnything;
 
-// Primitives
+# Primitives
 let Text = cabin.Text;
 let Number = cabin.Number;
 
-// Booleans
+# Booleans
 let Boolean = cabin.Boolean;
 let true = Boolean.true;
 let false = Boolean.false;
 
-// Optionals
+# Optionals
 let Optional = cabin.Optional;
 let nothing = cabin.Nothing.nothing;
 
-// Results
+# Results
 let Attempted = cabin.Attempted;
 let Error = cabin.Error;
 
-// Collections
+# Collections
 let List = cabin.List;
 let Map = cabin.Map;
 let Object = cabin.Object;
 
-// System
+# System
 let system = cabin.system;
 let print = system.terminal.print;
 let input = system.terminal.input;

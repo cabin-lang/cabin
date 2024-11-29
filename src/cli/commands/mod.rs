@@ -86,7 +86,7 @@ macro_rules! step {
 					move_cursor_up_and_over($crate::api::context::context().lines_printed, ($crate::api::context::context().config().options().tabs(1) + "evaluating abstract syntax tree... ").len());
 				}
 
-				if $action != "Running" {
+				if !$object.starts_with("compiled") {
 					println!("{}", "Error:".bold().red());
 				}
 
