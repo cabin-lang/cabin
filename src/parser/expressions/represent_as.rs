@@ -48,7 +48,7 @@ impl Parse for RepresentAs {
 		let start = tokens.pop(TokenType::KeywordRepresent)?.span;
 		let outer_scope_id = context().scope_data.unique_id();
 
-		context().scope_data.enter_new_unlabeled_scope(ScopeType::RepresentAs);
+		context().scope_data.enter_new_scope(ScopeType::RepresentAs);
 		let inner_scope_id = context().scope_data.unique_id();
 
 		let compile_time_parameters = if_then_else_default!(tokens.next_is(TokenType::LeftAngleBracket), {
@@ -83,7 +83,7 @@ impl Parse for RepresentAs {
 			let mut value = Expression::parse(tokens)?;
 
 			// Set tags
-			if let Some(tags) = tags.clone() {
+			if let Some(tags) = tags {
 				value.set_tags(tags);
 			}
 
@@ -190,7 +190,7 @@ impl RepresentAs {
 			if literal.type_name() == &"Parameter".into() {
 				let parameter = Parameter::from_literal(literal).unwrap();
 				let anything: VirtualPointer = *context().scope_data.get_variable("Anything").unwrap().expect_as::<VirtualPointer>()?;
-				let parameter_type = parameter.clone().get_type()?;
+				let parameter_type = parameter.get_type()?;
 				if parameter_type == anything || object.is_assignable_to_type(parameter_type)? {
 					return Ok(true);
 				}
@@ -207,8 +207,8 @@ impl RepresentAs {
 
 		if let Expression::Name(name) = self.type_to_represent.as_ref() {
 			if let Expression::Parameter(parameter) = context().scope_data.get_variable(name).unwrap() {
-				let parameter_type = parameter.clone().get_type()?;
-				return Ok(parameter_type.virtual_deref().name().unmangled_name());
+				let parameter_type = parameter.get_type()?;
+				return Ok(parameter_type.virtual_deref().name().unmangled_name().to_owned());
 			}
 		}
 
@@ -258,13 +258,13 @@ impl LiteralConvertible for RepresentAs {
 			outer_scope_id: literal.outer_scope_id(),
 			inner_scope_id: literal.inner_scope_id.unwrap(),
 			name: literal.name.clone(),
-			span: literal.span.clone(),
+			span: literal.span,
 		})
 	}
 }
 
 impl Spanned for RepresentAs {
 	fn span(&self) -> Span {
-		self.span.clone()
+		self.span
 	}
 }

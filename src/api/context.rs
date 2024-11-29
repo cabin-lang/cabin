@@ -13,14 +13,11 @@ use crate::{
 	},
 	comptime::memory::VirtualMemory,
 	lexer::Span,
-	mapped_err,
-	parser::expressions::{name::Name, Expression},
 };
 
 pub struct Context {
 	// Publicly mutable
 	pub scope_data: ScopeData,
-	pub scope_label: Option<Name>,
 	pub virtual_memory: VirtualMemory,
 	pub running_context: RunningContext,
 	pub lines_printed: usize,
@@ -41,7 +38,6 @@ impl Default for Context {
 		Context {
 			options: CabinToml::default(),
 			scope_data: ScopeData::global(),
-			scope_label: None,
 			virtual_memory: VirtualMemory::empty(),
 			side_effects_stack: Vec::new(),
 			error_location: None,
@@ -69,25 +65,9 @@ impl Context {
 		self.side_effects_stack.last().cloned().unwrap_or(true)
 	}
 
-	pub fn nothing(&mut self) -> anyhow::Result<Expression> {
-		Ok(Expression::Pointer(
-			self.scope_data
-				.get_variable("nothing")
-				.unwrap()
-				.clone()
-				.try_as_literal()
-				.cloned()
-				.map_err(mapped_err! {
-					while = format!("interpreting the value of the global variable {} as a literal", "nothing".bold().yellow()),
-				})?
-				.address
-				.unwrap(),
-		))
-	}
-
-	pub fn set_error_position(&mut self, position: &Span) {
+	pub fn set_error_position(&mut self, position: Span) {
 		if self.error_location.is_none() {
-			self.error_location = Some(position.clone());
+			self.error_location = Some(position);
 		}
 	}
 
@@ -102,7 +82,7 @@ impl Context {
 	}
 
 	pub fn error_position(&self) -> Option<Span> {
-		self.error_location.clone()
+		self.error_location
 	}
 
 	pub fn set_compiler_error_position(&mut self, position: SourceFilePosition) {

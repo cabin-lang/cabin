@@ -112,12 +112,12 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			let this = arguments
 				.first()
 				.ok_or_else(|| anyhow::anyhow!("Missing argument to {}", format!("{}.{}()", "Anything".yellow(), "to_string".blue()).bold()))?
-				.try_as_literal().cloned().map_err(mapped_err! {
+				.try_as_literal().map_err(mapped_err! {
 					while = format!("Interpreting the first argument to {} as a literal", format!("{}.{}()", "Anything".yellow(), "to_string".blue()).bold()),
 				})?;
 
 			let type_name = this.get_internal_field::<Name>("representing_type_name").unwrap_or(this.type_name());
-			Ok(string(&match type_name.unmangled_name().as_str() {
+			Ok(string(&match type_name.unmangled_name() {
 				"Number" => this.expect_as::<f64>()?.to_string(),
 				"Text" => this.expect_as::<String>()?.to_owned(),
 				_ => {

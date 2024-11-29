@@ -78,7 +78,7 @@ impl Parse for FunctionDeclaration {
 		let debug_section = debug_start!("{} a {}", "Parsing".bold().green(), "function declaration".cyan());
 		// "function" keyword
 		let start = tokens.pop(TokenType::KeywordAction)?.span;
-		let mut end = start.clone();
+		let mut end = start;
 
 		// Compile-time parameters
 		debug_log!("Parsing the compile-time parameters of {}", "function declaration".cyan());
@@ -98,7 +98,7 @@ impl Parse for FunctionDeclaration {
 		});
 
 		// Parameters
-		debug_log!("{} the parameters of {}", "Parsing".bold().green(), "function declaration".cyan());
+		debug_log!("Parsing the parameters of {}", "function declaration".cyan());
 		let parameters = if_then_else_default!(tokens.next_is(TokenType::LeftParenthesis), {
 			let mut parameters = Vec::new();
 			end = parse_list!(tokens, ListType::Parenthesized, {
@@ -123,6 +123,7 @@ impl Parse for FunctionDeclaration {
 		});
 
 		// Body
+		debug_log!("Parsing the body of a {}", "function declaration".cyan());
 		let (body, inner_scope_id) = if_then_some!(tokens.next_is(TokenType::LeftBrace), {
 			let block = Block::parse_type(tokens, ScopeType::Function)?;
 			let inner_scope_id = block.inner_scope_id;
@@ -241,7 +242,7 @@ impl TranspileToC for FunctionDeclaration {
 		// Get builtin and side effect tags
 		let mut builtin_body = None;
 		for tag in &self.tags.values {
-			if let Ok(object) = tag.try_as_literal().cloned() {
+			if let Ok(object) = tag.try_as_literal() {
 				if object.type_name() == &Name::from("BuiltinTag") {
 					let builtin_name = object.get_field_literal("internal_name").unwrap().expect_as::<String>()?.to_owned();
 					let mut parameters = self.parameters.iter().map(|parameter| parameter.name().to_c().unwrap()).collect::<Vec<_>>();
@@ -258,7 +259,7 @@ impl TranspileToC for FunctionDeclaration {
 			format!(
 				"{}{}* return_address",
 				if self.parameters.is_empty() { "" } else { ", " },
-				return_type.try_as_literal()?.clone().to_c_type()?
+				return_type.try_as_literal()?.to_c_type()?
 			)
 		} else {
 			String::new()
@@ -268,11 +269,7 @@ impl TranspileToC for FunctionDeclaration {
 			"({}{}) {{\n{}\n}}",
 			self.parameters
 				.iter()
-				.map(|parameter| Ok(format!(
-					"{}* {}",
-					parameter.parameter_type().try_as_literal()?.clone().to_c_type()?,
-					parameter.name().to_c()?
-				)))
+				.map(|parameter| Ok(format!("{}* {}", parameter.parameter_type().try_as_literal()?.to_c_type()?, parameter.name().to_c()?)))
 				.collect::<anyhow::Result<Vec<_>>>()?
 				.join(", "),
 			return_type_c,
@@ -324,14 +321,14 @@ impl LiteralConvertible for FunctionDeclaration {
 			outer_scope_id: literal.outer_scope_id(),
 			inner_scope_id: literal.inner_scope_id,
 			name: literal.name.clone(),
-			span: literal.span.to_owned(),
+			span: literal.span,
 		})
 	}
 }
 
 impl Spanned for FunctionDeclaration {
 	fn span(&self) -> Span {
-		self.span.clone()
+		self.span
 	}
 }
 

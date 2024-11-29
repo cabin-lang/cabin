@@ -65,15 +65,21 @@ impl VirtualPointer {
 	pub fn virtual_deref_mut(&self) -> &'static mut LiteralObject {
 		context().virtual_memory.memory.get_mut(&self.0).unwrap()
 	}
+
+	pub fn try_map<Error>(self, mapping_function: fn(LiteralObject) -> Result<LiteralObject, Error>) -> Result<VirtualPointer, Error> {
+		let original = context().virtual_memory.memory.remove(&self.0).unwrap();
+		let mut mapped = mapping_function(original)?;
+		mapped.address = Some(self);
+		context().virtual_memory.memory.insert(self.0, mapped);
+		Ok(self)
+	}
 }
 
 impl CompileTime for VirtualPointer {
 	type Output = VirtualPointer;
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
-		let evaluated = self.virtual_deref().clone().evaluate_at_compile_time()?;
-		context().virtual_memory.memory.insert(self.0, evaluated);
-		Ok(self)
+		self.try_map(LiteralObject::evaluate_at_compile_time)
 	}
 }
 
@@ -92,13 +98,13 @@ impl std::fmt::Display for VirtualPointer {
 
 impl TranspileToC for VirtualPointer {
 	fn to_c(&self) -> anyhow::Result<String> {
-		Ok(format!("{}_{}", self.virtual_deref().clone().name.to_c()?, self))
+		Ok(format!("{}_{}", self.virtual_deref().name.to_c()?, self))
 	}
 }
 
 impl Typed for VirtualPointer {
 	fn get_type(&self) -> anyhow::Result<VirtualPointer> {
-		self.virtual_deref().clone().get_type()
+		self.virtual_deref().get_type()
 	}
 }
 
@@ -218,12 +224,12 @@ impl VirtualMemory {
 	///
 	/// An owned `Vec` containing tuples of owned `VirtualPointers` and `LiteralObjects` representing every object stored in this
 	/// virtual memory.
-	pub fn entries(&self) -> Vec<(VirtualPointer, LiteralObject)> {
+	pub fn entries(&self) -> Vec<(VirtualPointer, &LiteralObject)> {
 		self.memory
 			.iter()
 			.collect::<Vec<_>>()
 			.into_iter()
-			.map(|(address, object)| (VirtualPointer(*address), object.clone()))
+			.map(|(address, object)| (VirtualPointer(*address), object))
 			.collect()
 	}
 }

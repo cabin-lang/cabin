@@ -219,7 +219,7 @@ impl LiteralObject {
 	}
 
 	pub fn to_c_type(&self) -> anyhow::Result<String> {
-		Ok(match self.type_name.unmangled_name().as_str() {
+		Ok(match self.type_name.unmangled_name() {
 			"Object" => format!("type_{}_{}", self.name.to_c()?, self.address.unwrap()),
 			_ => {
 				format!("group_{}_{}", self.name.mangled_name(), self.address.unwrap())
@@ -281,7 +281,7 @@ impl Debug for LiteralObject {
 			}
 			builder += &format!(
 				"\n\t{} = {}{},",
-				match field_pointer.virtual_deref().type_name.unmangled_name().as_str() {
+				match field_pointer.virtual_deref().type_name.unmangled_name() {
 					"Group" => field_name.unmangled_name().yellow(),
 					"OneOf" => field_name.unmangled_name().yellow(),
 					_ => field_name.unmangled_name().red(),
@@ -351,7 +351,7 @@ impl CompileTime for LiteralObject {
 			self.type_name.unmangled_name().yellow()
 		);
 		let address = self.address;
-		let mut literal = match self.type_name().unmangled_name().as_str() {
+		let mut literal = match self.type_name().unmangled_name() {
 			"Function" => FunctionDeclaration::from_literal(&self)?.evaluate_at_compile_time()?.to_literal(),
 			"Group" => GroupDeclaration::from_literal(&self)?.evaluate_at_compile_time()?.to_literal(),
 			"Either" => Either::from_literal(&self)?.evaluate_at_compile_time()?.to_literal(),
@@ -430,26 +430,26 @@ pub trait LiteralConvertible: Sized {
 
 impl TranspileToC for LiteralObject {
 	fn to_c(&self) -> anyhow::Result<String> {
-		Ok(match self.type_name.unmangled_name().as_str() {
+		Ok(match self.type_name.unmangled_name() {
 			"Number" => {
 				format!(
 					"&({}) {{ .internal_value = {} }}",
-					self.get_type()?.virtual_deref().clone().to_c_type()?,
+					self.get_type()?.virtual_deref().to_c_type()?,
 					self.expect_as::<f64>()?.to_owned()
 				)
 			},
 			"Text" => {
 				format!(
 					"&({}) {{ .internal_value = \"{}\" }}",
-					self.get_type()?.virtual_deref().clone().to_c_type()?,
+					self.get_type()?.virtual_deref().to_c_type()?,
 					self.expect_as::<String>()?.to_owned()
 				)
 			},
 			_ => {
 				// Type name
-				let type_name = match self.type_name.unmangled_name().as_str() {
+				let type_name = match self.type_name.unmangled_name() {
 					"Object" => format!("type_{}_{}", self.name.to_c()?, self.address.unwrap()),
-					_ => self.get_type()?.virtual_deref().clone().to_c_type()?,
+					_ => self.get_type()?.virtual_deref().to_c_type()?,
 				};
 
 				// Create string builder
@@ -474,6 +474,6 @@ impl TranspileToC for LiteralObject {
 
 impl Spanned for LiteralObject {
 	fn span(&self) -> Span {
-		self.span.clone()
+		self.span
 	}
 }

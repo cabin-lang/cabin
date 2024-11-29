@@ -28,7 +28,7 @@ impl Parse for Statement {
 		let statement = match tokens.peek_type()? {
 			TokenType::KeywordLet | TokenType::TagOpening => Statement::Declaration(Declaration::parse(tokens)?),
 			TokenType::Identifier => {
-				if tokens.peek_type2()? == &TokenType::KeywordIs {
+				if tokens.peek_type2()? == TokenType::KeywordIs {
 					let tail = Statement::Tail(TailStatement::parse(tokens)?);
 					tokens.pop(TokenType::Semicolon)?;
 					tail

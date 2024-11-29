@@ -61,7 +61,7 @@ fn parse_binary_expression(operation: &BinaryOperation, tokens: &mut VecDeque<To
 	let mut expression = operation.parse_precedent(tokens)?;
 
 	while tokens.next_is_one_of(operation.token_types) {
-		let operator_token = tokens.pop(tokens.peek_type()?.clone())?;
+		let operator_token = tokens.pop(tokens.peek_type()?)?;
 		let right = operation.parse_precedent(tokens)?;
 		expression = Expression::FunctionCall(FunctionCall::from_binary_operation(expression, right, operator_token).map_err(mapped_err! {
 			while = "converting a binary operation into a function call expression",

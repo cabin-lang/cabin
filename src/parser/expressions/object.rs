@@ -163,7 +163,7 @@ impl Parse for ObjectConstructor {
 			let mut value = Expression::parse(tokens)?;
 
 			// Set tags
-			if let Some(tags) = tags.clone() {
+			if let Some(tags) = tags {
 				value.set_tags(tags);
 			}
 
@@ -203,17 +203,15 @@ impl CompileTime for ObjectConstructor {
 		let previous = context().scope_data.set_current_scope(self.inner_scope_id);
 
 		// Get object type
-		let object_type = if_then_some!(!matches!(self.type_name.unmangled_name().as_str(), "Group" | "Module" | "Object"), {
+		let object_type = if_then_some!(!matches!(self.type_name.unmangled_name(), "Group" | "Module" | "Object"), {
 			GroupDeclaration::from_literal(
-				&self
-					.type_name
+				self.type_name
 					.clone()
 					.evaluate_at_compile_time()
 					.map_err(mapped_err! {
 						while = format!("evaluating the type of an object constructor at compile time"),
 					})?
 					.try_as_literal()
-					.cloned()
 					.map_err(mapped_err! {
 						while = format!("interpreting an object constructor's type (\"{}\") as a literal", self.type_name.unmangled_name().bold().cyan()),
 					})?,
@@ -313,7 +311,7 @@ impl TranspileToC for ObjectConstructor {
 
 impl Spanned for ObjectConstructor {
 	fn span(&self) -> Span {
-		self.span.clone()
+		self.span
 	}
 }
 

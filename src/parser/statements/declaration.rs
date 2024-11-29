@@ -50,7 +50,6 @@ impl Parse for Declaration {
 		// Name
 		tokens.pop(TokenType::KeywordLet)?;
 		let name = Name::parse(tokens)?;
-		context().scope_label = Some(name.clone());
 
 		// Value
 		tokens.pop(TokenType::Equal)?;
@@ -58,12 +57,13 @@ impl Parse for Declaration {
 		let mut value = Expression::parse(tokens)?;
 
 		// Tags
-		if let Some(tags) = tags.clone() {
+		if let Some(tags) = tags {
 			value.set_tags(tags);
 		}
 
 		// Set name
 		value.try_set_name(name.clone());
+		value.try_set_scope_label(name.clone());
 
 		// Add the name declaration to the scope
 		context().scope_data.declare_new_variable(name.clone(), value).map_err(mapped_err! {
@@ -97,7 +97,7 @@ impl CompileTime for Declaration {
 				while = format!("getting the value of the declaration of \"{}\"", self.name.unmangled_name().bold().cyan()),
 			})?
 			.clone()
-			.evaluate_at_compile_time()?;
+			.evaluate_at_compile_time()?; // TODO: use a mapping function instead of cloning
 		context().scope_data.reassign_variable_from_id(&self.name, evaluated, self.scope_id)?;
 
 		// Return the declaration
@@ -111,7 +111,7 @@ impl TranspileToC for Declaration {
 		Ok(format!(
 			"void* {} = {};",
 			self.name.to_c()?,
-			self.value()?.clone().to_c().map_err(mapped_err! {
+			self.value()?.to_c().map_err(mapped_err! {
 				while = format!("transpiling the value of the initial declaration for the variable \"{}\" to C", self.name.unmangled_name()),
 			})?
 		))

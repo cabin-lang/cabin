@@ -40,7 +40,7 @@ impl Parse for GroupDeclaration {
 	fn parse(tokens: &mut VecDeque<Token>) -> anyhow::Result<Self::Output> {
 		let start = tokens.pop(TokenType::KeywordGroup)?.span;
 		let outer_scope_id = context().scope_data.unique_id();
-		context().scope_data.enter_new_unlabeled_scope(ScopeType::Group);
+		context().scope_data.enter_new_scope(ScopeType::Group);
 		let inner_scope_id = context().scope_data.unique_id();
 
 		// Fields
@@ -66,7 +66,7 @@ impl Parse for GroupDeclaration {
 				let mut value = Expression::parse(tokens)?;
 
 				// Set tags
-				if let Some(tags) = tags.clone() {
+				if let Some(tags) = tags {
 					value.set_tags(tags);
 				}
 
@@ -181,15 +181,15 @@ impl TranspileToC for GroupDeclaration {
 			builder += &format!(
 				"\n\t{}* {};",
 				if let Some(field_type) = &field.field_type {
-					field_type.try_as_literal()?.clone().to_c_type()?
+					field_type.try_as_literal()?.to_c_type()?
 				} else {
-					field.value.as_ref().unwrap_or(&Expression::Void(())).get_type()?.virtual_deref().clone().to_c_type()?
+					field.value.as_ref().unwrap_or(&Expression::Void(())).get_type()?.virtual_deref().to_c_type()?
 				},
 				field.name.to_c()?
 			);
 		}
 
-		match self.name.unmangled_name().as_str() {
+		match self.name.unmangled_name() {
 			"Text" => builder += "\n\tchar* internal_value;",
 			"Number" => builder += "\n\tfloat internal_value;",
 			"Function" => builder += "\n\tvoid* call;",
@@ -230,14 +230,14 @@ impl LiteralConvertible for GroupDeclaration {
 			outer_scope_id: literal.outer_scope_id(),
 			inner_scope_id: literal.inner_scope_id.unwrap(),
 			name: literal.name.clone(),
-			span: literal.span.clone(),
+			span: literal.span,
 		})
 	}
 }
 
 impl Spanned for GroupDeclaration {
 	fn span(&self) -> crate::lexer::Span {
-		self.span.clone()
+		self.span
 	}
 }
 

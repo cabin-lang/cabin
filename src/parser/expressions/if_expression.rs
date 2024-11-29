@@ -1,5 +1,5 @@
 use crate::{
-	api::context::context,
+	api::{context::context, scope::ScopeId},
 	comptime::CompileTime,
 	lexer::{Span, TokenType},
 	mapped_err,
@@ -18,6 +18,7 @@ pub struct IfExpression {
 	body: Box<Expression>,
 	else_body: Option<Box<Expression>>,
 	span: Span,
+	inner_scope_id: ScopeId,
 }
 
 impl Parse for IfExpression {
@@ -26,7 +27,7 @@ impl Parse for IfExpression {
 	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
 		let start = tokens.pop(TokenType::KeywordIf)?.span;
 		let condition = Box::new(Expression::parse(tokens)?);
-		let body = Box::new(Expression::Block(Block::parse(tokens)?));
+		let body = Block::parse(tokens)?;
 		let mut end = body.span();
 		let else_body = if tokens.next_is(TokenType::KeywordOtherwise) {
 			tokens.pop(TokenType::KeywordOtherwise).unwrap_or_else(|_| unreachable!());
@@ -38,7 +39,8 @@ impl Parse for IfExpression {
 		};
 		Ok(IfExpression {
 			condition,
-			body,
+			inner_scope_id: body.inner_scope_id,
+			body: Box::new(Expression::Block(body)),
 			else_body,
 			span: start.to(&end),
 		})
@@ -92,6 +94,7 @@ impl CompileTime for IfExpression {
 			body: Box::new(body),
 			else_body,
 			span: self.span,
+			inner_scope_id: self.inner_scope_id,
 		}))
 	}
 }
@@ -120,6 +123,12 @@ impl TranspileToC for IfExpression {
 
 impl Spanned for IfExpression {
 	fn span(&self) -> Span {
-		self.span.clone()
+		self.span
+	}
+}
+
+impl IfExpression {
+	pub fn inner_scope_id(&self) -> ScopeId {
+		self.inner_scope_id
 	}
 }

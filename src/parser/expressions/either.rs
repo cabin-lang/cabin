@@ -84,7 +84,7 @@ impl LiteralConvertible for Either {
 			scope_id: literal.outer_scope_id(),
 			inner_scope_id: literal.inner_scope_id.unwrap(),
 			name: literal.name.clone(),
-			span: literal.span.clone(),
+			span: literal.span,
 		})
 	}
 }

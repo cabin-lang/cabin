@@ -112,7 +112,7 @@ fn get_source_code_directory(root_dir: &PathBuf) -> anyhow::Result<CabinDirector
 fn add_modules_to_scope(directory: CabinDirectory<Module>) -> anyhow::Result<ObjectConstructor> {
 	let mut fields = Vec::new();
 
-	context().scope_data.enter_new_unlabeled_scope(ScopeType::File);
+	context().scope_data.enter_new_scope(ScopeType::File);
 	let inner_scope_id = context().scope_data.unique_id();
 	for (file_name, file_module) in directory.source_files {
 		let value = Expression::ObjectConstructor(file_module.into_object().unwrap());

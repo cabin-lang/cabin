@@ -40,7 +40,7 @@ impl Parse for OneOf {
 		let start = tokens.pop(TokenType::KeywordOneOf)?.span;
 
 		// Enter inner scope
-		context().scope_data.enter_new_unlabeled_scope(ScopeType::OneOf);
+		context().scope_data.enter_new_scope(ScopeType::OneOf);
 		let inner_scope_id = context().scope_data.unique_id();
 
 		// Compile-time parameters
@@ -131,7 +131,7 @@ impl LiteralConvertible for OneOf {
 			compile_time_parameters: literal.get_internal_field::<Vec<Name>>("compile_time_parameters")?.to_owned(),
 			outer_scope_id: literal.outer_scope_id(),
 			inner_scope_id: literal.inner_scope_id.unwrap(),
-			span: literal.span.clone(),
+			span: literal.span,
 			name: literal.name().to_owned(),
 		})
 	}
@@ -139,6 +139,6 @@ impl LiteralConvertible for OneOf {
 
 impl Spanned for OneOf {
 	fn span(&self) -> Span {
-		self.span.clone()
+		self.span
 	}
 }

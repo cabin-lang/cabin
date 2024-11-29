@@ -93,7 +93,7 @@ impl CompileTime for Name {
 		debug_log!("Name {} evaluated to a {}", self.unmangled_name().red(), value.kind_name().cyan());
 
 		debug_section.finish();
-		Ok(value.try_clone_pointer().unwrap_or(Expression::Name(self.clone())))
+		Ok(value.try_clone_pointer().unwrap_or(Expression::Name(self)))
 	}
 }
 
@@ -105,7 +105,7 @@ impl TranspileToC for Name {
 
 impl ToCabin for Name {
 	fn to_cabin(&self) -> String {
-		self.unmangled_name()
+		self.unmangled_name().to_owned()
 	}
 }
 
@@ -127,7 +127,7 @@ impl AsRef<Name> for Name {
 
 impl Spanned for Name {
 	fn span(&self) -> Span {
-		self.span.clone()
+		self.span
 	}
 }
 
@@ -158,15 +158,15 @@ impl Name {
 		}
 	}
 
-	pub fn unmangled_name(&self) -> String {
-		self.name.clone()
+	pub fn unmangled_name(&self) -> &str {
+		&self.name
 	}
 
 	pub fn mangled_name(&self) -> String {
 		if self.should_mangle {
 			format!("u_{}", self.name)
 		} else {
-			self.unmangled_name()
+			self.unmangled_name().to_owned()
 		}
 	}
 }

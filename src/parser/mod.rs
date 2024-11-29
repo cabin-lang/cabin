@@ -40,7 +40,7 @@ impl Parse for Module {
 	type Output = Self;
 
 	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
-		context().scope_data.enter_new_unlabeled_scope(ScopeType::File);
+		context().scope_data.enter_new_scope(ScopeType::File);
 		let inner_scope_id = context().scope_data.unique_id();
 		let mut statements = Vec::new();
 		while !tokens.is_empty() {
@@ -138,9 +138,9 @@ pub trait TokenQueueFunctionality {
 	/// A reference to the next token in the queue or `None` if the queue is empty.
 	fn peek(&self) -> anyhow::Result<&str>;
 
-	fn peek_type(&self) -> anyhow::Result<&TokenType>;
+	fn peek_type(&self) -> anyhow::Result<TokenType>;
 
-	fn peek_type2(&self) -> anyhow::Result<&TokenType>;
+	fn peek_type2(&self) -> anyhow::Result<TokenType>;
 
 	/// Returns whether the next token in the queue matches the given token type.
 	fn next_is(&self, token_type: TokenType) -> bool;
@@ -153,7 +153,7 @@ pub trait TokenQueueFunctionality {
 	/// # Returns
 	/// Whether the next token in the queue matches one of the given token types.
 	fn next_is_one_of(&self, token_types: &[TokenType]) -> bool {
-		token_types.iter().any(|token_type| self.next_is(token_type.clone()))
+		token_types.iter().any(|token_type| self.next_is(token_type.to_owned()))
 	}
 
 	fn current_position(&self) -> Option<Span>;
@@ -164,12 +164,12 @@ impl TokenQueueFunctionality for std::collections::VecDeque<Token> {
 		Ok(&self.front().ok_or_else(|| anyhow::anyhow!("Unexpected end of file"))?.value)
 	}
 
-	fn peek_type(&self) -> anyhow::Result<&TokenType> {
-		Ok(&self.front().ok_or_else(|| anyhow::anyhow!("Unexpected end of file."))?.token_type)
+	fn peek_type(&self) -> anyhow::Result<TokenType> {
+		Ok(self.front().ok_or_else(|| anyhow::anyhow!("Unexpected end of file."))?.token_type)
 	}
 
-	fn peek_type2(&self) -> anyhow::Result<&TokenType> {
-		Ok(&self.get(1).ok_or_else(|| anyhow::anyhow!("Unexpected end of file."))?.token_type)
+	fn peek_type2(&self) -> anyhow::Result<TokenType> {
+		Ok(self.get(1).ok_or_else(|| anyhow::anyhow!("Unexpected end of file."))?.token_type)
 	}
 
 	fn pop(&mut self, token_type: TokenType) -> anyhow::Result<Token> {
@@ -201,11 +201,11 @@ impl TokenQueueFunctionality for std::collections::VecDeque<Token> {
 	}
 
 	fn next_is(&self, token_type: TokenType) -> bool {
-		self.peek_type().map_or(false, |token| token == &token_type)
+		self.peek_type().map_or(false, |token| token == token_type)
 	}
 
 	fn current_position(&self) -> Option<Span> {
-		self.front().map(|front| front.span.clone())
+		self.front().map(|front| front.span)
 	}
 }
 

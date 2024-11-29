@@ -37,7 +37,7 @@ macro_rules! err {
         };
 
         if let Some(position) = error.at {
-            $crate::api::context::context().set_error_position(&position);
+            $crate::api::context::context().set_error_position(position);
         }
 
         if let Some(details) = error.details {

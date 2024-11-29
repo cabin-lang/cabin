@@ -4,6 +4,7 @@ use crate::{
 		scope::{ScopeId, ScopeType},
 	},
 	comptime::CompileTime,
+	debug_start,
 	lexer::{Span, TokenType},
 	parser::{expressions::Expression, statements::Statement, Parse, TokenQueue, TokenQueueFunctionality as _},
 	transpiler::TranspileToC,
@@ -20,21 +21,23 @@ pub struct Block {
 
 impl Block {
 	pub fn parse_type(tokens: &mut TokenQueue, scope_type: ScopeType) -> anyhow::Result<Block> {
-		if let Some(scope_label) = &context().scope_label {
-			context().scope_data.enter_new_scope(scope_type, scope_label.to_owned());
-			context().scope_label = None;
-		} else {
-			context().scope_data.enter_new_unlabeled_scope(scope_type);
-		}
+		let debug_section = debug_start!("{} a {} expression", "Compile-Time Evaluating".bold().green(), "block".cyan());
+		context().scope_data.enter_new_scope(scope_type);
 
 		let scope_id = context().scope_data.unique_id();
+
 		let start = tokens.pop(TokenType::LeftBrace)?.span;
+
 		let mut statements = Vec::new();
 		while !tokens.next_is(TokenType::RightBrace) {
 			statements.push(Statement::parse(tokens)?);
 		}
+
 		let end = tokens.pop(TokenType::RightBrace)?.span;
+
 		context().scope_data.exit_scope()?;
+
+		debug_section.finish();
 		Ok(Block {
 			statements,
 			inner_scope_id: scope_id,

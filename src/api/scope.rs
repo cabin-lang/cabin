@@ -7,6 +7,7 @@ use crate::{
 	parser::expressions::{name::Name, Expression},
 };
 
+/// Scopes never get deleted, so all `ScopeIds` are always guaranteed to point to a valid `Scope`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScopeId(usize);
 
@@ -102,7 +103,7 @@ impl Scope {
 	/// A reference to the declaration data of the variable that exists in this scope with the given name. If none exists, `None` is returned. If it does exist
 	/// and `Some` is returned, the returned reference will have the same lifetime as this `Scope` object, as well as the given scopes slice.
 	#[must_use]
-	pub fn get_variable<'scopes>(&'scopes self, name: impl Into<Name> + Clone, scopes: &'scopes [Self]) -> Option<&Expression> {
+	pub fn get_variable<'scopes>(&'scopes self, name: impl Into<Name> + Clone, scopes: &'scopes [Self]) -> Option<&'scopes Expression> {
 		self.variables
 			.get(&name.clone().into())
 			.or_else(|| self.parent.and_then(|parent| scopes.get(parent).unwrap().get_variable(name, scopes)))
@@ -187,6 +188,10 @@ impl Scope {
 		string.push("}".to_owned());
 		string.join("\n")
 	}
+
+	pub fn set_label(&mut self, name: Name) {
+		self.label = Some(name);
+	}
 }
 
 /// Current scope data for the language. The scopes in the language are a tree data structure, with the root being the global scope. This can be hard to implement
@@ -250,12 +255,12 @@ impl ScopeData {
 	/// # Returns
 	/// An immutable reference to the scope with this id, or `None` if no scope exists with the given id.
 	#[must_use]
-	pub fn get_scope_from_id(&self, id: ScopeId) -> Option<&Scope> {
-		self.scopes.get(id.0)
+	pub fn get_scope_from_id(&self, id: ScopeId) -> &Scope {
+		self.scopes.get(id.0).unwrap()
 	}
 
-	pub fn get_scope_mut_from_id(&mut self, id: ScopeId) -> Option<&mut Scope> {
-		self.scopes.get_mut(id.0)
+	pub fn get_scope_mut_from_id(&mut self, id: ScopeId) -> &mut Scope {
+		self.scopes.get_mut(id.0).unwrap()
 	}
 
 	/// Returns the declaration information about a variable that exists in the current scope. The variable may be declared in this scope, or any one of its parents;
@@ -283,12 +288,12 @@ impl ScopeData {
 	/// A reference to the variable declaration, or `None` if the variable does not exist in the current scope.
 	#[must_use]
 	pub fn get_variable_from_id(&self, name: impl Into<Name> + Clone, id: ScopeId) -> Option<&Expression> {
-		self.get_scope_from_id(id).and_then(|scope| scope.get_variable(name, &self.scopes))
+		self.get_scope_from_id(id).get_variable(name, &self.scopes)
 	}
 
 	/// Enters a new scope. This creates a new scope with the given scope type, and sets the current scope to be that one. The newly created scope is added
 	/// to the children of this scope, and its parent will be this scope. When you're done with this scope, use `exit_scope()`.
-	pub fn enter_new_unlabeled_scope(&mut self, scope_type: ScopeType) {
+	pub fn enter_new_scope(&mut self, scope_type: ScopeType) {
 		self.scopes.push(Scope {
 			variables: HashMap::new(),
 			index: self.scopes.len(),
@@ -296,21 +301,6 @@ impl ScopeData {
 			children: Vec::new(),
 			scope_type,
 			label: None,
-		});
-
-		let new_id = self.scopes.len() - 1;
-		self.current_mut().children.push(new_id);
-		self.current_scope = self.scopes.len() - 1;
-	}
-
-	pub fn enter_new_scope(&mut self, scope_type: ScopeType, label: Name) {
-		self.scopes.push(Scope {
-			variables: HashMap::new(),
-			index: self.scopes.len(),
-			parent: Some(self.current_scope),
-			children: Vec::new(),
-			scope_type,
-			label: Some(label),
 		});
 
 		let new_id = self.scopes.len() - 1;
@@ -378,7 +368,7 @@ impl ScopeData {
 		debug_log!(
 			"Declaring a new variable called {} in a scope of type {:?}",
 			name.unmangled_name().red(),
-			self.get_scope_from_id(id).unwrap().scope_type
+			self.get_scope_from_id(id).scope_type
 		);
 		if self.get_variable_from_id(name.clone(), id).is_some() {
 			anyhow::bail!(
@@ -434,7 +424,7 @@ impl ScopeData {
 		debug_log!(
 			"Reassigning the variable called {} in a scope of type {:?} to be {value:?}",
 			name.unmangled_name().red(),
-			self.get_scope_from_id(id).unwrap().scope_type
+			self.get_scope_from_id(id).scope_type
 		);
 		// Traverse up the parent tree looking for the declaration and reassign it
 		let mut current = Some(id.0);
@@ -497,15 +487,11 @@ impl ScopeData {
 		all_variables.sort_by(|(first, _), (second, _)| {
 			first
 				.unmangled_name()
-				.distance_to(&name.unmangled_name())
-				.cmp(&second.unmangled_name().distance_to(&name.unmangled_name()))
+				.distance_to(name.unmangled_name())
+				.cmp(&second.unmangled_name().distance_to(name.unmangled_name()))
 		});
 
-		if all_variables.len() <= max {
-			all_variables
-		} else {
-			all_variables.get(0..max).unwrap().to_vec()
-		}
+		all_variables.get(0..max).map(|slice| slice.to_vec()).unwrap_or(all_variables)
 	}
 
 	/// Returns the unique ID of the scope of the current file.
@@ -517,7 +503,7 @@ impl ScopeData {
 	pub fn file_id(&self) -> ScopeId {
 		let mut current = self.current();
 		while current.scope_type != ScopeType::File {
-			current = self.get_scope_from_id(ScopeId(*current.parent.as_ref().unwrap())).unwrap();
+			current = self.get_scope_from_id(ScopeId(*current.parent.as_ref().unwrap()));
 		}
 		ScopeId(current.index)
 	}
@@ -549,7 +535,6 @@ pub trait Levenshtein {
 	/// Returns the Levenshtein distance between this string and another string. This distance is smaller the closer
 	/// the two strings are. This is used by the compiler to give suggestions for variables with close names
 	/// when a variable can't be found.
-
 	fn distance_to(&self, other: &str) -> usize;
 }
 
@@ -575,27 +560,27 @@ impl Levenshtein for str {
 		let mut substitution_cost: usize;
 
 		let mut dummy;
-		let m = self.len();
-		let n = other.len();
+		let first_length = self.len();
+		let second_length = other.len();
 
 		let mut v0 = Vec::new();
 		let mut v1 = Vec::new();
 
-		for i in 0..=n {
-			v0.push(i);
+		for index in 0..=second_length {
+			v0.push(index);
 		}
 
-		for i in 0..m {
+		for index in 0..first_length {
 			if v1.is_empty() {
 				v1.push(0);
 			}
-			v1[0] = i + 1;
+			v1[0] = index + 1;
 
-			for j in 0..n {
+			for j in 0..second_length {
 				deletion_cost = v0[j + 1] + 1;
 				insertion_cost = v1[j] + 1;
 
-				substitution_cost = if self.chars().nth(i) == other.chars().nth(j) { v0[j] } else { v0[j] + 1 };
+				substitution_cost = if self.chars().nth(index) == other.chars().nth(j) { v0[j] } else { v0[j] + 1 };
 
 				while v1.len() <= j + 1 {
 					v1.push(0);
@@ -609,6 +594,6 @@ impl Levenshtein for str {
 			v1 = dummy;
 		}
 
-		v0[n]
+		v0[second_length]
 	}
 }

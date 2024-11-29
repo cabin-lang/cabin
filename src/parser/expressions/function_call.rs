@@ -35,7 +35,7 @@ impl Parse for PostfixOperators {
 		// Primary expression
 		let mut expression = FieldAccess::parse(tokens)?;
 		let start = expression.span();
-		let mut end = start.clone();
+		let mut end = start;
 
 		// Postfix function call operators
 		while tokens.next_is_one_of(&[TokenType::LeftParenthesis, TokenType::LeftAngleBracket]) {
@@ -252,7 +252,7 @@ impl CompileTime for FunctionCall {
 
 				// Get builtin and side effect tags
 				for tag in &function_declaration.tags().values {
-					if let Ok(object) = tag.try_as_literal().cloned() {
+					if let Ok(object) = tag.try_as_literal() {
 						if object.type_name() == &Name::from("BuiltinTag") {
 							builtin_name = Some(
 								object
@@ -310,7 +310,7 @@ impl TranspileToC for FunctionCall {
 		let function = FunctionDeclaration::from_literal(self.function.clone().evaluate_at_compile_time()?.expect_as::<VirtualPointer>()?.virtual_deref())?;
 
 		let return_type = if let Some(return_type) = function.return_type() {
-			format!("{}* return_address;", return_type.try_as_literal()?.clone().to_c_type()?)
+			format!("{}* return_address;", return_type.try_as_literal()?.to_c_type()?)
 		} else {
 			String::new()
 		};
@@ -341,14 +341,14 @@ impl TranspileToC for FunctionCall {
 				let mut parameters = function
 					.parameters()
 					.iter()
-					.map(|parameter| Ok(format!("{}*", parameter.parameter_type().try_as_literal()?.clone().to_c_type()?)))
+					.map(|parameter| Ok(format!("{}*", parameter.parameter_type().try_as_literal()?.to_c_type()?)))
 					.collect::<anyhow::Result<Vec<_>>>()?
 					.join(", ");
 				if let Some(return_type) = function.return_type().as_ref() {
 					if !parameters.is_empty() {
 						parameters += ", ";
 					}
-					parameters += &format!("{}*", return_type.try_as_literal()?.clone().to_c_type()?);
+					parameters += &format!("{}*", return_type.try_as_literal()?.to_c_type()?);
 				}
 				parameters
 			},
@@ -365,7 +365,7 @@ impl TranspileToC for FunctionCall {
 			argument_declaration = self
 				.arguments
 				.iter()
-				.map(|argument| Ok(format!("{}* arg0 = {};", argument.get_type()?.virtual_deref().clone().to_c_type()?, argument.to_c()?)))
+				.map(|argument| Ok(format!("{}* arg0 = {};", argument.get_type()?.virtual_deref().to_c_type()?, argument.to_c()?)))
 				.collect::<anyhow::Result<Vec<_>>>()?
 				.join(", "),
 			arguments = (0..self.arguments.len()).map(|index| format!("arg{index}")).collect::<Vec<_>>().join(", "),
@@ -422,7 +422,7 @@ impl Typed for FunctionCall {
 
 impl Spanned for FunctionCall {
 	fn span(&self) -> Span {
-		self.span.clone()
+		self.span
 	}
 }
 

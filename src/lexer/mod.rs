@@ -28,7 +28,7 @@ use crate::{
 /// it is just called `Dot`. The names of the tokens should be written parser-agnostic, meaning they should have no "knowledge" of the actual use cases of the
 /// token in the language. This helps make parser changes easier, as we can repurpose token types without having to rename them and without causing confusion
 /// or ambiguity in what they refer to.
-#[derive(strum_macros::EnumIter, PartialEq, Eq, Debug, Clone)]
+#[derive(strum_macros::EnumIter, PartialEq, Eq, Debug, Clone, Copy)]
 pub enum TokenType {
 	/// The "tag opening" token type. This marks the start of a list of tags on a variable declaration. Please note that this only notes the *start* of such
 	/// a list, not the entire list. To be specific, this *only* matches the character sequence `#[`. All tokens after that sequenced are tokenized as normal, including
@@ -500,7 +500,7 @@ impl Token {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
 pub struct Span {
 	start: usize,
 	length: usize,
@@ -576,7 +576,7 @@ pub fn tokenize_program(code: &str, is_prelude: bool) -> anyhow::Result<VecDeque
 
 			// Add the token
 			let token = Token {
-				token_type: token_type.clone(),
+				token_type,
 				value,
 				span: Span { start: position, length },
 			};
@@ -593,9 +593,9 @@ pub fn tokenize_program(code: &str, is_prelude: bool) -> anyhow::Result<VecDeque
 
 	if !is_prelude {
 		for (index, token) in tokens.iter().enumerate() {
-			let style = token.style(tokens.get(index + 1)).clone();
+			let style = token.style(tokens.get(index + 1));
 			for character in token.value.chars() {
-				context().colored_program.push(character.to_string().style(&style));
+				context().colored_program.push(character.to_string().style(style));
 			}
 		}
 	}

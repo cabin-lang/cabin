@@ -226,7 +226,7 @@ impl TranspileToC for FieldAccess {
 
 impl Spanned for FieldAccess {
 	fn span(&self) -> Span {
-		self.span.clone()
+		self.span
 	}
 }
 

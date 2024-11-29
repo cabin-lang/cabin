@@ -76,6 +76,6 @@ impl TranspileToC for ForEachLoop {
 
 impl Spanned for ForEachLoop {
 	fn span(&self) -> Span {
-		self.span.clone()
+		self.span
 	}
 }

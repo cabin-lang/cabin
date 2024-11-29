@@ -263,6 +263,18 @@ impl Expression {
 		}
 	}
 
+	pub fn try_set_scope_label(&mut self, name: Name) {
+		let scope_id = match self {
+			Self::If(if_expression) => Some(if_expression.inner_scope_id()),
+			Self::Pointer(pointer) => pointer.virtual_deref().inner_scope_id,
+			_ => None,
+		};
+
+		if let Some(scope_id) = scope_id {
+			context().scope_data.get_scope_mut_from_id(scope_id).set_label(name);
+		}
+	}
+
 	/// Returns whether this expression can be assigned to the type pointed to by `target_type`, which is generally
 	/// a call to `Typed::get_type()`.
 	///
@@ -275,7 +287,7 @@ impl Expression {
 	///
 	/// whether this expression can be assigned to the given type.
 	pub fn is_assignable_to_type(&self, target_type: VirtualPointer) -> anyhow::Result<bool> {
-		let this_type = self.get_type()?.virtual_deref().clone();
+		let this_type = self.get_type()?.virtual_deref();
 		// TODO:
 		this_type.is_type_assignable_to_type(target_type)
 	}
@@ -303,7 +315,7 @@ impl TranspileToC for Expression {
 impl Typed for Expression {
 	fn get_type(&self) -> anyhow::Result<VirtualPointer> {
 		Ok(match self {
-			Expression::Pointer(pointer) => pointer.virtual_deref().clone().get_type()?,
+			Expression::Pointer(pointer) => pointer.virtual_deref().get_type()?,
 			Expression::FunctionCall(function_call) => function_call.get_type()?,
 			Expression::Run(run_expression) => run_expression.get_type()?,
 			Expression::Parameter(parameter) => parameter.get_type()?,

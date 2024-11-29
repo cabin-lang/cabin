@@ -82,9 +82,9 @@ pub fn transpile_types() -> anyhow::Result<String> {
 	let mut builder = String::new();
 
 	for (address, value) in context().virtual_memory.entries() {
-		builder += &match value.type_name().unmangled_name().as_str() {
+		builder += &match value.type_name().unmangled_name() {
 			"Group" => {
-				let group = GroupDeclaration::from_literal(&value).map_err(mapped_err! {
+				let group = GroupDeclaration::from_literal(value).map_err(mapped_err! {
 					while = "deserializing a literal in memory to a group",
 				})?;
 				format!(
@@ -98,7 +98,7 @@ pub fn transpile_types() -> anyhow::Result<String> {
 				)
 			},
 			"Either" => {
-				let either = Either::from_literal(&value)?;
+				let either = Either::from_literal(value)?;
 				format!("enum {} {};\n\n", value.name.to_c()?, either.to_c()?,)
 			},
 			"Object" => {
@@ -106,11 +106,7 @@ pub fn transpile_types() -> anyhow::Result<String> {
 
 				// Add object fields
 				for (field_name, field_value) in value.fields() {
-					builder += &format!(
-						"\n\t{}* {};",
-						field_value.virtual_deref().clone().get_type()?.virtual_deref().clone().to_c_type()?,
-						field_name.to_c()?
-					);
+					builder += &format!("\n\t{}* {};", field_value.virtual_deref().get_type()?.virtual_deref().to_c_type()?, field_name.to_c()?);
 				}
 
 				// Finish building the string
@@ -126,9 +122,9 @@ pub fn transpile_types() -> anyhow::Result<String> {
 pub fn transpile_functions() -> anyhow::Result<String> {
 	let mut builder = String::new();
 	for (address, value) in context().virtual_memory.entries() {
-		builder += &match value.type_name().unmangled_name().as_str() {
+		builder += &match value.type_name().unmangled_name() {
 			"Function" => {
-				let function = FunctionDeclaration::from_literal(&value).map_err(mapped_err! {
+				let function = FunctionDeclaration::from_literal(value).map_err(mapped_err! {
 					while = "deserializing a function declaration literal into a function declaration",
 				})?;
 				let value = function.to_c().map_err(mapped_err! {
@@ -152,12 +148,12 @@ pub fn transpile_literals() -> anyhow::Result<String> {
 
 	// Virtual memory
 	for (address, value) in context().virtual_memory.entries() {
-		if matches!(value.type_name().unmangled_name().as_str(), "OneOf" | "Either") {
+		if matches!(value.type_name().unmangled_name(), "OneOf" | "Either") {
 			continue;
 		}
 
 		let mut current_tree = Vec::new();
-		builder += &transpile_literal(&value, address, &mut visited, &mut current_tree)?;
+		builder += &transpile_literal(value, address, &mut visited, &mut current_tree)?;
 	}
 	Ok(builder)
 }
@@ -191,12 +187,12 @@ pub fn transpile_literal(value: &LiteralObject, address: VirtualPointer, done: &
 
 	// Transpile dependencies
 	for dependency in value.dependencies() {
-		builder += &transpile_literal(&dependency.virtual_deref().clone(), dependency, done, current_cycle)?;
+		builder += &transpile_literal(dependency.virtual_deref(), dependency, done, current_cycle)?;
 	}
 
 	// Transpile self
 	let c = {
-		let type_name = value.get_type()?.virtual_deref().clone().to_c_type()?;
+		let type_name = value.get_type()?.virtual_deref().to_c_type()?;
 		format!("{}* {}_{address} = {};\n\n", type_name, value.name.to_c()?, value.to_c()?)
 	};
 
@@ -212,7 +208,7 @@ pub fn transpile_literal(value: &LiteralObject, address: VirtualPointer, done: &
 pub fn transpile_forward_declarations() -> anyhow::Result<String> {
 	let mut builder = "// Forward declarations -----------------------------------------------------------------------\n\n".to_owned();
 	for (address, value) in context().virtual_memory.entries() {
-		builder += &match value.type_name().unmangled_name().as_str() {
+		builder += &match value.type_name().unmangled_name() {
 			"Group" => format!("typedef struct {name} {name};\n", name = value.to_c_type()?),
 			"Either" => format!("typedef enum either_{name}_{address} {name}_{address};\n", name = value.name.to_c()?),
 			"Object" => {
