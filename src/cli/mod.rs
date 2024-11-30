@@ -26,14 +26,14 @@ impl RunningContext {
 	}
 }
 
-impl TryFrom<PathBuf> for RunningContext {
+impl TryFrom<&PathBuf> for RunningContext {
 	type Error = anyhow::Error;
 
-	fn try_from(path: PathBuf) -> Result<Self, Self::Error> {
-		Ok(if PathBuf::from(&path).is_dir() {
-			RunningContext::Project(Project::new(&path)?)
-		} else if PathBuf::from(&path).is_file() {
-			RunningContext::SingleFile(path)
+	fn try_from(path: &PathBuf) -> Result<Self, Self::Error> {
+		Ok(if PathBuf::from(path).is_dir() {
+			RunningContext::Project(Project::new(path)?)
+		} else if PathBuf::from(path).is_file() {
+			RunningContext::SingleFile(path.to_owned())
 		} else {
 			anyhow::bail!("Invalid path");
 		})
@@ -51,7 +51,7 @@ impl Project {
 		})
 	}
 
-	pub fn root_directory(&self) -> &PathBuf {
+	pub const fn root_directory(&self) -> &PathBuf {
 		&self.root_directory
 	}
 

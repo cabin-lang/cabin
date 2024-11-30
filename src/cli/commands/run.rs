@@ -1,5 +1,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
+use colored::Colorize;
+
 use crate::{
 	api::{
 		context::{context, Phase},
@@ -34,18 +36,57 @@ pub struct RunCommand {
 }
 
 impl CabinCommand for RunCommand {
-	fn execute(self) -> anyhow::Result<()> {
-		let path = self.path.map(PathBuf::from).unwrap_or_else(|| std::env::current_dir().unwrap());
-		context().running_context = RunningContext::try_from(path)?;
+	fn execute(self) {
+		let path = self.path.map_or_else(|| std::env::current_dir().unwrap(), PathBuf::from);
+		context().running_context = RunningContext::try_from(&path).unwrap_or_else(|error| {
+			eprintln!("{} Error running file: {error}", "Error:".bold().red());
+			std::process::exit(1);
+		});
 
 		// Standard Library
 		{
 			let debug_section = debug_start!("{} stdlib module", "Adding".bold().green());
-			let mut stdlib_tokens = tokenize_without_prelude(STDLIB)?;
-			let stdlib_ast = parse(&mut stdlib_tokens)?;
-			let evaluated_stdlib = stdlib_ast.evaluate_at_compile_time()?;
-			let stdlib_module = evaluated_stdlib.into_literal()?.store_in_memory();
-			context().scope_data.declare_new_variable("cabin", Expression::Pointer(stdlib_module))?;
+			let mut stdlib_tokens = tokenize_without_prelude(STDLIB).unwrap_or_else(|error| {
+				eprintln!(
+					"{} A fatal internal error has occurred while tokenizing the Cabin standard library: {error}",
+					"Error:".bold().red()
+				);
+				std::process::exit(1);
+			});
+			let stdlib_ast = parse(&mut stdlib_tokens).unwrap_or_else(|error| {
+				eprintln!(
+					"{} A fatal internal error has occurred while parsing the Cabin standard library: {error}",
+					"Error:".bold().red()
+				);
+				std::process::exit(1);
+			});
+			let evaluated_stdlib = stdlib_ast.evaluate_at_compile_time().unwrap_or_else(|error| {
+				eprintln!(
+					"{} A fatal internal error has occurred while evaluating the Cabin standard library at compile-time: {error}",
+					"Error:".bold().red()
+				);
+				std::process::exit(1);
+			});
+			let stdlib_module = evaluated_stdlib
+				.into_literal()
+				.unwrap_or_else(|error| {
+					eprintln!(
+						"{} A fatal internal error has occurred while converting the Cabin standard library into an object: {error}",
+						"Error:".bold().red()
+					);
+					std::process::exit(1);
+				})
+				.store_in_memory();
+			context()
+				.scope_data
+				.declare_new_variable("cabin", Expression::Pointer(stdlib_module))
+				.unwrap_or_else(|error| {
+					eprintln!(
+						"{} A fatal internal error has occurred while adding the Cabin standard library into scope: {error}",
+						"Error:".bold().red()
+					);
+					std::process::exit(1);
+				});
 			debug_section.finish();
 		}
 
@@ -59,7 +100,7 @@ impl CabinCommand for RunCommand {
 			let tokenized = step(|| tokenize_directory(root), Phase::Tokenization);
 			let module_ast = step(|| parse_directory(tokenized), Phase::Parsing);
 			let root_module = step(|| add_modules_to_scope(module_ast), Phase::Linking);
-			step(
+			let _evaluated_ast = step(
 				|| {
 					let Expression::ObjectConstructor(compile_time_evaluated_root_module) = root_module.evaluate_at_compile_time()? else {
 						unreachable!()
@@ -84,8 +125,6 @@ impl CabinCommand for RunCommand {
 		// std::fs::write("../output.c", &c_code)?;
 		// let binary_location = step!(compile(&c_code), &context, "Compiling", "generated C code");
 		// step!(run_native_executable(binary_location), &context, "Running", "compiled executable");
-
-		Ok(())
 	}
 }
 
@@ -101,10 +140,10 @@ fn get_source_code_directory(root_dir: &PathBuf) -> anyhow::Result<CabinDirector
 	for entry in std::fs::read_dir(root_dir).unwrap().filter_map(Result::ok) {
 		if entry.path().is_file() && entry.path().extension().unwrap() == "cabin" {
 			let name = entry.path().file_name().unwrap().to_str().unwrap().to_owned().strip_suffix(".cabin").unwrap().to_owned();
-			source_files.insert(name, std::fs::read_to_string(entry.path())?);
+			let _ = source_files.insert(name, std::fs::read_to_string(entry.path())?);
 		} else if entry.path().is_dir() {
 			let name = entry.path().file_name().unwrap().to_str().unwrap().to_owned().strip_suffix(".cabin").unwrap().to_owned();
-			sub_directories.insert(name.clone(), get_source_code_directory(&entry.path())?);
+			let _ = sub_directories.insert(name.clone(), get_source_code_directory(&entry.path())?);
 		}
 	}
 
@@ -123,7 +162,7 @@ fn add_modules_to_scope(directory: CabinDirectory<Module>) -> anyhow::Result<Obj
 			name: file_name.clone().into(),
 			field_type: None,
 			value: Some(Expression::Name(Name::from(file_name))),
-		})
+		});
 	}
 	context().scope_data.exit_scope()?;
 

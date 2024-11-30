@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Write as _};
 
 use colored::Colorize;
 
@@ -103,7 +103,7 @@ impl TranspileToC for Either {
 	fn to_c(&self) -> anyhow::Result<String> {
 		let mut builder = "{\n".to_owned();
 		for (variant_name, _variant_value) in &self.variants {
-			builder += &format!("\n\t{},", variant_name.to_c()?);
+			write!(builder, "\n\t{},", variant_name.to_c()?).unwrap();
 		}
 
 		builder += "\n}";

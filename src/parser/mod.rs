@@ -269,7 +269,7 @@ pub enum ListType {
 }
 
 impl ListType {
-	fn opening(&self) -> TokenType {
+	const fn opening(&self) -> TokenType {
 		match self {
 			Self::AngleBracketed => TokenType::LeftAngleBracket,
 			Self::Braced => TokenType::LeftBrace,
@@ -279,7 +279,7 @@ impl ListType {
 		}
 	}
 
-	fn closing(&self) -> TokenType {
+	const fn closing(&self) -> TokenType {
 		match self {
 			Self::AngleBracketed => TokenType::RightAngleBracket,
 			Self::Braced => TokenType::RightBrace,

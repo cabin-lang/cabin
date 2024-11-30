@@ -14,8 +14,14 @@ use crate::{
 	},
 };
 
+use std::fmt::Write as _;
+
 pub trait TranspileToC {
 	fn to_c(&self) -> anyhow::Result<String>;
+
+	fn c_prelude(&self) -> anyhow::Result<String> {
+		Ok(String::new())
+	}
 }
 
 pub fn transpile(program: &Module) -> anyhow::Result<String> {
@@ -208,13 +214,11 @@ pub fn transpile_literal(value: &LiteralObject, address: VirtualPointer, done: &
 pub fn transpile_forward_declarations() -> anyhow::Result<String> {
 	let mut builder = "// Forward declarations -----------------------------------------------------------------------\n\n".to_owned();
 	for (address, value) in context().virtual_memory.entries() {
-		builder += &match value.type_name().unmangled_name() {
-			"Group" => format!("typedef struct {name} {name};\n", name = value.to_c_type()?),
-			"Either" => format!("typedef enum either_{name}_{address} {name}_{address};\n", name = value.name.to_c()?),
-			"Object" => {
-				format!("typedef struct type_{name}_{address} type_{name}_{address};\n", name = value.name.to_c()?)
-			},
-			_ => String::new(),
+		match value.type_name().unmangled_name() {
+			"Group" => writeln!(builder, "typedef struct {name} {name};\n", name = value.to_c_type()?).unwrap(),
+			"Either" => writeln!(builder, "typedef enum either_{name}_{address} {name}_{address};", name = value.name.to_c()?).unwrap(),
+			"Object" => writeln!(builder, "typedef struct type_{name}_{address} type_{name}_{address};", name = value.name.to_c()?).unwrap(),
+			_ => {},
 		}
 	}
 	builder += "\n";

@@ -24,7 +24,7 @@ pub mod set;
 #[enum_dispatch::enum_dispatch]
 pub trait CabinCommand {
 	/// Executes this subcommand.
-	fn execute(self) -> anyhow::Result<()>;
+	fn execute(self);
 }
 
 #[derive(clap::Subcommand)]
@@ -39,14 +39,14 @@ pub fn step<T, E: Display, F: FnOnce() -> Result<T, E>>(expression: F, phase: Ph
 	context().phase = phase;
 
 	fn move_cursor_up_and_right(up: usize, right: usize) {
-		print!("\x1b[{}A", up);
-		print!("\x1b[{}C", right);
+		print!("\x1b[{up}A");
+		print!("\x1b[{right}C");
 		std::io::stdout().flush().unwrap();
 	}
 
 	fn move_cursor_down_and_left(down: usize, left: usize) {
-		print!("\x1b[{}B", down);
-		print!("\x1b[{}D", left);
+		print!("\x1b[{down}B");
+		print!("\x1b[{left}D");
 		std::io::stdout().flush().unwrap();
 	}
 
@@ -118,9 +118,9 @@ pub fn step<T, E: Display, F: FnOnce() -> Result<T, E>>(expression: F, phase: Ph
 				"\n{} {}",
 				"Error:".bold().red(),
 				if context().config().options().quiet() {
-					format!("{}", error).lines().next().unwrap().to_owned()
+					format!("{error}").lines().next().unwrap().to_owned()
 				} else {
-					format!("{}\n", error)
+					format!("{error}\n")
 				}
 			);
 
@@ -178,6 +178,7 @@ pub fn step<T, E: Display, F: FnOnce() -> Result<T, E>>(expression: F, phase: Ph
 			}
 
 			// Exit
+			#[allow(clippy::exit, reason = "This is the one place the program should be able to manually exit.")]
 			std::process::exit(1);
 		},
 	}

@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, fmt::Write as _};
 
 use colored::Colorize as _;
 
@@ -6,6 +6,7 @@ use crate::{
 	api::{
 		context::context,
 		macros::{number, string},
+		scope::ScopeId,
 		traits::TryAs as _,
 	},
 	comptime::{memory::VirtualPointer, CompileTime},
@@ -14,8 +15,6 @@ use crate::{
 	mapped_err,
 	parser::expressions::{name::Name, object::ObjectConstructor, Expression, Spanned, Typed},
 };
-
-use super::scope::ScopeId;
 
 pub struct BuiltinFunction {
 	evaluate_at_compile_time: fn(ScopeId, Vec<Expression>, Span) -> anyhow::Result<Expression>,
@@ -57,7 +56,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 	"terminal.input" => BuiltinFunction {
 		evaluate_at_compile_time: |_caller_scope_id, _arguments, span| {
 			let mut line = String::new();
-			std::io::stdin().read_line(&mut line)?;
+			let _ = std::io::stdin().read_line(&mut line)?;
 			line = line.get(0..line.len() - 1).unwrap().to_owned();
 			Ok(Expression::Pointer(*ObjectConstructor::string(&line, span).evaluate_at_compile_time()?.try_as::<VirtualPointer>()?))
 		},
@@ -106,7 +105,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 					while = format!("Interpreting the first argument to {} as a literal", format!("{}.{}()", "Anything".yellow(), "to_string".blue()).bold()),
 				})?;
 
-			let type_name = this.get_internal_field::<Name>("representing_type_name").unwrap_or(this.type_name());
+			let type_name = this.get_internal_field::<Name>("representing_type_name").unwrap_or_else(|_| this.type_name());
 			Ok(string(&match type_name.unmangled_name() {
 				"Number" => this.try_as::<f64>()?.to_string(),
 				"Text" => this.try_as::<String>()?.to_owned(),
@@ -114,7 +113,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 					let mut builder = "{".to_owned();
 
 					for (field_name, field_pointer) in this.fields() {
-						builder += &format!("\n\t{} = {},", field_name.unmangled_name(), field_pointer);
+						write!(builder, "\n\t{} = {field_pointer},", field_name.unmangled_name()).unwrap();
 					}
 
 					if !this.has_any_fields() {
@@ -171,6 +170,25 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 	},
 };
 
+/// Calls a built-in function at compile-time. Built-in functions are called at compiled time with Rust code. This is used in
+/// `FunctionCall::evaluate_at_compile_time()` to evaluate function-call expressions at compile-time when the function to call is a built-in function.
+///
+/// # Parameters
+///
+/// - `name` - The name of the built-in functions to call; This must be a key in the `BUILTINS` map.
+/// - `caller_scope_id` - The scope id of the site at which the function was called.
+/// - `arguments` - The arguments passed to the built-in function.
+/// - `span` - The span of the function call.
+///
+/// # Returns
+///
+/// The return value from the built-in function; Possibly `Expression::Void`.
+///
+/// # Errors
+///
+/// If there is no built-in function with the given name, an error is returned.
+///
+/// Also, if the built-in function throws an error while being called, that error is returned as well.
 pub fn call_builtin_at_compile_time(name: &str, caller_scope_id: ScopeId, arguments: Vec<Expression>, span: Span) -> anyhow::Result<Expression> {
 	(BUILTINS
 		.get(name)
@@ -186,6 +204,22 @@ pub fn call_builtin_at_compile_time(name: &str, caller_scope_id: ScopeId, argume
 	})
 }
 
+/// Transpiles a built-in function to C code. This is used during transpilation to supply built-in functions with bodies.
+///
+/// # Parameters
+///
+/// - `name` - The name of the built-in functions to call; This must be a key in the `BUILTINS` map.
+/// - `parameter_names` - The names of the parameters of the function to transpile.
+///
+/// # Returns
+///
+/// The C code after transpilation.
+///
+/// # Errors
+///
+/// If there is no built-in function with the given name, an error is returned.
+///
+/// Also, if the built-in function throws an error while being transpiled, that error is returned as well.
 pub fn transpile_builtin_to_c(name: &str, parameters: &[String]) -> anyhow::Result<String> {
 	(BUILTINS
 		.get(name)

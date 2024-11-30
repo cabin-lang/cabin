@@ -168,7 +168,7 @@ impl Expression {
 	///
 	/// # Returns
 	/// The name of the kind of expression of this as a string.
-	#[must_use]
+	
 	pub const fn kind_name(&self) -> &'static str {
 		match self {
 			Self::Block(_) => "block",
@@ -341,7 +341,7 @@ impl Spanned for Expression {
 			Expression::ForEachLoop(for_each_loop) => for_each_loop.span(),
 			Expression::Parameter(parameter) => parameter.span(),
 			Expression::RepresentAs(represent_as) => represent_as.span(),
-			Expression::Void(_) => panic!(),
+			Expression::Void(_) => todo!(),
 		}
 	}
 }

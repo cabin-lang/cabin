@@ -4,8 +4,6 @@ use crate::{
 	parser::expressions::{object::ObjectConstructor, Expression},
 };
 
-use super::context::context;
-
 /// Returns a `err!()` from the current function, wrapped in a `Result::Err()`.
 #[macro_export]
 macro_rules! bail_err {
@@ -27,7 +25,7 @@ macro_rules! err {
     ) => {{
         use colored::Colorize as _;
 
-		#[allow(clippy::needless_update)]
+		#[allow(clippy::needless_update, reason = "Sometimes all values are given, sometimes not.")]
 		let error = $crate::api::macros::CabinError {
             base: Some(anyhow::anyhow!($base)),
             $(process: Some("while ".to_owned() + &$process),)?
@@ -77,11 +75,11 @@ macro_rules! mapped_err {
 ///
 /// This is used by the compiler to log stack traces for printing developer information upon errors.
 ///
-/// modified from https://stackoverflow.com/a/40234666
+/// modified from <https://stackoverflow.com/a/40234666>
 #[macro_export]
 macro_rules! function {
 	() => {{
-		fn f() {}
+		const fn f() {}
 		fn type_name_of<T>(_: T) -> &'static str {
 			std::any::type_name::<T>()
 		}
@@ -94,24 +92,12 @@ macro_rules! function {
 
 /// This should only be called after parse-time.
 pub fn string(value: &str, span: Span) -> Expression {
-	let number = ObjectConstructor::string(value, span).evaluate_at_compile_time().unwrap();
-	if !number.is_pointer() {
-		panic!("Internal error: Number literal isn't a pointer");
-	}
-	number
-}
-
-pub fn cabin_true() -> anyhow::Result<Expression> {
-	context().scope_data.get_variable("true").unwrap().try_clone_pointer()
+	ObjectConstructor::string(value, span).evaluate_at_compile_time().unwrap()
 }
 
 /// This should only be called after parse-time.
 pub fn number(number: f64, span: Span) -> Expression {
-	let number = ObjectConstructor::number(number, span).evaluate_at_compile_time().unwrap();
-	if !number.is_pointer() {
-		panic!("Internal error: Number literal isn't a pointer");
-	}
-	number
+	ObjectConstructor::number(number, span).evaluate_at_compile_time().unwrap()
 }
 
 /// Returns the second value provided wrapped in `Some()` if the first value is true; Otherwise, returns `None`.
@@ -157,11 +143,11 @@ macro_rules! parse_list {
 	) => {{
 		use $crate::parser::TokenQueueFunctionality as _;
 
-		$tokens.pop($list_type.opening())?;
+		let _ = $tokens.pop($list_type.opening())?;
 		while !$tokens.next_is($list_type.closing()) {
 			$body
 			if $tokens.next_is($crate::lexer::TokenType::Comma) {
-				$tokens.pop($crate::lexer::TokenType::Comma)?;
+				let _ = $tokens.pop($crate::lexer::TokenType::Comma)?;
 			} else {
 				break;
 			}

@@ -29,7 +29,7 @@ macro_rules! toml {
 
 			impl [<$document_name:camel Toml>] {
 				$(
-					pub fn $heading(&self) -> &[<$document_name:camel $heading:camel>] {
+					pub const fn $heading(&self) -> &[<$document_name:camel $heading:camel>] {
 						&self.$heading
 					}
 
@@ -43,7 +43,7 @@ macro_rules! toml {
 				fn from(value: &mut [<$document_name:camel Toml>]) -> toml_edit::DocumentMut {
 					let mut document = toml_edit::DocumentMut::new();
 					$(
-						document.as_table_mut().insert(stringify!($heading), (&mut value.$heading).into());
+						let _ = document.as_table_mut().insert(stringify!($heading), (&mut value.$heading).into());
 					)*
 					document
 				}
@@ -126,7 +126,7 @@ macro_rules! toml {
 					fn from(value: &mut [<$document_name:camel $heading:camel>]) -> toml_edit::Item {
 						let mut table = toml_edit::Table::new();
 						$(
-							table.insert(stringify!($name), value.$name().into_toml_item());
+							let _ = table.insert(stringify!($name), value.$name().into_toml_item());
 						)*
 						toml_edit::Item::Table(table)
 					}
@@ -152,7 +152,7 @@ pub struct TomlValue<T: Clone> {
 }
 
 impl<T: Clone> TomlValue<T> {
-	pub fn new(value: T) -> TomlValue<T> {
+	pub const fn new(value: T) -> TomlValue<T> {
 		TomlValue {
 			value: Some(value),
 			choices: Vec::new(),

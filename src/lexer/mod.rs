@@ -342,7 +342,7 @@ impl TokenType {
 	///
 	/// # Returns
 	/// A regular expression pattern that matches the token type.
-	fn pattern(&self) -> &'static regex_macro::Regex {
+	fn pattern(self) -> &'static regex_macro::Regex {
 		match self {
 			// Keywords
 			Self::KeywordAction => regex_macro::regex!(r"^action\b"),
@@ -414,7 +414,7 @@ impl TokenType {
 	///
 	/// # Returns
 	/// The matched text of the token type in the given code, or `None` if no match was found.
-	#[must_use]
+
 	pub fn get_match(&self, code: &str) -> Option<String> {
 		self.pattern().find(code).map(|m| m.as_str().to_owned())
 	}
@@ -426,7 +426,7 @@ impl TokenType {
 	///
 	/// # Returns
 	/// The first token type that matches the given code, along with the matched text.
-	#[must_use]
+
 	fn find_match(code: &str) -> Option<(Self, String)> {
 		for token_type in Self::iter() {
 			if let Some(matched) = token_type.get_match(code) {
@@ -510,40 +510,34 @@ pub struct Span {
 }
 
 impl Span {
-	pub fn unknown() -> Span {
+	pub const fn unknown() -> Span {
 		Span { start: 0, length: 0 }
 	}
 
-	#[must_use]
-	pub fn cover(first: &Span, second: &Span) -> Span {
+	pub const fn cover(first: &Span, second: &Span) -> Span {
 		Span {
 			start: first.start,
 			length: (second.start + second.length).abs_diff(first.start),
 		}
 	}
 
-	#[must_use]
-	pub fn to(&self, other: &Span) -> Span {
+	pub const fn to(&self, other: &Span) -> Span {
 		Span::cover(self, other)
 	}
 
-	#[must_use]
 	pub fn contains(&self, position: usize) -> bool {
 		(self.start..self.start + self.length).contains(&position)
 	}
 
-	#[must_use]
-	pub fn start(&self) -> usize {
+	pub const fn start(&self) -> usize {
 		self.start
 	}
 
-	#[must_use]
-	pub fn end(&self) -> usize {
+	pub const fn end(&self) -> usize {
 		self.start + self.length
 	}
 
-	#[must_use]
-	pub fn length(&self) -> usize {
+	pub const fn length(&self) -> usize {
 		self.length
 	}
 }
@@ -562,7 +556,6 @@ impl Span {
 ///
 /// # Errors
 /// If the given code string is not syntactically valid Cabin code. It needn't be semantically valid, but it must be comprised of the proper tokens.
-#[allow(clippy::missing_panics_doc)]
 pub fn tokenize_program(code: &str, is_prelude: bool) -> anyhow::Result<VecDeque<Token>> {
 	let mut code = code.to_owned();
 	code = code.replace('\t', "    ");
@@ -590,7 +583,7 @@ pub fn tokenize_program(code: &str, is_prelude: bool) -> anyhow::Result<VecDeque
 		}
 		// Unrecognized token - return an error!
 		else {
-			anyhow::bail!("");
+			anyhow::bail!("Unrecognized token: {code}");
 		}
 	}
 
@@ -615,15 +608,18 @@ pub fn tokenize_program(code: &str, is_prelude: bool) -> anyhow::Result<VecDeque
 /// (I'm very creative with names, I know).
 ///
 /// # Parameters
+///
 /// - `code` - The Cabin source code. If the given code is not valid Cabin code, this function makes no guarantees to return an error, nor does it make
 /// a guarantee to return an `Ok`. This includes semantic and syntactic errors. This function will only return an error if an unrecognized token is found;
 /// Meaning a piece of code is encountered that doesn't match any known token types. This could be a non-ASCII character or just generally any unused character
 /// in the language like `@`.
 ///
 /// # Returns
+///
 /// A vector of tokens in the order they appeared in the given source code after tokenization, or an `Err` if an unrecognized token was found.
 ///
 /// # Errors
+///
 /// If the given code string is not syntactically valid Cabin code. It needn't be semantically valid, but it must be comprised of the proper tokens.
 pub fn tokenize(code: &str) -> anyhow::Result<VecDeque<Token>> {
 	let mut tokens = tokenize_program(code, false)?;
@@ -638,20 +634,36 @@ pub fn tokenize(code: &str) -> anyhow::Result<VecDeque<Token>> {
 /// The Cabin prelude is not prepended to the returned token stream. To tokenize with the prelude, use `tokenize()`.
 ///
 /// # Parameters
+///
 /// - `code` - The Cabin source code. If the given code is not valid Cabin code, this function makes no guarantees to return an error, nor does it make
 /// a guarantee to return an `Ok`. This includes semantic and syntactic errors. This function will only return an error if an unrecognized token is found;
 /// Meaning a piece of code is encountered that doesn't match any known token types. This could be a non-ASCII character or just generally any unused character
 /// in the language like `@`.
 ///
 /// # Returns
+///
 /// A vector of tokens in the order they appeared in the given source code after tokenization, or an `Err` if an unrecognized token was found.
 ///
 /// # Errors
+///
 /// If the given code string is not syntactically valid Cabin code. It needn't be semantically valid, but it must be comprised of the proper tokens.
 pub fn tokenize_without_prelude(code: &str) -> anyhow::Result<VecDeque<Token>> {
 	tokenize_program(code, false)
 }
 
+/// Tokenizes the main entry point for a Cabin program. This is identical to `tokenize`, but it wraps the code in a function declaration.
+///
+/// # Parameters
+///
+/// - `code` - The source code to tokenize
+///
+/// # Returns
+///
+/// The token stream that was generated from the source code.
+///
+/// # Errors
+///
+/// If an unrecognized token was encountered.
 pub fn tokenize_main(code: &str) -> anyhow::Result<VecDeque<Token>> {
 	let mut tokens = tokenize(code)?;
 	let mut pre_tokens = tokenize_program("let main_function = action {", true)?;

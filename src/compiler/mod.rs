@@ -1,5 +1,7 @@
 use std::{env, path::PathBuf};
 
+use crate::api::context::context;
+
 pub fn compile(c_code: &str) -> anyhow::Result<PathBuf> {
 	let c_path = env::temp_dir().join("cabin_transpiled.c");
 	std::fs::write(c_path, c_code)?;

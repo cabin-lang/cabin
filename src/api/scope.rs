@@ -7,6 +7,8 @@ use crate::{
 	parser::expressions::{name::Name, Expression},
 };
 
+use super::context::context;
+
 /// Scopes never get deleted, so all `ScopeIds` are always guaranteed to point to a valid `Scope`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScopeId(usize);
@@ -84,7 +86,7 @@ impl Scope {
 	/// # Returns
 	/// A reference to the declaration data of the variable declared in this scope with the given name. If none exists, `None` is returned. If it does exist
 	/// and `Some` is returned, the returned reference will have the same lifetime as this `Scope` object.
-	#[must_use]
+
 	pub fn get_variable_direct(&self, name: &Name) -> Option<&Expression> {
 		self.variables.get(name)
 	}
@@ -102,7 +104,7 @@ impl Scope {
 	/// # Returns
 	/// A reference to the declaration data of the variable that exists in this scope with the given name. If none exists, `None` is returned. If it does exist
 	/// and `Some` is returned, the returned reference will have the same lifetime as this `Scope` object, as well as the given scopes slice.
-	#[must_use]
+
 	pub fn get_variable<'scopes>(&'scopes self, name: impl Into<Name> + Clone, scopes: &'scopes [Self]) -> Option<&'scopes Expression> {
 		self.variables
 			.get(&name.clone().into())
@@ -120,7 +122,7 @@ impl Scope {
 	///
 	/// # Returns
 	/// All variables that exist in this scope, including those declared in ancestor scopes.
-	#[must_use]
+
 	pub fn get_variables<'scopes>(&'scopes self, scopes: &'scopes [Self]) -> Vec<(&'scopes Name, &'scopes Expression)> {
 		let mut variables = self.variables.iter().collect::<Vec<_>>();
 		if let Some(parent) = self.parent {
@@ -159,7 +161,7 @@ impl Scope {
 	///
 	/// # Returns
 	/// A string representation of this scope to debug programs.
-	#[must_use]
+
 	pub fn to_string(&self, scopes: &[Self]) -> String {
 		let mut string = vec!["{".to_owned()];
 		string.push(format!("\ttype: [{:?}]", self.scope_type));
@@ -170,17 +172,7 @@ impl Scope {
 			self.variables.keys().map(|name| name.unmangled_name()).collect::<Vec<_>>().join(",")
 		));
 		for child_scope in &self.children {
-			for line in scopes
-				.get(*child_scope)
-				.unwrap_or_else(|| {
-					panic!(
-						"Internal Error attempting to convert scope with Id {} to string representation: When looping over the scope's children, a child exists with the id {}, but this is not a valid scope index and does not point to a scope that exists.",
-						self.index, child_scope
-					)
-				})
-				.to_string(scopes)
-				.lines()
-			{
+			for line in scopes.get(*child_scope).unwrap().to_string(scopes).lines() {
 				string.push(format!("\t{line}"));
 			}
 		}
@@ -214,7 +206,7 @@ impl ScopeData {
 	///
 	/// # Returns
 	/// A newly created scope data object with an empty global scope.
-	#[must_use]
+
 	pub fn global() -> Self {
 		Self {
 			scopes: vec![Scope {
@@ -234,9 +226,7 @@ impl ScopeData {
 	/// # Returns
 	/// An immutable reference to the current scope (did you really have to ask?)
 	fn current(&self) -> &Scope {
-		self.scopes
-			.get(self.current_scope)
-			.unwrap_or_else(|| panic!("Internal Error: Context's scope_data's current_scope index does not point to a valid scope in the scope arena."))
+		self.scopes.get(self.current_scope).unwrap()
 	}
 
 	/// Returns a mutable reference to the current scope.
@@ -254,7 +244,7 @@ impl ScopeData {
 	///
 	/// # Returns
 	/// An immutable reference to the scope with this id, or `None` if no scope exists with the given id.
-	#[must_use]
+
 	pub fn get_scope_from_id(&self, id: ScopeId) -> &Scope {
 		self.scopes.get(id.0).unwrap()
 	}
@@ -272,7 +262,7 @@ impl ScopeData {
 	///
 	/// # Returns
 	/// A reference to the variable declaration, or `None` if the variable does not exist in the current scope.
-	#[must_use]
+
 	pub fn get_variable(&self, name: impl Into<Name> + Clone) -> Option<&Expression> {
 		self.current().get_variable(name, &self.scopes)
 	}
@@ -286,7 +276,7 @@ impl ScopeData {
 	///
 	/// # Returns
 	/// A reference to the variable declaration, or `None` if the variable does not exist in the current scope.
-	#[must_use]
+
 	pub fn get_variable_from_id(&self, name: impl Into<Name> + Clone, id: ScopeId) -> Option<&Expression> {
 		self.get_scope_from_id(id).get_variable(name, &self.scopes)
 	}
@@ -332,7 +322,7 @@ impl ScopeData {
 	///
 	/// # Returns
 	/// The unique ID of the current scope
-	#[must_use]
+
 	pub const fn unique_id(&self) -> ScopeId {
 		ScopeId(self.current_scope)
 	}
@@ -465,7 +455,7 @@ impl ScopeData {
 	///
 	/// # Returns
 	/// a sorted list, which are sorted by how close they are to the given variable name.
-	#[must_use]
+
 	pub fn get_variables(&self) -> Vec<(&Name, &Expression)> {
 		self.current().get_variables(&self.scopes)
 	}
@@ -481,7 +471,7 @@ impl ScopeData {
 	/// # Returns
 	/// a sorted list, of at most `max` elements, which are sorted by how close they are to the given variable
 	/// name.
-	#[must_use]
+
 	pub fn get_closest_variables(&self, name: &Name, max: usize) -> Vec<(&Name, &Expression)> {
 		let mut all_variables = self.get_variables();
 		all_variables.sort_by(|(first, _), (second, _)| {
@@ -499,7 +489,7 @@ impl ScopeData {
 	/// # Returns
 	///
 	/// The id of the scope of the current file.
-	#[must_use]
+
 	pub fn file_id(&self) -> ScopeId {
 		let mut current = self.current();
 		while current.scope_type != ScopeType::File {

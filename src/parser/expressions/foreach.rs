@@ -39,7 +39,7 @@ impl Parse for ForEachLoop {
 
 		let binding_name = Name::parse(tokens)?;
 
-		tokens.pop(TokenType::KeywordIn)?;
+		let _ = tokens.pop(TokenType::KeywordIn)?;
 
 		let iterable = Box::new(Expression::parse(tokens)?);
 

@@ -34,7 +34,7 @@ impl Theme {
 	///
 	/// # Returns
 	/// An immutable reference to the style for keywords according to this theme.
-	#[must_use]
+
 	pub const fn keyword(&self) -> &Style {
 		&self.keyword
 	}
@@ -44,7 +44,7 @@ impl Theme {
 	///
 	/// # Returns
 	/// An immutable reference to the style for variable names according to this theme.
-	#[must_use]
+
 	pub const fn variable_name(&self) -> &Style {
 		&self.variable_name
 	}
@@ -54,7 +54,7 @@ impl Theme {
 	///
 	/// # Returns
 	/// An immutable reference to the style for type names according to this theme.
-	#[must_use]
+
 	pub const fn type_name(&self) -> &Style {
 		&self.type_name
 	}
@@ -64,32 +64,27 @@ impl Theme {
 	///
 	/// # Returns
 	/// An immutable reference to the style for the background according to this theme.
-	#[must_use]
+
 	pub const fn background(&self) -> &Style {
 		&self.background
 	}
 
-	#[must_use]
 	pub const fn normal(&self) -> &Style {
 		&self.normal
 	}
 
-	#[must_use]
 	pub const fn string(&self) -> &Style {
 		&self.string
 	}
 
-	#[must_use]
 	pub const fn comment(&self) -> &Style {
 		&self.comment
 	}
 
-	#[must_use]
 	pub const fn number(&self) -> &Style {
 		&self.number
 	}
 
-	#[must_use]
 	pub const fn function(&self) -> &Style {
 		&self.function
 	}
@@ -99,7 +94,7 @@ impl Theme {
 	///
 	/// # Returns
 	/// An immutable reference to the style for line numbers according to this theme.
-	#[must_use]
+
 	pub const fn line_numbers(&self) -> &Style {
 		&self.line_numbers
 	}
@@ -171,7 +166,7 @@ pub enum ParseableTheme {
 impl ParseableTheme {
 	/// Returns a reference to the proper `Theme` object associated with this `ParseableTheme`. This shouldn't really need to be called explicitly often because
 	/// `ParseableTheme` implements `Deref<Target = Theme>`, so consider using that instead when possible.
-	#[must_use]
+
 	pub const fn get_theme(&self) -> &Theme {
 		match self {
 			Self::OneMidnight => &ONE_MIDNIGHT,
@@ -211,7 +206,7 @@ pub struct Hex {
 impl Hex {
 	/// This is an internal function that should never be used, and is only public because it must be called from the `hex!` macro, hence the long name.
 	/// To create a `Hex` color, use the `hex!` macro.
-	#[must_use]
+
 	pub const fn create_unsafely_from_raw_unvalidated_hex_string(im_not_telling_you_what_this_parameter_is_because_you_shouldnt_use_it: &'static str) -> Self {
 		Self {
 			string: im_not_telling_you_what_this_parameter_is_because_you_shouldnt_use_it,
@@ -219,8 +214,7 @@ impl Hex {
 	}
 
 	/// Returns a canonicalized `Color` object from this `Hex` color.
-	#[allow(clippy::as_conversions)]
-	#[must_use]
+
 	pub fn to_color(&self) -> Color {
 		let bigint = u32::from_str_radix(self.string.get(1..).unwrap(), 16).unwrap();
 		let r = ((bigint >> 16) & 255) as u8;
@@ -232,19 +226,13 @@ impl Hex {
 }
 
 /// Validates that a string is a valid hex color at compile-time.
-#[allow(clippy::manual_assert)]
-#[allow(unused)] // Not sure why this is necessary, it's clearly used
+#[allow(clippy::indexing_slicing, reason = "Indexing is the only option in const fns.")]
 const fn validate_hex_color(input: &str) -> &str {
 	let mut index: usize = 0;
 	let bytes = input.as_bytes();
 
-	if bytes.len() != 7 {
-		panic!("Hex string must be 7 characters long");
-	}
-
-	if !bytes[index] == b'#' {
-		panic!("Hex literal must start with a #");
-	}
+	assert!(bytes.len() == 7, "Hex string must be 7 characters long");
+	assert!(bytes[index] == b'#', "Hex literal must start with a #");
 
 	index += 1;
 
@@ -270,7 +258,7 @@ impl Color {
 	///
 	/// # Returns
 	/// The created color wrapped in a `ColorLike`.
-	#[must_use]
+
 	pub const fn rgb(red: u8, green: u8, blue: u8) -> ColorLike {
 		ColorLike::Color(Self { red, green, blue })
 	}
@@ -320,14 +308,13 @@ pub struct Style {
 	is_background: bool,
 }
 
-#[allow(unused)]
 impl Style {
 	/// Creates a new "foreground" style. This is a blank style, and applying a color to it applies a foreground color. This should be the default used for
 	/// creating styles for most token types, outside of `background`.
 	///
 	/// # Returns
 	/// The newly created foreground style
-	#[must_use]
+
 	pub const fn foreground() -> Self {
 		Self {
 			color: None,
@@ -344,7 +331,7 @@ impl Style {
 	///
 	/// # Returns
 	/// The newly created background style
-	#[must_use]
+
 	pub const fn background() -> Self {
 		Self {
 			color: None,
@@ -362,7 +349,7 @@ impl Style {
 	/// ```rust
 	/// "my string".bold().italic().underline()
 	/// ```
-	#[must_use]
+
 	pub const fn color(mut self, color: ColorLike) -> Self {
 		self.color = Some(color);
 		self
@@ -373,7 +360,7 @@ impl Style {
 	/// ```rust
 	/// "my string".bold().italic().underline()
 	/// ```
-	#[must_use]
+
 	pub const fn bold(mut self) -> Self {
 		self.bold = true;
 		self
@@ -384,7 +371,7 @@ impl Style {
 	/// ```rust
 	/// "my string".bold().italic().underline()
 	/// ```
-	#[must_use]
+
 	pub const fn underline(mut self) -> Self {
 		self.underline = true;
 		self
@@ -395,7 +382,7 @@ impl Style {
 	/// ```rust
 	/// "my string".bold().italic().underline()
 	/// ```
-	#[must_use]
+
 	pub const fn italic(mut self) -> Self {
 		self.italic = true;
 		self
@@ -406,7 +393,7 @@ impl Style {
 	/// ```rust
 	/// "my string".bold().italic().underline()
 	/// ```
-	#[must_use]
+
 	pub const fn strikethrough(mut self) -> Self {
 		self.strikethrough = true;
 		self
@@ -417,7 +404,7 @@ impl Style {
 	///
 	/// # Parameters
 	/// - `string` - The string to style and convert
-	#[must_use]
+
 	fn on(&self, string: &str) -> colored::ColoredString {
 		let mut base = colored::ColoredString::from(string);
 		if self.bold {

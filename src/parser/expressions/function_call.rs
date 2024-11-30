@@ -217,6 +217,8 @@ impl CompileTime for FunctionCall {
 				})?;
 
 				inner_debug_section.finish();
+
+				// Return value is literal
 				if return_value.try_as_literal().is_ok() {
 					debug_log!(
 						"{} compile-time evaluated into it's return value, which is a {}",
@@ -225,13 +227,14 @@ impl CompileTime for FunctionCall {
 					);
 					debug_section.finish();
 					return Ok(return_value);
-				} else {
-					debug_log!(
-						"{} compile-time couldn't be evaluated into it's non-literal return value, which is a {}",
-						"function call".cyan(),
-						return_value.kind_name().cyan()
-					);
 				}
+
+				// Return value isn't literal
+				debug_log!(
+					"{} compile-time couldn't be evaluated into it's non-literal return value, which is a {}",
+					"function call".cyan(),
+					return_value.kind_name().cyan()
+				);
 			}
 			// Builtin function
 			else {
@@ -282,11 +285,11 @@ impl CompileTime for FunctionCall {
 						inner_debug_section.finish();
 						debug_section.finish();
 						return return_value;
-					} else {
-						inner_debug_section.finish();
-						debug_section.finish();
-						return Ok(Expression::Void(()));
 					}
+
+					inner_debug_section.finish();
+					debug_section.finish();
+					return Ok(Expression::Void(()));
 				}
 
 				bail_err!(base = "Attempted to call a function that doesn't have a body.",);

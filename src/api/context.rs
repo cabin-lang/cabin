@@ -1,4 +1,4 @@
-use std::sync::LazyLock;
+use std::{fmt::Write as _, sync::LazyLock};
 
 use colored::{ColoredString, Colorize as _};
 
@@ -48,7 +48,7 @@ impl Default for Context {
 			compiler_error_position: Vec::new(),
 			warnings: Vec::new(),
 			lines_printed: 0,
-			running_context: RunningContext::try_from(std::env::current_dir().unwrap()).unwrap(),
+			running_context: RunningContext::try_from(&std::env::current_dir().unwrap()).unwrap(),
 			theme: Theme::default(),
 			colored_program: Vec::new(),
 			debug_indent: Vec::new(),
@@ -62,11 +62,11 @@ impl Context {
 	}
 
 	pub fn untoggle_side_effects(&mut self) {
-		self.side_effects_stack.pop();
+		let _ = self.side_effects_stack.pop();
 	}
 
 	pub fn has_side_effects(&self) -> bool {
-		self.side_effects_stack.last().cloned().unwrap_or(true)
+		self.side_effects_stack.last().copied().unwrap_or(true)
 	}
 
 	pub fn set_error_position(&mut self, position: Span) {
@@ -85,7 +85,7 @@ impl Context {
 		self.error_details.clone()
 	}
 
-	pub fn error_position(&self) -> Option<Span> {
+	pub const fn error_position(&self) -> Option<Span> {
 		self.error_location
 	}
 
@@ -97,31 +97,27 @@ impl Context {
 		self.compiler_error_position.clone()
 	}
 
-	#[must_use]
 	pub fn start_debug_sequence(&mut self, message: &str) -> DebugSection {
 		self.debug_indent.push(message.to_owned());
 		DebugSection
 	}
 
-	#[must_use]
 	fn end_debug_sequence(&mut self) -> String {
 		self.debug_indent.pop().unwrap()
 	}
 
-	#[must_use]
 	pub fn debug_indent(&self) -> usize {
 		self.debug_indent.len()
 	}
 
-	#[must_use]
 	pub fn colored_program(&self) -> String {
 		let mut builder = String::new();
 		for (position, character) in self.colored_program.iter().enumerate() {
 			if let Some(error_location) = self.error_position() {
 				if error_location.contains(position) {
-					builder += &format!("{}", character.clone().red().underline().bold());
+					write!(builder, "{}", character.clone().red().underline().bold()).unwrap();
 				} else {
-					builder += &format!("{}", character);
+					write!(builder, "{character}").unwrap();
 				}
 			}
 		}
@@ -184,12 +180,10 @@ impl Context {
 		}
 	}
 
-	#[must_use]
 	pub fn program(&self) -> String {
 		self.colored_program.iter().map(|part| (**part).to_owned()).collect::<String>()
 	}
 
-	#[must_use]
 	pub fn line_column(&self, span: Span) -> (usize, usize) {
 		let blank = self.program();
 
@@ -212,14 +206,17 @@ impl Context {
 		(line, column)
 	}
 
-	#[must_use]
-	pub fn config(&self) -> &CabinToml {
+	pub const fn config(&self) -> &CabinToml {
 		&self.options
 	}
 
 	/// Returns a mutable reference to the data stored in the project's `cabin.toml`. If the user is running a single
 	/// Cabin file and not in a project, an error is returned. When this value is dropped, the `cabin.toml` file is
 	/// written to update to the contents of the returned object.
+	///
+	/// # Errors
+	/// If the compiler is currently operating on a single file instead of in a project that contains options, since
+	/// single Cabin files can't contain compiler configuration.
 	pub fn cabin_toml_mut(&mut self) -> anyhow::Result<CabinTomlWriteOnDrop> {
 		let RunningContext::Project(project) = &self.running_context else {
 			anyhow::bail!("Attempted to get a mutable reference to the cabin.toml, but Cabin is not currently running in a project.");
@@ -248,27 +245,22 @@ pub struct SourceFilePosition {
 }
 
 impl SourceFilePosition {
-	#[must_use]
-	pub fn new(line: u32, column: u32, name: &'static str, function: String) -> Self {
+	pub const fn new(line: u32, column: u32, name: &'static str, function: String) -> Self {
 		Self { line, column, name, function }
 	}
 
-	#[must_use]
-	pub fn line(&self) -> u32 {
+	pub const fn line(&self) -> u32 {
 		self.line
 	}
 
-	#[must_use]
-	pub fn column(&self) -> u32 {
+	pub const fn column(&self) -> u32 {
 		self.column
 	}
 
-	#[must_use]
-	pub fn file_name(&self) -> &'static str {
+	pub const fn file_name(&self) -> &'static str {
 		self.name
 	}
 
-	#[must_use]
 	pub fn function_name(&self) -> String {
 		self.function.clone()
 	}
@@ -291,9 +283,15 @@ static CONTEXT: LazyLock<Context> = LazyLock::new(Context::default);
 
 /// Returns a non-borrow-checked static mutable reference to the program's `Context`, which holds global state
 /// data about the compiler.
-#[must_use]
+
 pub fn context() -> &'static mut Context {
-	unsafe { (&*CONTEXT as *const Context as *mut Context).as_mut().unwrap() }
+	#[allow(
+		unsafe_code,
+		reason = "This is the single place in Cabin where unsafe code is used. See the documentation for `CONTEXT` above."
+	)]
+	unsafe {
+		(&*CONTEXT as *const Context as *mut Context).as_mut().unwrap()
+	}
 }
 
 pub struct DebugSection;
@@ -321,7 +319,7 @@ pub enum Phase {
 }
 
 impl Phase {
-	pub fn action(&self) -> (&'static str, &'static str) {
+	pub const fn action(&self) -> (&'static str, &'static str) {
 		match self {
 			Phase::Stdlib => ("Adding", "standard library"),
 			Phase::ReadingSourceFiles => ("Reading", "source files"),
@@ -332,20 +330,6 @@ impl Phase {
 			Phase::Transpilation => ("Transpiling", "program to C"),
 			Phase::Compilation => ("Compiling", "C code"),
 			Phase::RunningBinary => ("Running", "executable"),
-		}
-	}
-
-	pub fn next(&self) -> Phase {
-		match self {
-			Phase::Stdlib => Phase::ReadingSourceFiles,
-			Phase::ReadingSourceFiles => Phase::Tokenization,
-			Phase::Tokenization => Phase::Parsing,
-			Phase::Parsing => Phase::Linking,
-			Phase::Linking => Phase::CompileTimeEvaluation,
-			Phase::CompileTimeEvaluation => Phase::Transpilation,
-			Phase::Transpilation => Phase::Compilation,
-			Phase::Compilation => Phase::RunningBinary,
-			Phase::RunningBinary => Phase::Stdlib,
 		}
 	}
 }

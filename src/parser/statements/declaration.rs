@@ -26,6 +26,10 @@ pub struct Declaration {
 }
 
 impl Declaration {
+	pub const fn name(&self) -> &Name {
+		&self.name
+	}
+
 	pub fn value(&self) -> anyhow::Result<&Expression> {
 		context().scope_data.get_variable_from_id(self.name.clone(), self.scope_id).ok_or_else(|| {
 			err! {
@@ -34,7 +38,7 @@ impl Declaration {
 		})
 	}
 
-	pub fn declaration_type(&self) -> &DeclarationType {
+	pub const fn declaration_type(&self) -> &DeclarationType {
 		&self.declaration_type
 	}
 }
@@ -115,11 +119,5 @@ impl TranspileToC for Declaration {
 				while = format!("transpiling the value of the initial declaration for the variable \"{}\" to C", self.name.unmangled_name()),
 			})?
 		))
-	}
-}
-
-impl Declaration {
-	pub fn name(&self) -> &Name {
-		&self.name
 	}
 }
