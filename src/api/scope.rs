@@ -520,6 +520,10 @@ impl ScopeData {
 
 		Ok(&current.scope_type)
 	}
+
+	pub fn get_stdlib_id() -> ScopeId {
+		ScopeId(1)
+	}
 }
 
 impl Debug for ScopeData {

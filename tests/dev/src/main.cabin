@@ -1,1 +1,1 @@
-print("Hello world".length());
+print("Hello world":AsAnything);

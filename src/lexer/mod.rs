@@ -93,6 +93,8 @@ pub enum TokenType {
 	/// identifier, which will cause issues when parsing. Please be careful when moving around this keyword or the `Identifier` token type!
 	KeywordOtherwise,
 
+	RightArrow,
+
 	KeywordRepresent,
 	KeywordAs,
 
@@ -343,23 +345,23 @@ impl TokenType {
 	fn pattern(&self) -> &'static regex_macro::Regex {
 		match self {
 			// Keywords
-			Self::KeywordOneOf => regex_macro::regex!(r"^oneof\b"),
-			Self::KeywordEither => regex_macro::regex!(r"^either\b"),
-			Self::KeywordIf => regex_macro::regex!(r"^if\b"),
 			Self::KeywordAction => regex_macro::regex!(r"^action\b"),
-			Self::KeywordNew => regex_macro::regex!(r"^new\b"),
-			Self::KeywordOtherwise => regex_macro::regex!(r"^otherwise\b"),
-			Self::KeywordLet => regex_macro::regex!(r"^let\b"),
-			Self::KeywordGroup => regex_macro::regex!(r"^group\b"),
-			Self::KeywordReturn => regex_macro::regex!(r"^return\b"),
-			Self::KeywordRuntime => regex_macro::regex!(r"^run\b"),
-			Self::KeywordIs => regex_macro::regex!(r"^is\b"),
-			Self::KeywordForEach => regex_macro::regex!(r"^foreach\b"),
-			Self::KeywordIn => regex_macro::regex!(r"^in\b"),
-			Self::KeywordWhile => regex_macro::regex!(r"^while\b"),
-			Self::KeywordRepresent => regex_macro::regex!(r"^represent\b"),
 			Self::KeywordAs => regex_macro::regex!(r"^as\b"),
 			Self::KeywordDefault => regex_macro::regex!(r"^default\b"),
+			Self::KeywordEither => regex_macro::regex!(r"^either\b"),
+			Self::KeywordForEach => regex_macro::regex!(r"^foreach\b"),
+			Self::KeywordGroup => regex_macro::regex!(r"^group\b"),
+			Self::KeywordIf => regex_macro::regex!(r"^if\b"),
+			Self::KeywordIn => regex_macro::regex!(r"^in\b"),
+			Self::KeywordIs => regex_macro::regex!(r"^is\b"),
+			Self::KeywordLet => regex_macro::regex!(r"^let\b"),
+			Self::KeywordNew => regex_macro::regex!(r"^new\b"),
+			Self::KeywordOneOf => regex_macro::regex!(r"^oneof\b"),
+			Self::KeywordOtherwise => regex_macro::regex!(r"^otherwise\b"),
+			Self::KeywordReturn => regex_macro::regex!(r"^return\b"),
+			Self::KeywordRuntime => regex_macro::regex!(r"^run\b"),
+			Self::KeywordRepresent => regex_macro::regex!(r"^represent\b"),
+			Self::KeywordWhile => regex_macro::regex!(r"^while\b"),
 			Self::KeywordWith => regex_macro::regex!(r"^with\b"),
 
 			// Left opening groupings
@@ -390,6 +392,7 @@ impl TokenType {
 			Self::Equal => regex_macro::regex!("^="),
 			Self::LessThan => regex_macro::regex!(r"^\s+<"),
 			Self::GreaterThan => regex_macro::regex!(r"^\s+>"),
+			Self::RightArrow => regex_macro::regex!(r"^->"),
 
 			// Punctuations / Misc
 			Self::TagOpening => regex_macro::regex!(r"^\#\["),

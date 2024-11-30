@@ -65,21 +65,15 @@ impl VirtualPointer {
 	pub fn virtual_deref_mut(&self) -> &'static mut LiteralObject {
 		context().virtual_memory.memory.get_mut(&self.0).unwrap()
 	}
-
-	pub fn try_map<Error>(self, mapping_function: fn(LiteralObject) -> Result<LiteralObject, Error>) -> Result<VirtualPointer, Error> {
-		let original = context().virtual_memory.memory.remove(&self.0).unwrap();
-		let mut mapped = mapping_function(original)?;
-		mapped.address = Some(self);
-		context().virtual_memory.memory.insert(self.0, mapped);
-		Ok(self)
-	}
 }
 
 impl CompileTime for VirtualPointer {
 	type Output = VirtualPointer;
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
-		self.try_map(LiteralObject::evaluate_at_compile_time)
+		let evaluated = self.virtual_deref().clone().evaluate_at_compile_time()?;
+		context().virtual_memory.memory.insert(self.0, evaluated);
+		Ok(self)
 	}
 }
 

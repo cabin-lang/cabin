@@ -23,8 +23,10 @@ pub struct Context {
 	pub lines_printed: usize,
 	pub theme: Theme,
 	pub colored_program: Vec<ColoredString>,
+	pub phase: Phase,
 
 	// Privately mutable
+	warnings: Vec<String>,
 	side_effects_stack: Vec<bool>,
 	error_location: Option<Span>,
 	error_details: Option<String>,
@@ -36,6 +38,7 @@ pub struct Context {
 impl Default for Context {
 	fn default() -> Self {
 		Context {
+			phase: Phase::Stdlib,
 			options: CabinToml::default(),
 			scope_data: ScopeData::global(),
 			virtual_memory: VirtualMemory::empty(),
@@ -43,6 +46,7 @@ impl Default for Context {
 			error_location: None,
 			error_details: None,
 			compiler_error_position: Vec::new(),
+			warnings: Vec::new(),
 			lines_printed: 0,
 			running_context: RunningContext::try_from(std::env::current_dir().unwrap()).unwrap(),
 			theme: Theme::default(),
@@ -104,10 +108,12 @@ impl Context {
 		self.debug_indent.pop().unwrap()
 	}
 
+	#[must_use]
 	pub fn debug_indent(&self) -> usize {
 		self.debug_indent.len()
 	}
 
+	#[must_use]
 	pub fn colored_program(&self) -> String {
 		let mut builder = String::new();
 		for (position, character) in self.colored_program.iter().enumerate() {
@@ -178,10 +184,12 @@ impl Context {
 		}
 	}
 
+	#[must_use]
 	pub fn program(&self) -> String {
 		self.colored_program.iter().map(|part| (**part).to_owned()).collect::<String>()
 	}
 
+	#[must_use]
 	pub fn line_column(&self, span: Span) -> (usize, usize) {
 		let blank = self.program();
 
@@ -204,6 +212,7 @@ impl Context {
 		(line, column)
 	}
 
+	#[must_use]
 	pub fn config(&self) -> &CabinToml {
 		&self.options
 	}
@@ -216,6 +225,14 @@ impl Context {
 			anyhow::bail!("Attempted to get a mutable reference to the cabin.toml, but Cabin is not currently running in a project.");
 		};
 		Ok(CabinTomlWriteOnDrop::new(&mut self.options, project.root_directory().to_owned()))
+	}
+
+	pub fn add_warning(&mut self, warning: String) {
+		self.warnings.push(warning);
+	}
+
+	pub fn warnings(&self) -> &[String] {
+		&self.warnings
 	}
 }
 
@@ -231,22 +248,27 @@ pub struct SourceFilePosition {
 }
 
 impl SourceFilePosition {
+	#[must_use]
 	pub fn new(line: u32, column: u32, name: &'static str, function: String) -> Self {
 		Self { line, column, name, function }
 	}
 
+	#[must_use]
 	pub fn line(&self) -> u32 {
 		self.line
 	}
 
+	#[must_use]
 	pub fn column(&self) -> u32 {
 		self.column
 	}
 
+	#[must_use]
 	pub fn file_name(&self) -> &'static str {
 		self.name
 	}
 
+	#[must_use]
 	pub fn function_name(&self) -> String {
 		self.function.clone()
 	}
@@ -269,6 +291,7 @@ static CONTEXT: LazyLock<Context> = LazyLock::new(Context::default);
 
 /// Returns a non-borrow-checked static mutable reference to the program's `Context`, which holds global state
 /// data about the compiler.
+#[must_use]
 pub fn context() -> &'static mut Context {
 	unsafe { (&*CONTEXT as *const Context as *mut Context).as_mut().unwrap() }
 }
@@ -280,6 +303,49 @@ impl DebugSection {
 		let message = context().end_debug_sequence();
 		if context().config().options().debug_info() == "some" {
 			println!("{}{} {}", "│\t".repeat(context().debug_indent()).dimmed(), "Finished".green().bold(), message);
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Phase {
+	Stdlib,
+	ReadingSourceFiles,
+	Tokenization,
+	Parsing,
+	Linking,
+	CompileTimeEvaluation,
+	Transpilation,
+	Compilation,
+	RunningBinary,
+}
+
+impl Phase {
+	pub fn action(&self) -> (&'static str, &'static str) {
+		match self {
+			Phase::Stdlib => ("Adding", "standard library"),
+			Phase::ReadingSourceFiles => ("Reading", "source files"),
+			Phase::Tokenization => ("Tokenizing", "source code"),
+			Phase::Parsing => ("Parsing", "token stream"),
+			Phase::Linking => ("Linking", "source files"),
+			Phase::CompileTimeEvaluation => ("Running", "compile-time code"),
+			Phase::Transpilation => ("Transpiling", "program to C"),
+			Phase::Compilation => ("Compiling", "C code"),
+			Phase::RunningBinary => ("Running", "executable"),
+		}
+	}
+
+	pub fn next(&self) -> Phase {
+		match self {
+			Phase::Stdlib => Phase::ReadingSourceFiles,
+			Phase::ReadingSourceFiles => Phase::Tokenization,
+			Phase::Tokenization => Phase::Parsing,
+			Phase::Parsing => Phase::Linking,
+			Phase::Linking => Phase::CompileTimeEvaluation,
+			Phase::CompileTimeEvaluation => Phase::Transpilation,
+			Phase::Transpilation => Phase::Compilation,
+			Phase::Compilation => Phase::RunningBinary,
+			Phase::RunningBinary => Phase::Stdlib,
 		}
 	}
 }

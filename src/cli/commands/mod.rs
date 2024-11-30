@@ -1,10 +1,17 @@
+use std::{fmt::Display, io::Write as _};
+
 use colored::Colorize as _;
 use new::NewCommand;
-use package::add::AddCommand;
 use run::RunCommand;
 use set::SetCommand;
 
-use crate::api::context::context;
+use crate::{
+	api::{
+		context::{context, Phase},
+		traits::TerminalOutput as _,
+	},
+	debug_start, if_then_some,
+};
 
 pub mod new;
 
@@ -26,152 +33,154 @@ pub enum SubCommand {
 	Run(RunCommand),
 	Set(SetCommand),
 	New(NewCommand),
-	Add(AddCommand),
 }
 
-#[macro_export]
-macro_rules! step {
-	(
-		$expression: expr, $action: expr, $object: expr $(,)?
-	) => {{
-		use colored::Colorize as _;
-		use std::io::Write as _;
-		use $crate::api::traits::TerminalOutput as _;
+pub fn step<T, E: Display, F: FnOnce() -> Result<T, E>>(expression: F, phase: Phase) -> T {
+	context().phase = phase;
 
-		fn move_cursor_up_and_over(up: usize, right: usize) {
-			print!("\x1b[{}A", up);
-			print!("\x1b[{}C", right);
-			std::io::stdout().flush().unwrap();
-		}
+	fn move_cursor_up_and_right(up: usize, right: usize) {
+		print!("\x1b[{}A", up);
+		print!("\x1b[{}C", right);
+		std::io::stdout().flush().unwrap();
+	}
 
-		fn move_cursor_down_and_left(down: usize, left: usize) {
-			print!("\x1b[{}B", down);
-			print!("\x1b[{}D", left);
-			std::io::stdout().flush().unwrap();
-		}
+	fn move_cursor_down_and_left(down: usize, left: usize) {
+		print!("\x1b[{}B", down);
+		print!("\x1b[{}D", left);
+		std::io::stdout().flush().unwrap();
+	}
 
-		let here = $crate::here!();
+	let debug_section = if_then_some!(
+		context().config().options().debug_info() == "some",
+		debug_start!("{} {}", phase.action().0, phase.action().1)
+	);
 
-		let debug_section = $crate::if_then_some!($crate::api::context::context().config().options().debug_info() == "some", {
-			$crate::debug_start!("{} {}", $action.bold().green(), $object)
-		});
+	if !context().config().options().quiet() && context().config().options().debug_info() == "none" {
+		print!("{}{} {}... ", context().config().options().tabs(1), phase.action().0.bold().green(), phase.action().1);
+		std::io::stdout().flush().unwrap();
+	}
 
-		if !$crate::api::context::context().config().options().quiet() && $crate::api::context::context().config().options().debug_info() == "none" {
-			print!("{}{} {}... ", $crate::api::context::context().config().options().tabs(1), $action.bold().green(), $object);
-			std::io::stdout().flush().unwrap();
-		}
-
-		match $expression {
-			Ok(return_value) => {
-				if !$crate::api::context::context().config().options().quiet() && $crate::api::context::context().config().options().debug_info() == "none" {
-					if $object.starts_with("compile-time") && $crate::api::context::context().lines_printed != 0 {
-						move_cursor_up_and_over($crate::api::context::context().lines_printed, ($crate::api::context::context().config().options().tabs(1) + $action + $object + "...  ").len());
-					}
-
-					println!("{}", "Done!".bold().green());
-
-					if $object.starts_with("compile-time") && $crate::api::context::context().lines_printed != 0 {
-						move_cursor_down_and_left($crate::api::context::context().lines_printed, 0);
-					}
-				}
-				if let Some(debug_section) = debug_section {
-					debug_section.finish();
-				}
-				return_value
-			},
-
-			// Error during this step of compilation
-			Err(error) => {
-				if $object.starts_with("compile-time") && $crate::api::context::context().lines_printed != 0 {
-					move_cursor_up_and_over($crate::api::context::context().lines_printed, ($crate::api::context::context().config().options().tabs(1) + "evaluating abstract syntax tree... ").len());
-				}
-
-				if !$object.starts_with("compiled") {
-					println!("{}", "Error:".bold().red());
-				}
-
-				if $object.starts_with("compile-time") && $crate::api::context::context().lines_printed != 0 {
-					move_cursor_down_and_left($crate::api::context::context().lines_printed, 0);
-				}
-
-				// Print error message
-				eprintln!(
-					"\n{} {}",
-					"Error:".bold().red(),
-					if $crate::api::context::context().config().options().quiet() {
-						format!("{}", error).lines().next().unwrap().to_owned()
-					} else {
-						format!("{}\n", error)
-					}
-				);
-
-				// Print the program
-				if let Some(error_position) = $crate::api::context::context().error_position() {
-					let (error_line, _column) = $crate::api::context::context().line_column(error_position);
-
-					eprintln!(
-						"In {}{}:",
-						format!("{}", $crate::api::context::context().running_context.entry_point().display()).bold().cyan(),
-						format!(" on {}", format!("line {error_line}").bold().cyan())
-					);
-
-					eprintln!("\n\n{}\n", $crate::api::context::context().colored_program());
-				}
-
-				// Print additional error information
-				if !$crate::api::context::context().config().options().quiet() && $crate::api::context::context().config().options().detailed_errors() {
-					if let Some(error_details) = $crate::api::context::context().error_details() {
-						eprintln!("{}\n\n{error_details}\n", "More information:".bold().bright_blue().underline());
-					}
-				}
-
-				// Print compiler bug location
-				if $crate::api::context::context().config().options().developer_mode() {
-					println!("{}\n", "Developer Information:".bold().purple().underline());
-					println!("{}\n", "This error occurred in the Cabin compiler with the following stack trace:".bold());
-					for (index, position) in $crate::api::context::context().get_compiler_error_position().iter().enumerate() {
-						let trace = format!(
-							"{}in {} at {}",
-							$crate::api::context::context().config().options().tabs(if index == 0 { 1 } else { 2 }),
-							position.function_name().cyan(),
-							format!("{}:{}:{}", position.file_name(), position.line(), position.column()).purple()
+	match expression() {
+		Ok(return_value) => {
+			if !context().config().options().quiet() && context().config().options().debug_info() == "none" {
+				if phase == Phase::CompileTimeEvaluation {
+					if phase == Phase::CompileTimeEvaluation && context().lines_printed != 0 {
+						move_cursor_up_and_right(
+							context().lines_printed + 1,
+							(context().config().options().tabs(1) + phase.action().0 + phase.action().1 + "... ").len() + 1,
 						);
-						let trace = if index == 0 { trace } else { format!("{}", trace.dimmed()) };
-						println!("{trace}");
 					}
-					println!(
-						"{}",
-						format!(
-							"{}in {} at {}",
-							$crate::api::context::context().config().options().tabs(2),
-							here.function_name().cyan(),
-							format!("{}:{}:{}", here.file_name(), here.line(), here.column()).purple()
-						)
-						.dimmed()
-					);
-					if !$crate::api::context::context().get_compiler_error_position().is_empty() {
+					if !context().warnings().is_empty() {
+						println!("{}", "Warning:".bold().yellow());
+					}
+
+					if context().lines_printed != 0 {
+						move_cursor_down_and_left(context().lines_printed + 1, 0);
 						println!();
 					}
 
-					println!("{}\n",
-						expression_formatter::format!(
-							r#"
-							This information is showing because you have the {"developer-mode".yellow().bold()} option set to 
-							{"true".bold().cyan()}. If you don't want to see this, either disable developer information manually 
-							in your cabin.toml, or automatically by running {"cabin set developer-mode false".bold().green()}.
-							"#
-						)
-						.as_terminal_output()
-						.dimmed()
-						.italic()
+					for warning in context().warnings() {
+						println!("{} {}\n", "Warning:".bold().yellow(), warning);
+					}
+
+					if context().warnings().is_empty() {
+						println!("{}", "Done!".bold().green());
+					}
+				} else {
+					println!("{}", "Done!".bold().green());
+				}
+			}
+			if let Some(debug_section) = debug_section {
+				debug_section.finish();
+			}
+			return_value
+		},
+
+		// Error during this step of compilation
+		Err(error) => {
+			if phase == Phase::CompileTimeEvaluation && context().lines_printed != 0 {
+				move_cursor_up_and_right(
+					context().lines_printed,
+					(context().config().options().tabs(1) + phase.action().0 + phase.action().1 + "... ").len() + 1,
+				);
+			}
+
+			if phase != Phase::RunningBinary {
+				println!("{}", "Error:".bold().red());
+			}
+
+			if phase != Phase::CompileTimeEvaluation && context().lines_printed != 0 {
+				move_cursor_down_and_left(context().lines_printed, 0);
+			}
+
+			// Print error message
+			eprintln!(
+				"\n{} {}",
+				"Error:".bold().red(),
+				if context().config().options().quiet() {
+					format!("{}", error).lines().next().unwrap().to_owned()
+				} else {
+					format!("{}\n", error)
+				}
+			);
+
+			// Print the program
+			if let Some(error_position) = context().error_position() {
+				let (error_line, _column) = context().line_column(error_position);
+
+				eprintln!(
+					"In {} on {}:",
+					format!("{}", context().running_context.entry_point().display()).bold().cyan(),
+					format!("line {error_line}").bold().cyan()
+				);
+
+				eprintln!("\n\n{}\n", context().colored_program());
+			}
+
+			// Print additional error information
+			if !context().config().options().quiet() && context().config().options().detailed_errors() {
+				if let Some(error_details) = context().error_details() {
+					eprintln!("{}\n\n{error_details}\n", "More information:".bold().bright_blue().underline());
+				}
+			}
+
+			// Print compiler bug location
+			if context().config().options().developer_mode() {
+				println!("{}\n", "Developer Information:".bold().purple().underline());
+				println!("{}\n", "This error occurred in the Cabin compiler with the following stack trace:".bold());
+				for (index, position) in context().get_compiler_error_position().iter().enumerate() {
+					let trace = format!(
+						"{}in {} at {}",
+						context().config().options().tabs(if index == 0 { 1 } else { 2 }),
+						position.function_name().cyan(),
+						format!("{}:{}:{}", position.file_name(), position.line(), position.column()).purple()
 					);
+					let trace = if index == 0 { trace } else { format!("{}", trace.dimmed()) };
+					println!("{trace}");
+				}
+				if !context().get_compiler_error_position().is_empty() {
+					println!();
 				}
 
-				// Exit
-				std::process::exit(1);
-			},
-		}
-	}};
+				println!(
+					"{}\n",
+					expression_formatter::format!(
+						r#"
+						This information is showing because you have the {"developer-mode".yellow().bold()} option set to 
+						{"true".bold().cyan()}. If you don't want to see this, either disable developer information manually 
+						in your cabin.toml, or automatically by running {"cabin set developer-mode false".bold().green()}.
+						"#
+					)
+					.as_terminal_output()
+					.dimmed()
+					.italic()
+				);
+			}
+
+			// Exit
+			std::process::exit(1);
+		},
+	}
 }
 
 pub fn start(action: &str) {

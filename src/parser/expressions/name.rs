@@ -33,12 +33,6 @@ pub struct Name {
 	should_mangle: bool,
 }
 
-impl Debug for Name {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", self.unmangled_name().red())
-	}
-}
-
 impl Parse for Name {
 	type Output = Self;
 
@@ -87,6 +81,7 @@ impl CompileTime for Name {
 						.map(|(name, _)| format!("    - {}", name.unmangled_name().bold().green()))
 						.collect::<Vec<_>>()
 						.join("\n")
+						.trim_start()
 				)),
 			})?;
 
@@ -146,6 +141,12 @@ impl Hash for Name {
 impl From<&Name> for Name {
 	fn from(val: &Name) -> Self {
 		val.clone()
+	}
+}
+
+impl Debug for Name {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", self.unmangled_name().red())
 	}
 }
 

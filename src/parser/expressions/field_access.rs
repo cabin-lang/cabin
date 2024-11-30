@@ -11,17 +11,20 @@ use crate::{
 	err,
 	lexer::{Span, TokenType},
 	parser::{
-		expressions::{function_declaration::FunctionDeclaration, literal::LiteralConvertible as _, name::Name, operators::PrimaryExpression, Expression, Spanned, Typed},
+		expressions::{
+			function_declaration::FunctionDeclaration,
+			literal::LiteralConvertible as _,
+			literal::LiteralObject,
+			name::Name,
+			object::{Field, InternalFieldValue, ObjectConstructor},
+			operators::PrimaryExpression,
+			represent_as::RepresentAs,
+			Expression, Spanned, Typed,
+		},
 		statements::tag::TagList,
 		Parse, TokenQueue, TokenQueueFunctionality as _,
 	},
 	transpiler::TranspileToC,
-};
-
-use super::{
-	literal::LiteralObject,
-	object::{Field, InternalFieldValue, ObjectConstructor},
-	represent_as::RepresentAs,
 };
 
 /// A type describing how fields are accessed on this type of objects via the dot operator.
@@ -182,7 +185,7 @@ impl CompileTime for FieldAccess {
 
 						Expression::Pointer(
 							LiteralObject::try_from_object_constructor(ObjectConstructor {
-								type_name: declaration.type_to_represent_as().expect_as::<VirtualPointer>().unwrap().virtual_deref().name().to_owned(),
+								type_name: declaration.type_to_represent_as().try_as::<VirtualPointer>().unwrap().virtual_deref().name().to_owned(),
 								fields,
 								internal_fields,
 								inner_scope_id: context().scope_data.file_id(),

@@ -244,7 +244,7 @@ impl TranspileToC for FunctionDeclaration {
 		for tag in &self.tags.values {
 			if let Ok(object) = tag.try_as_literal() {
 				if object.type_name() == &Name::from("BuiltinTag") {
-					let builtin_name = object.get_field_literal("internal_name").unwrap().expect_as::<String>()?.to_owned();
+					let builtin_name = object.get_field_literal("internal_name").unwrap().try_as::<String>()?.to_owned();
 					let mut parameters = self.parameters.iter().map(|parameter| parameter.name().to_c().unwrap()).collect::<Vec<_>>();
 					parameters.push("return_address".to_string());
 					builtin_body = Some(transpile_builtin_to_c(&builtin_name, &parameters).map_err(mapped_err! {

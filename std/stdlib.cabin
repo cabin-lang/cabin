@@ -2,6 +2,7 @@ let This = group {};
 
 # Optionals -----------------------------------------------------------------------------------------------------------------
 
+#[suppress<Warning.SingleVariantEither>]
 let Nothing = either {
 	nothing
 };
@@ -11,10 +12,7 @@ let Optional = oneof<Data> {
 	Nothing
 };
 
-let Text = group {
-	#[builtin<"Text.length">]
-	length = action(this: Anything): Number
-};
+let Text = group {};
 
 let Anything = group {
 
@@ -114,4 +112,19 @@ let system = new Object {
 let Map = group {
 	get = action(key: Anything) {},
 	set = action(key: Anything, value: Anything) {}
+};
+
+let Warning = either {
+	EmptyEither,
+	SingleVariantEither
+};
+
+let WarningSuppressor = group {
+	warning: Warning
+};
+
+let suppress = action<warning: Warning> {
+	suppress is new WarningSuppressor {
+		warning = warning
+	};
 };

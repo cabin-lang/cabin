@@ -213,16 +213,12 @@ impl Expression {
 		};
 	}
 
-	pub fn expect_clone_pointer(&self) -> anyhow::Result<Expression> {
-		self.try_clone_pointer()
-	}
-
 	pub fn is_true(&self) -> bool {
 		let Ok(literal_address) = self.try_as::<VirtualPointer>() else {
 			return false;
 		};
 
-		let true_address = context().scope_data.get_variable("true").unwrap().expect_as().unwrap();
+		let true_address = context().scope_data.get_variable("true").unwrap().try_as().unwrap();
 
 		literal_address == true_address
 	}

@@ -1,9 +1,12 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use crate::{
-	api::{context::context, scope::ScopeType},
+	api::{
+		context::{context, Phase},
+		scope::ScopeType,
+	},
 	cli::{
-		commands::{start, CabinCommand},
+		commands::{start, step, CabinCommand},
 		RunningContext,
 	},
 	comptime::CompileTime as _,
@@ -21,7 +24,7 @@ use crate::{
 		statements::tag::TagList,
 		Module, TokenQueue,
 	},
-	step, STDLIB,
+	STDLIB,
 };
 
 /// Run a cabin file or project.
@@ -52,12 +55,12 @@ impl CabinCommand for RunCommand {
 		// Project
 		if let RunningContext::Project(project) = &context().running_context {
 			let debug_section = debug_start!("\n{} project", "Running".bold().green());
-			let root = step!(get_source_code_directory(&project.root_directory().join("src")), "Reading", "source files");
-			let tokenized = step!(tokenize_directory(root), "Tokenizing", "source code");
-			let module_ast = step!(parse_directory(tokenized), "Parsing", "token streams");
-			let root_module = step!(add_modules_to_scope(module_ast), "Linking", "source files");
-			step!(
-				(|| {
+			let root = step(|| get_source_code_directory(&project.root_directory().join("src")), Phase::ReadingSourceFiles);
+			let tokenized = step(|| tokenize_directory(root), Phase::Tokenization);
+			let module_ast = step(|| parse_directory(tokenized), Phase::Parsing);
+			let root_module = step(|| add_modules_to_scope(module_ast), Phase::Linking);
+			step(
+				|| {
 					let Expression::ObjectConstructor(compile_time_evaluated_root_module) = root_module.evaluate_at_compile_time()? else {
 						unreachable!()
 					};
@@ -70,9 +73,8 @@ impl CabinCommand for RunCommand {
 					};
 					let main_function = main_module.get_field("main_function").unwrap().try_clone_pointer().unwrap();
 					FunctionCall::call_main(main_function, compile_time_evaluated_root_module.inner_scope_id)
-				})(),
-				"Running",
-				"compile-time code"
+				},
+				Phase::CompileTimeEvaluation,
 			);
 
 			debug_section.finish();

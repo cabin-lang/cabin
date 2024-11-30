@@ -82,6 +82,7 @@ impl CompileTime for Block {
 		}
 
 		context().scope_data.set_current_scope(previous_scope);
+
 		Ok(Expression::Block(Block {
 			statements,
 			inner_scope_id: self.inner_scope_id,

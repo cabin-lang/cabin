@@ -189,9 +189,10 @@ impl RepresentAs {
 			let literal = pointer.virtual_deref();
 			if literal.type_name() == &"Parameter".into() {
 				let parameter = Parameter::from_literal(literal).unwrap();
-				let anything: VirtualPointer = *context().scope_data.get_variable("Anything").unwrap().expect_as::<VirtualPointer>()?;
+				let anything: VirtualPointer = *context().scope_data.get_variable("Anything").unwrap().try_as::<VirtualPointer>()?;
 				let parameter_type = parameter.get_type()?;
 				if parameter_type == anything || object.is_assignable_to_type(parameter_type)? {
+					context().scope_data.set_current_scope(previous);
 					return Ok(true);
 				}
 			}
@@ -208,6 +209,7 @@ impl RepresentAs {
 		if let Expression::Name(name) = self.type_to_represent.as_ref() {
 			if let Expression::Parameter(parameter) = context().scope_data.get_variable(name).unwrap() {
 				let parameter_type = parameter.get_type()?;
+				context().scope_data.set_current_scope(previous);
 				return Ok(parameter_type.virtual_deref().name().unmangled_name().to_owned());
 			}
 		}

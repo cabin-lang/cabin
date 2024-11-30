@@ -92,6 +92,7 @@ macro_rules! function {
 	}};
 }
 
+/// This should only be called after parse-time.
 pub fn string(value: &str, span: Span) -> Expression {
 	let number = ObjectConstructor::string(value, span).evaluate_at_compile_time().unwrap();
 	if !number.is_pointer() {
@@ -101,9 +102,10 @@ pub fn string(value: &str, span: Span) -> Expression {
 }
 
 pub fn cabin_true() -> anyhow::Result<Expression> {
-	context().scope_data.get_variable("true").unwrap().expect_clone_pointer()
+	context().scope_data.get_variable("true").unwrap().try_clone_pointer()
 }
 
+/// This should only be called after parse-time.
 pub fn number(number: f64, span: Span) -> Expression {
 	let number = ObjectConstructor::number(number, span).evaluate_at_compile_time().unwrap();
 	if !number.is_pointer() {
@@ -213,5 +215,9 @@ macro_rules! here {
 
 #[macro_export]
 macro_rules! warn {
-	() => {};
+	(
+		$($tokens: tt)*
+	) => {
+		$crate::api::context::context().add_warning(format!($($tokens)*));
+	};
 }

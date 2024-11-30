@@ -220,7 +220,7 @@ impl Module {
 					(declaration.declaration_type() != &DeclarationType::RepresentAs).then(|| {
 						let name = declaration.name().to_owned();
 						let value = declaration.value().unwrap();
-						(name, value.expect_as::<VirtualPointer>().unwrap().to_owned())
+						(name, value.try_as::<VirtualPointer>().unwrap().to_owned())
 					})
 				})
 				.collect(),

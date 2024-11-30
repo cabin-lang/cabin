@@ -175,7 +175,7 @@ impl LiteralObject {
 	where
 		LiteralObject: TryAsRef<T>,
 	{
-		self.get_field_literal(name).unwrap().expect_as().unwrap()
+		self.get_field_literal(name).unwrap().try_as().unwrap()
 	}
 
 	pub fn get_internal_field<T>(&self, name: &str) -> anyhow::Result<&T>
@@ -333,7 +333,7 @@ impl Typed for LiteralObject {
 					base = format!("No variable found with the name {}", self.type_name().unmangled_name().red()),
 				}
 			})?
-			.expect_as::<VirtualPointer>()?
+			.try_as::<VirtualPointer>()?
 			.to_owned();
 
 		Ok(result)
@@ -435,14 +435,14 @@ impl TranspileToC for LiteralObject {
 				format!(
 					"&({}) {{ .internal_value = {} }}",
 					self.get_type()?.virtual_deref().to_c_type()?,
-					self.expect_as::<f64>()?.to_owned()
+					self.try_as::<f64>()?.to_owned()
 				)
 			},
 			"Text" => {
 				format!(
 					"&({}) {{ .internal_value = \"{}\" }}",
 					self.get_type()?.virtual_deref().to_c_type()?,
-					self.expect_as::<String>()?.to_owned()
+					self.try_as::<String>()?.to_owned()
 				)
 			},
 			_ => {

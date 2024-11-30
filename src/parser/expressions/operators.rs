@@ -160,14 +160,18 @@ impl Parse for PrimaryExpression {
 	}
 }
 
+static PIPE: BinaryOperation = BinaryOperation {
+	precedent: None,
+	token_types: &[TokenType::RightArrow],
+};
+
 // TODO: make this right-associative
 /// The exponentiation operation, which has the highest precedence. This covers the `^` operator.
 static EXPONENTIATION: BinaryOperation = BinaryOperation {
-	precedent: None,
+	precedent: Some(&PIPE),
 	token_types: &[TokenType::Caret],
 };
 
-// TODO: Add modulo
 /// The multiplicative operations, which have the second highest precedence. This covers the `*` and `/` operators.
 static MULTIPLICATIVE: BinaryOperation = BinaryOperation {
 	precedent: Some(&EXPONENTIATION),

@@ -7,13 +7,6 @@ pub trait TryAs {
 	{
 		self.try_as_ref().ok_or_else(|| anyhow::anyhow!("Incorrect variant"))
 	}
-
-	fn expect_as<T>(&self) -> anyhow::Result<&T>
-	where
-		Self: TryAsRef<T>,
-	{
-		self.try_as()
-	}
 }
 pub trait TryAsRefMut {
 	fn try_as_ref_mut<T>(&mut self) -> anyhow::Result<&mut T>

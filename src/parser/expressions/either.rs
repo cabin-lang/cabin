@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use colored::Colorize;
+
 use crate::{
 	api::{context::context, scope::ScopeId},
 	comptime::{memory::VirtualPointer, CompileTime},
@@ -7,6 +9,7 @@ use crate::{
 	parse_list,
 	parser::{
 		expressions::{
+			field_access::FieldAccessType,
 			literal::{LiteralConvertible, LiteralObject},
 			name::Name,
 			object::InternalFieldValue,
@@ -16,15 +19,13 @@ use crate::{
 		ListType, Parse, TokenQueue, TokenQueueFunctionality,
 	},
 	transpiler::TranspileToC,
+	warn,
 };
-
-use super::field_access::FieldAccessType;
 
 #[derive(Debug, Clone)]
 pub struct Either {
 	variants: Vec<(Name, VirtualPointer)>,
 	scope_id: ScopeId,
-	inner_scope_id: ScopeId,
 	name: Name,
 	span: Span,
 }
@@ -42,10 +43,20 @@ impl Parse for Either {
 		})
 		.span;
 
+		// Warnings for small eithers
+		if variants.is_empty() {
+			warn!("An empty either was created, which can never be instantiated.");
+		}
+		if variants.len() == 1 {
+			warn!(
+				"An either was created with only one variant (\"{}\"), which can only ever be instantiated to that one value.",
+				variants.first().unwrap().0.unmangled_name().red()
+			);
+		}
+
 		Ok(Either {
 			variants,
 			scope_id: context().scope_data.unique_id(),
-			inner_scope_id: context().scope_data.unique_id(),
 			name: "anonymous_either".into(),
 			span: start.to(&end),
 		}
@@ -71,7 +82,7 @@ impl LiteralConvertible for Either {
 			name: self.name,
 			field_access_type: FieldAccessType::Either,
 			outer_scope_id: self.scope_id,
-			inner_scope_id: Some(self.inner_scope_id),
+			inner_scope_id: Some(self.scope_id),
 			span: self.span,
 			type_name: "Either".into(),
 			tags: TagList::default(),
@@ -82,7 +93,6 @@ impl LiteralConvertible for Either {
 		Ok(Either {
 			variants: literal.get_internal_field::<Vec<(Name, VirtualPointer)>>("variants")?.to_owned(),
 			scope_id: literal.outer_scope_id(),
-			inner_scope_id: literal.inner_scope_id.unwrap(),
 			name: literal.name.clone(),
 			span: literal.span,
 		})
@@ -109,10 +119,11 @@ impl Spanned for Either {
 }
 
 impl Either {
-	pub fn variants(&self) -> &[(Name, VirtualPointer)] {
-		&self.variants
-	}
-
+	/// Returns the names of the variants in this `either`.
+	///
+	/// # Returns
+	///
+	/// The names of the variants in this `either`.
 	pub fn variant_names(&self) -> Vec<&Name> {
 		self.variants.iter().map(|variant| &variant.0).collect()
 	}

@@ -1,7 +1,12 @@
 use std::collections::VecDeque;
 
 use crate::{
-	api::{builtin::call_builtin_at_compile_time, context::context, scope::ScopeId, traits::TryAs as _},
+	api::{
+		builtin::call_builtin_at_compile_time,
+		context::context,
+		scope::{ScopeData, ScopeId},
+		traits::TryAs as _,
+	},
 	bail_err,
 	comptime::{memory::VirtualPointer, CompileTime},
 	debug_log, debug_start, if_then_else_default,
@@ -143,15 +148,9 @@ impl CompileTime for FunctionCall {
 		// Evaluate function
 		let literal = function.try_as_literal();
 		if let Ok(function_declaration) = literal {
-			let function_declaration = match FunctionDeclaration::from_literal(function_declaration) {
-				Ok(function_declaration) => function_declaration,
-				Err(error) => {
-					bail_err! {
-						base = error,
-						while = "calling a function at compile-time",
-					};
-				},
-			};
+			let function_declaration = FunctionDeclaration::from_literal(function_declaration).map_err(mapped_err! {
+				while = "interpreting a literal as a function declaration at compile-time",
+			})?;
 
 			// Set this object
 			if let Some(this_object) = function_declaration.this_object() {
@@ -243,9 +242,9 @@ impl CompileTime for FunctionCall {
 				// Get the address of system_side_effects
 				let system_side_effects_address = *context()
 					.scope_data
-					.get_variable("system_side_effects")
+					.get_variable_from_id("system_side_effects", ScopeData::get_stdlib_id())
 					.unwrap()
-					.expect_as::<VirtualPointer>()
+					.try_as::<VirtualPointer>()
 					.map_err(mapped_err! {
 						while = format!("interpreting the global variable \"{}\" as a pointer", "system_side_effects".bold().cyan()),
 					})?;
@@ -258,7 +257,7 @@ impl CompileTime for FunctionCall {
 								object
 									.get_field_literal("internal_name")
 									.unwrap()
-									.expect_as::<String>()
+									.try_as::<String>()
 									.map_err(mapped_err! {
 										while = format!("interpreting the literal field \"{}\" of a {} as a string", "internal_name".bold().cyan(), "BuiltinTag".bold().cyan()),
 									})?
@@ -267,7 +266,7 @@ impl CompileTime for FunctionCall {
 							continue;
 						}
 
-						if tag.expect_as::<VirtualPointer>().unwrap() == &system_side_effects_address {
+						if tag.try_as::<VirtualPointer>().unwrap() == &system_side_effects_address {
 							system_side_effects = true;
 						}
 					}
@@ -307,7 +306,7 @@ impl CompileTime for FunctionCall {
 
 impl TranspileToC for FunctionCall {
 	fn to_c(&self) -> anyhow::Result<String> {
-		let function = FunctionDeclaration::from_literal(self.function.clone().evaluate_at_compile_time()?.expect_as::<VirtualPointer>()?.virtual_deref())?;
+		let function = FunctionDeclaration::from_literal(self.function.clone().evaluate_at_compile_time()?.try_as::<VirtualPointer>()?.virtual_deref())?;
 
 		let return_type = if let Some(return_type) = function.return_type() {
 			format!("{}* return_address;", return_type.try_as_literal()?.to_c_type()?)
@@ -413,9 +412,9 @@ impl Typed for FunctionCall {
 	fn get_type(&self) -> anyhow::Result<VirtualPointer> {
 		let function = FunctionDeclaration::from_literal(self.function.try_as_literal()?)?;
 		if let Some(return_type) = function.return_type() {
-			return_type.expect_as::<VirtualPointer>().cloned()
+			return_type.try_as::<VirtualPointer>().cloned()
 		} else {
-			context().scope_data.get_variable("Nothing").unwrap().expect_as::<VirtualPointer>().cloned()
+			context().scope_data.get_variable("Nothing").unwrap().try_as::<VirtualPointer>().cloned()
 		}
 	}
 }
@@ -458,6 +457,20 @@ impl FunctionCall {
 	/// Only if the given token does not represent a valid binary operation. The given token must have a type of
 	/// `TokenType::Plus`, `TokenType::Minus`, etc.
 	pub fn from_binary_operation(left: Expression, right: Expression, operation: Token) -> anyhow::Result<FunctionCall> {
+		// Pipe
+		if operation.token_type == TokenType::RightArrow {
+			let Expression::FunctionCall(mut function_call) = right else {
+				bail_err! {
+					base = "Used a non-function-call expression on the right-hand side of the arrow operator",
+				};
+			};
+
+			let mut arguments = vec![left];
+			arguments.append(&mut function_call.arguments);
+			function_call.arguments = arguments;
+			return Ok(function_call);
+		}
+
 		let function_name = match operation.token_type {
 			TokenType::Asterisk => "times",
 			TokenType::DoubleEquals => "equals",
