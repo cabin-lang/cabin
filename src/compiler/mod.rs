@@ -1,11 +1,9 @@
 use std::{env, path::PathBuf};
 
-use crate::api::context::context;
-
 pub fn compile(c_code: &str) -> anyhow::Result<PathBuf> {
 	let c_path = env::temp_dir().join("cabin_transpiled.c");
 	std::fs::write(c_path, c_code)?;
-	std::process::Command::new("clang")
+	let _ = std::process::Command::new("clang")
 		.arg("-ferror-limit=0")
 		.arg("-w")
 		.arg("-o")
@@ -17,6 +15,6 @@ pub fn compile(c_code: &str) -> anyhow::Result<PathBuf> {
 }
 
 pub fn run_native_executable(path: PathBuf) -> anyhow::Result<()> {
-	std::process::Command::new(path).spawn()?;
+	let _ = std::process::Command::new(path).spawn()?;
 	Ok(())
 }

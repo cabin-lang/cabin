@@ -10,6 +10,8 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
+use std::fmt::Write as _;
+
 use super::Spanned;
 
 #[derive(Debug, Clone)]
@@ -30,7 +32,7 @@ impl Parse for IfExpression {
 		let body = Block::parse(tokens)?;
 		let mut end = body.span();
 		let else_body = if tokens.next_is(TokenType::KeywordOtherwise) {
-			tokens.pop(TokenType::KeywordOtherwise).unwrap_or_else(|_| unreachable!());
+			let _ = tokens.pop(TokenType::KeywordOtherwise).unwrap();
 			let else_body = Expression::Block(Block::parse(tokens)?);
 			end = else_body.span();
 			Some(Box::new(else_body))
@@ -103,16 +105,16 @@ impl TranspileToC for IfExpression {
 	fn to_c(&self) -> anyhow::Result<String> {
 		let mut builder = format!("({}) ? (", self.condition.to_c()?);
 		for line in self.body.to_c()?.lines() {
-			builder += &format!("\n\t{line}");
+			write!(builder, "\n\t{line}").unwrap();
 		}
 		builder += "\n) : (";
 
 		if let Some(else_body) = &self.else_body {
 			for line in else_body.to_c()?.lines() {
-				builder += &format!("\n\t{line}");
+				write!(builder, "\n\t{line}").unwrap();
 			}
 		} else {
-			builder += "\nNULL"
+			write!(builder, "\nNULL").unwrap();
 		}
 
 		builder += "\n) ";
@@ -128,7 +130,7 @@ impl Spanned for IfExpression {
 }
 
 impl IfExpression {
-	pub fn inner_scope_id(&self) -> ScopeId {
+	pub const fn inner_scope_id(&self) -> ScopeId {
 		self.inner_scope_id
 	}
 }

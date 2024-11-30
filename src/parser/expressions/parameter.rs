@@ -30,7 +30,7 @@ impl Parse for Parameter {
 
 	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
 		let name = Name::parse(tokens)?;
-		tokens.pop(TokenType::Colon)?;
+		let _ = tokens.pop(TokenType::Colon)?;
 		let parameter_type = Expression::parse(tokens)?;
 		Ok(Parameter {
 			span: name.span().to(&parameter_type.span()),
@@ -84,11 +84,11 @@ impl Typed for Parameter {
 }
 
 impl Parameter {
-	pub fn name(&self) -> &Name {
+	pub const fn name(&self) -> &Name {
 		&self.name
 	}
 
-	pub fn parameter_type(&self) -> &Expression {
+	pub const fn parameter_type(&self) -> &Expression {
 		&self.parameter_type
 	}
 }
@@ -100,7 +100,7 @@ impl LiteralConvertible for Parameter {
 			fields: HashMap::from([]),
 			internal_fields: HashMap::from([("type".to_owned(), InternalFieldValue::Expression(*self.parameter_type))]),
 			name: self.name,
-			field_access_type: FieldAccessType::Group,
+			field_access_type: FieldAccessType::Normal,
 			outer_scope_id: self.scope_id,
 			inner_scope_id: Some(self.scope_id),
 			span: self.span,

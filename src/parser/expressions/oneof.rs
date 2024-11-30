@@ -46,7 +46,7 @@ impl Parse for OneOf {
 		// Compile-time parameters
 		let compile_time_parameters = if_then_else_default!(tokens.next_is(TokenType::LeftAngleBracket), {
 			let mut compile_time_parameters = Vec::new();
-			parse_list!(tokens, ListType::AngleBracketed, {
+			let _ = parse_list!(tokens, ListType::AngleBracketed, {
 				let name = Name::parse(tokens)?;
 				context().scope_data.declare_new_variable(name.clone(), Expression::Void(()))?;
 				compile_time_parameters.push(name);
@@ -116,7 +116,7 @@ impl LiteralConvertible for OneOf {
 				("compile_time_parameters".to_owned(), InternalFieldValue::NameList(self.compile_time_parameters)),
 			]),
 			name: self.name,
-			field_access_type: FieldAccessType::OneOf,
+			field_access_type: FieldAccessType::Normal,
 			outer_scope_id: self.outer_scope_id,
 			inner_scope_id: Some(self.inner_scope_id),
 			span: self.span,

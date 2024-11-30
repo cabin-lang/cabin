@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, fmt::Write as _};
 
 use crate::{
 	api::{
@@ -91,7 +91,7 @@ impl CompileTime for FunctionCall {
 
 		// Compile-time arguments
 		let compile_time_arguments = {
-			let debug_section = debug_start!(
+			let compile_args_debug = debug_start!(
 				"{} a {} compile-time arguments at compile-time",
 				"Compile-Time Evaluating".bold().green(),
 				"function call's".cyan()
@@ -108,13 +108,13 @@ impl CompileTime for FunctionCall {
 				})?;
 				evaluated_compile_time_arguments.push(evaluated);
 			}
-			debug_section.finish();
+			compile_args_debug.finish();
 			evaluated_compile_time_arguments
 		};
 
 		// Arguments
 		let mut arguments = {
-			let debug_section = debug_start!("{} a {} arguments at compile-time", "Compile-Time Evaluating".bold().green(), "function call's".cyan());
+			let arguments_debug = debug_start!("{} a {} arguments at compile-time", "Compile-Time Evaluating".bold().green(), "function call's".cyan());
 			let mut evaluated_arguments = Vec::new();
 			for argument in self.arguments {
 				let evaluated = argument.evaluate_at_compile_time().map_err(mapped_err! {
@@ -122,7 +122,7 @@ impl CompileTime for FunctionCall {
 				})?;
 				evaluated_arguments.push(evaluated);
 			}
-			debug_section.finish();
+			arguments_debug.finish();
 			evaluated_arguments
 		};
 
@@ -346,11 +346,11 @@ impl TranspileToC for FunctionCall {
 					.map(|parameter| Ok(format!("{}*", parameter.parameter_type().try_as_literal()?.to_c_type()?)))
 					.collect::<anyhow::Result<Vec<_>>>()?
 					.join(", ");
-				if let Some(return_type) = function.return_type().as_ref() {
+				if let Some(function_return_type) = function.return_type().as_ref() {
 					if !parameters.is_empty() {
 						parameters += ", ";
 					}
-					parameters += &format!("{}*", return_type.try_as_literal()?.to_c_type()?);
+					write!(parameters, "{}*", function_return_type.try_as_literal()?.to_c_type()?).unwrap();
 				}
 				parameters
 			},
@@ -506,6 +506,20 @@ impl FunctionCall {
 		})
 	}
 
+	/// Calls the program's main function at compile-time. This is used during the build process to begin compile-time evaluation.
+	///
+	/// # Parameters
+	///
+	/// - `function` - The main function to call.
+	/// - `scope_id` - The scope ID of the main function
+	///
+	/// # Returns
+	///
+	/// The returned value from the main function.
+	///
+	/// # Errors
+	///
+	/// If an error occurred while evaluating the function call at compile-time, the error is returned.
 	pub fn call_main(function: Expression, scope_id: ScopeId) -> anyhow::Result<Expression> {
 		FunctionCall {
 			function: Box::new(function),
@@ -515,5 +529,8 @@ impl FunctionCall {
 			span: Span::unknown(),
 		}
 		.evaluate_at_compile_time()
+		.map_err(mapped_err! {
+			while = "running the program's main file at compile-time",
+		})
 	}
 }

@@ -1,4 +1,7 @@
-use std::collections::{HashMap, VecDeque};
+use std::{
+	collections::{HashMap, VecDeque},
+	fmt::Write as _,
+};
 
 use crate::{
 	api::{
@@ -56,13 +59,13 @@ impl Parse for GroupDeclaration {
 
 			// Group field type
 			let field_type = if_then_some!(tokens.next_is(TokenType::Colon), {
-				tokens.pop(TokenType::Colon)?;
+				let _ = tokens.pop(TokenType::Colon)?;
 				Expression::parse(tokens)?
 			});
 
 			// Group field value
 			let value = if_then_some!(tokens.next_is(TokenType::Equal), {
-				tokens.pop(TokenType::Equal)?;
+				let _ = tokens.pop(TokenType::Equal)?;
 				let mut value = Expression::parse(tokens)?;
 
 				// Set tags
@@ -103,11 +106,11 @@ impl CompileTime for GroupDeclaration {
 			"group".cyan(),
 			self.name.unmangled_name().yellow()
 		);
-		let previous = context().scope_data.set_current_scope(self.inner_scope_id);
+		let _scope_reverter = context().scope_data.set_current_scope(self.inner_scope_id);
 		let mut fields = Vec::new();
 
 		for field in self.fields {
-			let debug_section = debug_start!(
+			let field_debug = debug_start!(
 				"{} the {} field {}",
 				"Compile-Time Evaluating".bold().green(),
 				"group".cyan(),
@@ -157,11 +160,10 @@ impl CompileTime for GroupDeclaration {
 				value,
 				field_type,
 			});
-			debug_section.finish();
+			field_debug.finish();
 		}
 
 		// Store in memory and return a pointer
-		context().scope_data.set_current_scope(previous);
 		debug_section.finish();
 		Ok(GroupDeclaration {
 			fields,
@@ -178,7 +180,8 @@ impl TranspileToC for GroupDeclaration {
 		let mut builder = "{".to_owned();
 
 		for field in &self.fields {
-			builder += &format!(
+			write!(
+				builder,
 				"\n\t{}* {};",
 				if let Some(field_type) = &field.field_type {
 					field_type.try_as_literal()?.to_c_type()?
@@ -186,7 +189,8 @@ impl TranspileToC for GroupDeclaration {
 					field.value.as_ref().unwrap_or(&Expression::Void(())).get_type()?.virtual_deref().to_c_type()?
 				},
 				field.name.to_c()?
-			);
+			)
+			.unwrap();
 		}
 
 		match self.name.unmangled_name() {
@@ -209,7 +213,7 @@ impl LiteralConvertible for GroupDeclaration {
 			fields: HashMap::from([]),
 			internal_fields: HashMap::from([("fields".to_owned(), InternalFieldValue::FieldList(self.fields))]),
 			name: self.name,
-			field_access_type: FieldAccessType::Group,
+			field_access_type: FieldAccessType::Normal,
 			outer_scope_id: self.outer_scope_id,
 			inner_scope_id: Some(self.inner_scope_id),
 			span: self.span,
@@ -219,7 +223,7 @@ impl LiteralConvertible for GroupDeclaration {
 	}
 
 	fn from_literal(literal: &LiteralObject) -> anyhow::Result<Self> {
-		if literal.field_access_type != FieldAccessType::Group {
+		if literal.field_access_type != FieldAccessType::Normal {
 			bail_err! {
 				base = "attempted to convert a non-group literal into a group",
 			};
@@ -236,7 +240,7 @@ impl LiteralConvertible for GroupDeclaration {
 }
 
 impl Spanned for GroupDeclaration {
-	fn span(&self) -> crate::lexer::Span {
+	fn span(&self) -> Span {
 		self.span
 	}
 }

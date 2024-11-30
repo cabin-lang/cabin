@@ -5,7 +5,7 @@ use crate::{
 		builtin::transpile_builtin_to_c,
 		context::context,
 		scope::{ScopeId, ScopeType},
-		traits::{TryAs as _, TupleOption},
+		traits::TryAs as _,
 	},
 	cli::theme::Styled,
 	comptime::{memory::VirtualPointer, CompileTime},
@@ -116,7 +116,7 @@ impl Parse for FunctionDeclaration {
 
 		// Return Type
 		let return_type = if_then_some!(tokens.next_is(TokenType::Colon), {
-			tokens.pop(TokenType::Colon)?;
+			let _ = tokens.pop(TokenType::Colon)?;
 			let expression = Expression::parse(tokens)?;
 			end = expression.span();
 			expression
@@ -125,7 +125,7 @@ impl Parse for FunctionDeclaration {
 		// Body
 		debug_log!("Parsing the body of a {}", "function declaration".cyan());
 		let (body, inner_scope_id) = if_then_some!(tokens.next_is(TokenType::LeftBrace), {
-			let block = Block::parse_type(tokens, ScopeType::Function)?;
+			let block = Block::parse_with_scope_type(tokens, ScopeType::Function)?;
 			let inner_scope_id = block.inner_scope_id;
 			for parameter in &compile_time_parameters {
 				context()
@@ -140,7 +140,7 @@ impl Parse for FunctionDeclaration {
 			end = block.span();
 			(Expression::Block(block), inner_scope_id)
 		})
-		.deconstruct();
+		.unzip();
 
 		// Return
 		debug_section.finish();
@@ -183,10 +183,10 @@ impl CompileTime for FunctionDeclaration {
 
 		// Parameters
 		let parameters = {
-			let debug_section = debug_start!("{} the parameters of a {}", "Compile-Time Evaluating".green().bold(), "function declaration".cyan());
+			let parameters_debug = debug_start!("{} the parameters of a {}", "Compile-Time Evaluating".green().bold(), "function declaration".cyan());
 			let mut parameters = Vec::new();
 			for parameter in self.parameters {
-				let debug_section = debug_start!(
+				let parameter_debug = debug_start!(
 					"{} a parameter called {} of type {:?} on a {}",
 					"Compile-Time Evaluating".bold().green(),
 					parameter.name().unmangled_name().red(),
@@ -196,9 +196,9 @@ impl CompileTime for FunctionDeclaration {
 				parameters.push(parameter.evaluate_at_compile_time().map_err(mapped_err! {
 					while = "evaluating a parameter at compile-time",
 				})?);
-				debug_section.finish();
+				parameter_debug.finish();
 			}
-			debug_section.finish();
+			parameters_debug.finish();
 			parameters
 		};
 
@@ -207,9 +207,9 @@ impl CompileTime for FunctionDeclaration {
 		let return_type = self.return_type.map(|return_type| return_type.evaluate_as_type()).transpose()?;
 
 		let tags = {
-			let debug_section = debug_start!("Evaluating the tags on a {}", "function declaration".cyan());
+			let tag_debug = debug_start!("Evaluating the tags on a {}", "function declaration".cyan());
 			let evaluated = self.tags.evaluate_at_compile_time()?;
-			debug_section.finish();
+			tag_debug.finish();
 			evaluated
 		};
 
@@ -246,7 +246,7 @@ impl TranspileToC for FunctionDeclaration {
 				if object.type_name() == &Name::from("BuiltinTag") {
 					let builtin_name = object.get_field_literal("internal_name").unwrap().try_as::<String>()?.to_owned();
 					let mut parameters = self.parameters.iter().map(|parameter| parameter.name().to_c().unwrap()).collect::<Vec<_>>();
-					parameters.push("return_address".to_string());
+					parameters.push("return_address".to_owned());
 					builtin_body = Some(transpile_builtin_to_c(&builtin_name, &parameters).map_err(mapped_err! {
 						while = format!("transpiling the body of the built-in function {}()", builtin_name.bold().blue()),
 					})?);
@@ -333,11 +333,11 @@ impl Spanned for FunctionDeclaration {
 }
 
 impl FunctionDeclaration {
-	pub fn body(&self) -> Option<&Expression> {
+	pub const fn body(&self) -> Option<&Expression> {
 		self.body.as_ref()
 	}
 
-	pub fn return_type(&self) -> Option<&Expression> {
+	pub const fn return_type(&self) -> Option<&Expression> {
 		self.return_type.as_ref()
 	}
 
@@ -345,15 +345,15 @@ impl FunctionDeclaration {
 		&self.parameters
 	}
 
-	pub fn tags(&self) -> &TagList {
+	pub const fn tags(&self) -> &TagList {
 		&self.tags
 	}
 
-	pub fn name(&self) -> &Name {
+	pub const fn name(&self) -> &Name {
 		&self.name
 	}
 
-	pub fn this_object(&self) -> Option<&Expression> {
+	pub const fn this_object(&self) -> Option<&Expression> {
 		self.this_object.as_ref()
 	}
 

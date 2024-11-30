@@ -19,22 +19,6 @@ pub trait TryAsRefMut {
 
 impl<T> TryAs for T {}
 impl<T> TryAsRefMut for T {}
-
-pub trait TupleOption<T, U> {
-	/// Converts an `Option<(T, U)>` into an `(Option<T>, Option<U>)`.
-	fn deconstruct(self) -> (Option<T>, Option<U>);
-}
-
-impl<T, U> TupleOption<T, U> for Option<(T, U)> {
-	fn deconstruct(self) -> (Option<T>, Option<U>) {
-		if let Some((first, second)) = self {
-			(Some(first), Some(second))
-		} else {
-			(None, None)
-		}
-	}
-}
-
 pub trait TerminalOutput {
 	fn as_terminal_output(&self) -> String;
 }

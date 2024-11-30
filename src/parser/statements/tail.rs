@@ -10,19 +10,6 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub struct Label {
-	kind: ScopeType,
-}
-
-impl Label {
-	pub fn new(name: Name) -> anyhow::Result<Self> {
-		Ok(Self {
-			kind: context().scope_data.scope_type_of(&name)?.to_owned(),
-		})
-	}
-}
-
-#[derive(Debug, Clone)]
 pub struct TailStatement {
 	pub label: Name,
 	pub value: Expression,
@@ -34,7 +21,7 @@ impl Parse for TailStatement {
 	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
 		let label = Name::parse(tokens)?;
 
-		tokens.pop(TokenType::KeywordIs)?;
+		let _ = tokens.pop(TokenType::KeywordIs)?;
 		let value = Expression::parse(tokens)?;
 
 		Ok(TailStatement { label, value })
@@ -52,7 +39,7 @@ impl CompileTime for TailStatement {
 
 impl TranspileToC for TailStatement {
 	fn to_c(&self) -> anyhow::Result<String> {
-		Ok(match Label::new(self.label.clone())?.kind {
+		Ok(match context().scope_data.scope_type_of(&self.label)? {
 			ScopeType::Function => format!("*return_address = {};\nreturn;", self.value.to_c()?),
 			_ => format!("*tail_value = {};\ngoto label_{};", self.value.to_c()?, self.label.to_c()?),
 		})

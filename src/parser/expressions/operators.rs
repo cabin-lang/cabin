@@ -87,11 +87,11 @@ impl Parse for PrimaryExpression {
 	fn parse(tokens: &mut VecDeque<Token>) -> anyhow::Result<Self::Output> {
 		Ok(match tokens.peek_type()? {
 			TokenType::LeftParenthesis => {
-				tokens.pop(TokenType::LeftParenthesis).unwrap_or_else(|_| unreachable!());
+				let _ = tokens.pop(TokenType::LeftParenthesis).unwrap_or_else(|_| unreachable!());
 				let expression = Expression::parse(tokens)?;
-				tokens.pop(TokenType::RightParenthesis)?;
+				let _ = tokens.pop(TokenType::RightParenthesis)?;
 				expression
-				// TODO: this needs to be its own expression type
+				// TODO: this needs to be its own expression type for transpilation
 			},
 
 			// Parse function declaration expression

@@ -31,7 +31,7 @@ impl TryFrom<&PathBuf> for RunningContext {
 
 	fn try_from(path: &PathBuf) -> Result<Self, Self::Error> {
 		Ok(if PathBuf::from(path).is_dir() {
-			RunningContext::Project(Project::new(path)?)
+			RunningContext::Project(Project::new(path))
 		} else if PathBuf::from(path).is_file() {
 			RunningContext::SingleFile(path.to_owned())
 		} else {
@@ -45,10 +45,10 @@ pub struct Project {
 }
 
 impl Project {
-	pub fn new(root_directory: &PathBuf) -> anyhow::Result<Project> {
-		Ok(Self {
+	pub fn new(root_directory: &PathBuf) -> Project {
+		Self {
 			root_directory: root_directory.to_owned(),
-		})
+		}
 	}
 
 	pub const fn root_directory(&self) -> &PathBuf {

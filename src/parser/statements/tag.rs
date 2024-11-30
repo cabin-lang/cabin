@@ -1,9 +1,13 @@
 use std::{fmt::Debug, ops::Deref};
 
 use crate::{
-	comptime::CompileTime,
+	api::traits::TryAs as _,
+	comptime::{memory::VirtualPointer, CompileTime},
 	debug_log, debug_start, mapped_err, parse_list,
-	parser::{expressions::Expression, ListType, Parse, TokenQueue},
+	parser::{
+		expressions::{literal::CompilerWarning, Expression},
+		ListType, Parse, TokenQueue,
+	},
 };
 
 #[derive(Clone, Default)]
@@ -16,9 +20,9 @@ impl Parse for TagList {
 
 	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
 		let mut tags = Vec::new();
-		parse_list!(tokens, ListType::Tag, {
+		let _ = parse_list!(tokens, ListType::Tag, {
 			tags.push(Expression::parse(tokens)?);
-		});
+		}); // TODO: Probably span this maybe?
 		Ok(TagList { values: tags })
 	}
 }
@@ -64,5 +68,26 @@ impl Debug for TagList {
 				.replace("\n", " ")
 				.replace("\t", "")
 		)
+	}
+}
+
+impl TagList {
+	pub fn suppresses_warning(&self, warning: CompilerWarning) -> bool {
+		if self.is_empty() {
+			return false;
+		}
+
+		self.iter().any(|tag| {
+			tag.try_as::<VirtualPointer>()
+				.map(|pointer| {
+					let literal = pointer.virtual_deref();
+					if literal.type_name() == &"WarningSuppressor".into() {
+						let value = literal.get_field_literal("warning").unwrap();
+						return value.is_warning(warning);
+					}
+					false
+				})
+				.unwrap_or(false)
+		})
 	}
 }

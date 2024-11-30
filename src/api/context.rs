@@ -289,6 +289,11 @@ pub fn context() -> &'static mut Context {
 		unsafe_code,
 		reason = "This is the single place in Cabin where unsafe code is used. See the documentation for `CONTEXT` above."
 	)]
+	// Okay, I'm not sure what to do here. In theory I think this *might* be UB, but it *seems* to have no problems both in
+	// debug or release; And running Miri on this type of logic
+	// (https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=93ec698ca315d578e6310af3e7deb64d)
+	// just says "this indicates a potential bug in the program: it performed an invalid operation, but the Stacked Borrows
+	// rules it violated are still experimental"
 	unsafe {
 		(&*CONTEXT as *const Context as *mut Context).as_mut().unwrap()
 	}

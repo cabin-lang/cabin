@@ -1,7 +1,7 @@
 use crate::{
 	api::{context::context, scope::ScopeId},
 	comptime::CompileTime,
-	debug_start, err,
+	debug_start, err, if_then_some,
 	lexer::TokenType,
 	mapped_err,
 	parser::{
@@ -48,15 +48,16 @@ impl Parse for Declaration {
 
 	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
 		let debug_section = debug_start!("{} a {}", "Parsing".bold().green(), "declaration".cyan());
+
 		// Tags
-		let tags = if tokens.next_is(TokenType::TagOpening) { Some(TagList::parse(tokens)?) } else { None };
+		let tags = if_then_some!(tokens.next_is(TokenType::TagOpening), TagList::parse(tokens)?);
 
 		// Name
-		tokens.pop(TokenType::KeywordLet)?;
+		let _ = tokens.pop(TokenType::KeywordLet)?;
 		let name = Name::parse(tokens)?;
 
 		// Value
-		tokens.pop(TokenType::Equal)?;
+		let _ = tokens.pop(TokenType::Equal)?;
 
 		let mut value = Expression::parse(tokens)?;
 
@@ -74,7 +75,7 @@ impl Parse for Declaration {
 			while = format!("attempting to add the variable \"{}\" to its scope", name.unmangled_name().bold().cyan()),
 		})?;
 
-		tokens.pop(TokenType::Semicolon)?;
+		let _ = tokens.pop(TokenType::Semicolon)?;
 
 		// Return the declaration
 		debug_section.finish();

@@ -97,6 +97,8 @@ let Attempted = oneof<Data> {
 	Error	
 };
 
+let discardable = new Object {};
+
 let system = new Object {
 
 	terminal = new Object {
@@ -115,7 +117,10 @@ let Map = group {
 };
 
 let Warning = either {
+	# The warning that triggers when an either is created that has zero variants.
 	EmptyEither,
+
+	# The warning that triggers when an either is created that has only one variant.
 	SingleVariantEither
 };
 
@@ -123,6 +128,7 @@ let WarningSuppressor = group {
 	warning: Warning
 };
 
+# Suppresses a warning applied to a value.
 let suppress = action<warning: Warning> {
 	suppress is new WarningSuppressor {
 		warning = warning

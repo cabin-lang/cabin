@@ -72,14 +72,14 @@ impl CompileTime for VirtualPointer {
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
 		let evaluated = self.virtual_deref().clone().evaluate_at_compile_time()?;
-		context().virtual_memory.memory.insert(self.0, evaluated);
+		let _ = context().virtual_memory.memory.insert(self.0, evaluated);
 		Ok(self)
 	}
 }
 
 /// Technically this can be used to get the internal numeric value a la:
 ///
-/// let value: usize = format!("{pointer}").parse().unwrap();
+/// `let value: usize = format!("{pointer}").parse().unwrap();`
 ///
 /// ...but hey, not much we can do about it. It's pretty hacky anyway so it should be a pretty glaring sign
 /// that it's not really meant to be used that way. If nothing else it's a backdoor for some obscure situation
@@ -150,7 +150,7 @@ impl VirtualMemory {
 	pub fn store(&mut self, mut value: LiteralObject) -> VirtualPointer {
 		let address = self.next_unused_virtual_address();
 		value.address = Some(VirtualPointer(address));
-		self.memory.insert(address, value);
+		let _ = self.memory.insert(address, value);
 		VirtualPointer(address)
 	}
 
@@ -169,7 +169,7 @@ impl VirtualMemory {
 	}
 
 	pub fn replace(&mut self, address: VirtualPointer, value: LiteralObject) {
-		self.memory.insert(address.0, value);
+		let _ = self.memory.insert(address.0, value);
 	}
 
 	/// Returns the first unused virtual address. When storing an object in memory, this is used to determine what address to give it.
@@ -203,7 +203,7 @@ impl VirtualMemory {
 	pub fn move_overwrite(&mut self, location_of_value_to_move: VirtualPointer, destination_to_overwrite: VirtualPointer) {
 		let mut value = self.memory.remove(&location_of_value_to_move.0).unwrap();
 		value.address = Some(destination_to_overwrite);
-		self.memory.insert(destination_to_overwrite.0, value);
+		let _ = self.memory.insert(destination_to_overwrite.0, value);
 	}
 
 	/// Returns a `Vec` of the entries of all objects stored in virtual memory. The returned `Vec` contains tuples of owned

@@ -10,6 +10,8 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
+use std::fmt::Write as _;
+
 use super::Spanned;
 
 #[derive(Debug, Clone)]
@@ -20,7 +22,21 @@ pub struct Block {
 }
 
 impl Block {
-	pub fn parse_type(tokens: &mut TokenQueue, scope_type: ScopeType) -> anyhow::Result<Block> {
+	/// Parses a block expression and sets the scope type of the inner scope.
+	///
+	/// # Parameters
+	///
+	/// - `tokens` - The token stream to parse
+	/// - `scope_type`- The scope type of the inside of the block
+	///
+	/// # Returns
+	///
+	/// The parsed block expression
+	///
+	/// # Errors
+	///
+	/// If an unexpected token was encountered.
+	pub fn parse_with_scope_type(tokens: &mut TokenQueue, scope_type: ScopeType) -> anyhow::Result<Block> {
 		let debug_section = debug_start!("{} a {} expression", "Compile-Time Evaluating".bold().green(), "block".cyan());
 		context().scope_data.enter_new_scope(scope_type);
 
@@ -50,7 +66,7 @@ impl Parse for Block {
 	type Output = Block;
 
 	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
-		Block::parse_type(tokens, ScopeType::Block)
+		Block::parse_with_scope_type(tokens, ScopeType::Block)
 	}
 }
 
@@ -63,14 +79,13 @@ impl CompileTime for Block {
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
 		let mut statements = Vec::new();
-		let previous_scope = context().scope_data.set_current_scope(self.inner_scope_id);
+		let _scope_reverter = context().scope_data.set_current_scope(self.inner_scope_id);
 		for statement in self.statements {
 			let evaluated_statement = statement.evaluate_at_compile_time()?;
 
 			// Tail statement
 			if let Statement::Tail(tail_statement) = evaluated_statement {
 				if tail_statement.value.try_as_literal().is_ok() {
-					context().scope_data.set_current_scope(previous_scope);
 					return Ok(tail_statement.value);
 				}
 				statements.push(Statement::Tail(tail_statement));
@@ -80,8 +95,6 @@ impl CompileTime for Block {
 				statements.push(evaluated_statement);
 			}
 		}
-
-		context().scope_data.set_current_scope(previous_scope);
 
 		Ok(Expression::Block(Block {
 			statements,
@@ -97,7 +110,7 @@ impl TranspileToC for Block {
 		builder += "({";
 		for statement in &self.statements {
 			for line in statement.to_c()?.lines() {
-				builder += &format!("\n{line}");
+				write!(builder, "\n{line}").unwrap();
 			}
 		}
 		builder += "\n})";

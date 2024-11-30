@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Write as _};
 
 use try_as::traits as try_as_traits;
 
@@ -9,12 +9,7 @@ use crate::{
 	lexer::{Span, TokenType},
 	mapped_err, parse_list,
 	parser::{
-		expressions::{
-			group::GroupDeclaration,
-			literal::{LiteralConvertible as _, LiteralObject},
-			name::Name,
-			Expression,
-		},
+		expressions::{group::GroupDeclaration, literal::LiteralConvertible as _, name::Name, Expression},
 		statements::tag::TagList,
 		ListType, Parse, TokenQueue, TokenQueueFunctionality,
 	},
@@ -50,7 +45,7 @@ pub trait Fields {
 impl Fields for Vec<Field> {
 	fn add_or_overwrite_field(&mut self, field: Field) {
 		while let Some(index) = self.iter().enumerate().find_map(|(index, other)| (other.name == field.name).then_some(index)) {
-			self.remove(index);
+			let _ = self.remove(index);
 		}
 		self.push(field);
 	}
@@ -154,12 +149,12 @@ impl Parse for ObjectConstructor {
 			let tags = if tokens.next_is(TokenType::TagOpening) { Some(TagList::parse(tokens)?) } else { None };
 
 			// Name
-			let name = Name::parse(tokens).map_err(mapped_err! {
+			let field_name = Name::parse(tokens).map_err(mapped_err! {
 				while = "attempting to parse an object constructor",
 			})?;
 
 			// Value
-			tokens.pop(TokenType::Equal)?;
+			let _ = tokens.pop(TokenType::Equal)?;
 			let mut value = Expression::parse(tokens)?;
 
 			// Set tags
@@ -169,7 +164,7 @@ impl Parse for ObjectConstructor {
 
 			// Add field
 			fields.add_or_overwrite_field(Field {
-				name,
+				name: field_name,
 				value: Some(value),
 				field_type: None,
 			});
@@ -200,7 +195,7 @@ impl CompileTime for ObjectConstructor {
 			"Compile-Time Evaluating".green().bold(),
 			self.type_name.unmangled_name().yellow()
 		);
-		let previous = context().scope_data.set_current_scope(self.inner_scope_id);
+		let _scope_reverter = context().scope_data.set_current_scope(self.inner_scope_id);
 
 		// Get object type
 		let object_type = if_then_some!(!matches!(self.type_name.unmangled_name(), "Group" | "Module" | "Object"), {
@@ -257,10 +252,8 @@ impl CompileTime for ObjectConstructor {
 
 		self.tags = self.tags.evaluate_at_compile_time()?;
 
-		context().scope_data.set_current_scope(previous);
-
 		let result = if self.is_literal() {
-			let literal = LiteralObject::try_from_object_constructor(self)?;
+			let literal = self.try_into()?;
 			let address = context().virtual_memory.store(literal);
 			Ok(Expression::Pointer(address))
 		} else {
@@ -297,11 +290,11 @@ impl TranspileToC for ObjectConstructor {
 			self.type_name.clone().evaluate_at_compile_time()?.to_c()?
 		};
 
-		let mut builder = format!("({}) {{", name);
+		let mut builder = format!("({name}) {{");
 
 		// Fields
 		for field in &self.fields {
-			builder += &format!("\n\t.{} = {},", field.name.to_c()?, field.value.as_ref().unwrap().to_c()?);
+			write!(builder, "\n\t.{} = {},", field.name.to_c()?, field.value.as_ref().unwrap().to_c()?).unwrap();
 		}
 
 		builder += "\n}";

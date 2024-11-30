@@ -15,6 +15,7 @@
     "idents",
     "linkedlist",
     "malloc",
+    "Miri",
     "nfgets",
     "ngetline",
     "oneof",

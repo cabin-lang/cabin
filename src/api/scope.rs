@@ -335,10 +335,10 @@ impl ScopeData {
 	///
 	/// # Returns
 	/// The id of the previously current scope
-	pub fn set_current_scope(&mut self, id: ScopeId) -> ScopeId {
+	pub fn set_current_scope(&mut self, id: ScopeId) -> ScopeReverter {
 		let previous = self.current_scope;
 		self.current_scope = id.0;
-		ScopeId(previous)
+		ScopeReverter(ScopeId(previous))
 	}
 
 	/// Declares a new variable in the scope with the given id with the given value and tags. This should only be used to declare a new variable,
@@ -366,7 +366,7 @@ impl ScopeData {
 				name = name.unmangled_name().bold().cyan()
 			);
 		}
-		self.scopes.get_mut(id.0).unwrap().variables.insert(name.clone(), value);
+		let _ = self.scopes.get_mut(id.0).unwrap().variables.insert(name, value);
 		Ok(())
 	}
 
@@ -511,7 +511,7 @@ impl ScopeData {
 		Ok(&current.scope_type)
 	}
 
-	pub fn get_stdlib_id() -> ScopeId {
+	pub const fn get_stdlib_id() -> ScopeId {
 		ScopeId(1)
 	}
 }
@@ -589,5 +589,13 @@ impl Levenshtein for str {
 		}
 
 		v0[second_length]
+	}
+}
+
+pub struct ScopeReverter(ScopeId);
+
+impl Drop for ScopeReverter {
+	fn drop(&mut self) {
+		context().scope_data.current_scope = self.0 .0;
 	}
 }

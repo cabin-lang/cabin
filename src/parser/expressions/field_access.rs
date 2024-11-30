@@ -34,8 +34,6 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FieldAccessType {
 	Normal,
-	Group,
-	OneOf,
 	Either,
 }
 
@@ -110,9 +108,9 @@ impl CompileTime for FieldAccess {
 							)
 						})?;
 
-						let literal = field.virtual_deref();
-						if literal.type_name() == &"Function".into() {
-							let mut function_declaration = FunctionDeclaration::from_literal(literal).unwrap();
+						let field_value_literal = field.virtual_deref();
+						if field_value_literal.type_name() == &"Function".into() {
+							let mut function_declaration = FunctionDeclaration::from_literal(field_value_literal).unwrap();
 							function_declaration.set_this_object(left_evaluated);
 							context().virtual_memory.replace(field.to_owned(), function_declaration.to_literal());
 							Expression::Pointer(field.to_owned())
@@ -133,9 +131,7 @@ impl CompileTime for FieldAccess {
 									self.right.unmangled_name().cyan().bold()
 								)
 							})?
-							.clone()
 					},
-					_value => todo!("{literal:?} {}", self.right.unmangled_name()),
 				},
 				FieldAccessOperator::Colon => match literal.field_access_type() {
 					FieldAccessType::Normal => {
@@ -162,7 +158,7 @@ impl CompileTime for FieldAccess {
 									",
 									left_evaluated.get_type()?.virtual_deref().name().unmangled_name().bold().yellow(),
 									self.right.unmangled_name().bold().yellow(),
-									declaration.can_represent_string()?.bold().yellow(),
+									declaration.representables()?.bold().yellow(),
 								).as_terminal_output(),
 							}
 						}
@@ -172,19 +168,19 @@ impl CompileTime for FieldAccess {
 							.fields
 							.clone()
 							.into_iter()
-							.map(|(name, pointer)| Field {
+							.map(|(name, field_value)| Field {
 								name,
 								field_type: None,
-								value: Some(Expression::Pointer(pointer)),
+								value: Some(Expression::Pointer(field_value)),
 							})
 							.collect::<Vec<_>>();
 						fields.append(&mut original_fields);
 
 						let mut internal_fields = literal.internal_fields.clone();
-						internal_fields.insert("representing_type_name".to_owned(), InternalFieldValue::Name(literal.type_name().clone()));
+						let _ = internal_fields.insert("representing_type_name".to_owned(), InternalFieldValue::Name(literal.type_name().clone()));
 
 						Expression::Pointer(
-							LiteralObject::try_from_object_constructor(ObjectConstructor {
+							LiteralObject::try_from(ObjectConstructor {
 								type_name: declaration.type_to_represent_as().try_as::<VirtualPointer>().unwrap().virtual_deref().name().to_owned(),
 								fields,
 								internal_fields,

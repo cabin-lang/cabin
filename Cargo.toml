@@ -34,7 +34,7 @@ run = "cargo run -q -- run"
 run-prelude = "cargo run -q -- run std/prelude.cabin"
 
 [lints.rust]
-absolute_path_not_starting_with_crate = "warn"
+absolute_paths_not_starting_with_crate = "warn"
 keyword_idents_2018 = "forbid"
 keyword_idents_2024 = "forbid"
 macro_use_extern_crate = "warn"

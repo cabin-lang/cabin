@@ -3,14 +3,14 @@ use std::{collections::HashMap, fmt::Write as _};
 use colored::Colorize;
 
 use crate::{
-	api::{context::context, scope::ScopeId},
+	api::{context::context, scope::ScopeId, traits::TryAs as _},
 	comptime::{memory::VirtualPointer, CompileTime},
 	lexer::{Span, TokenType},
 	parse_list,
 	parser::{
 		expressions::{
 			field_access::FieldAccessType,
-			literal::{LiteralConvertible, LiteralObject},
+			literal::{CompilerWarning, LiteralConvertible, LiteralObject},
 			name::Name,
 			object::InternalFieldValue,
 			Spanned,
@@ -28,6 +28,7 @@ pub struct Either {
 	scope_id: ScopeId,
 	name: Name,
 	span: Span,
+	tags: TagList,
 }
 
 impl Parse for Either {
@@ -43,22 +44,12 @@ impl Parse for Either {
 		})
 		.span;
 
-		// Warnings for small eithers
-		if variants.is_empty() {
-			warn!("An empty either was created, which can never be instantiated.");
-		}
-		if variants.len() == 1 {
-			warn!(
-				"An either was created with only one variant (\"{}\"), which can only ever be instantiated to that one value.",
-				variants.first().unwrap().0.unmangled_name().red()
-			);
-		}
-
 		Ok(Either {
 			variants,
 			scope_id: context().scope_data.unique_id(),
 			name: "anonymous_either".into(),
 			span: start.to(&end),
+			tags: TagList::default(),
 		}
 		.to_literal()
 		.store_in_memory())
@@ -68,7 +59,23 @@ impl Parse for Either {
 impl CompileTime for Either {
 	type Output = Either;
 
-	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
+	fn evaluate_at_compile_time(mut self) -> anyhow::Result<Self::Output> {
+		// Tags
+		self.tags = self.tags.evaluate_at_compile_time()?;
+
+		// Warning for empty either
+		if self.variants.is_empty() && !self.tags.suppresses_warning(CompilerWarning::EmptyEither) {
+			warn!("An empty either was created, which can never be instantiated.");
+		}
+
+		// Warning for single item either
+		if self.variants.len() == 1 && !self.tags.suppresses_warning(CompilerWarning::SingleVariantEither) {
+			warn!(
+				"An either was created with only one variant (\"{}\"), which can only ever be instantiated to that one value.",
+				self.variants.first().unwrap().0.unmangled_name().red()
+			);
+		}
+
 		Ok(self)
 	}
 }
@@ -85,7 +92,7 @@ impl LiteralConvertible for Either {
 			inner_scope_id: Some(self.scope_id),
 			span: self.span,
 			type_name: "Either".into(),
-			tags: TagList::default(),
+			tags: self.tags,
 		}
 	}
 
@@ -95,6 +102,7 @@ impl LiteralConvertible for Either {
 			scope_id: literal.outer_scope_id(),
 			name: literal.name.clone(),
 			span: literal.span,
+			tags: literal.tags.clone(),
 		})
 	}
 }
@@ -126,5 +134,16 @@ impl Either {
 	/// The names of the variants in this `either`.
 	pub fn variant_names(&self) -> Vec<&Name> {
 		self.variants.iter().map(|variant| &variant.0).collect()
+	}
+
+	pub fn variants(&self) -> &[(Name, VirtualPointer)] {
+		&self.variants
+	}
+
+	pub fn set_name(&mut self, name: Name) {
+		self.name = name;
+		for variant in &mut self.variants {
+			variant.1.virtual_deref_mut().type_name = self.name.clone();
+		}
 	}
 }

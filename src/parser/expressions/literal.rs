@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fmt::Debug};
+use std::{
+	collections::HashMap,
+	fmt::{Debug, Write as _},
+};
 
 use colored::Colorize;
 use try_as::traits::TryAsRef;
@@ -79,31 +82,15 @@ pub struct LiteralObject {
 	pub tags: TagList,
 }
 
-impl LiteralObject {
-	pub fn empty(span: Span) -> Self {
-		Self {
-			type_name: "Object".into(),
-			fields: HashMap::new(),
-			internal_fields: HashMap::new(),
-			field_access_type: FieldAccessType::Normal,
-			outer_scope_id: context().scope_data.file_id(),
-			inner_scope_id: None,
-			address: None,
-			span,
-			name: "anonymous_object".into(),
-			tags: TagList::default(),
-		}
-	}
+impl TryFrom<ObjectConstructor> for LiteralObject {
+	type Error = anyhow::Error;
 
-	/// Attempts to convert an `ObjectConstructor` expression into a literal value. This is possible if and only if all
-	/// fields of the object constructor are themselves either literals or other `ObjectConstructors` that are capable of
-	/// being converted into a literal value.
-	pub fn try_from_object_constructor(object: ObjectConstructor) -> anyhow::Result<Self> {
+	fn try_from(object: ObjectConstructor) -> Result<Self, Self::Error> {
 		let mut fields = HashMap::new();
 		for field in object.fields {
 			let value = field.value.unwrap();
 			if let Expression::Pointer(address) = value {
-				fields.insert(field.name, address);
+				let _ = fields.insert(field.name, address);
 				continue;
 			}
 
@@ -129,8 +116,8 @@ impl LiteralObject {
 				};
 			};
 
-			let value_address = LiteralObject::try_from_object_constructor(field_object)?.store_in_memory();
-			fields.insert(field.name, value_address);
+			let value_address = LiteralObject::try_from(field_object)?.store_in_memory();
+			let _ = fields.insert(field.name, value_address);
 		}
 
 		Ok(LiteralObject {
@@ -146,16 +133,33 @@ impl LiteralObject {
 			tags: object.tags.evaluate_at_compile_time()?,
 		})
 	}
+}
 
-	pub fn type_name(&self) -> &Name {
+impl LiteralObject {
+	pub fn empty(span: Span) -> Self {
+		Self {
+			type_name: "Object".into(),
+			fields: HashMap::new(),
+			internal_fields: HashMap::new(),
+			field_access_type: FieldAccessType::Normal,
+			outer_scope_id: context().scope_data.file_id(),
+			inner_scope_id: None,
+			address: None,
+			span,
+			name: "anonymous_object".into(),
+			tags: TagList::default(),
+		}
+	}
+
+	pub const fn type_name(&self) -> &Name {
 		&self.type_name
 	}
 
-	pub fn field_access_type(&self) -> &FieldAccessType {
+	pub const fn field_access_type(&self) -> &FieldAccessType {
 		&self.field_access_type
 	}
 
-	pub fn name(&self) -> &Name {
+	pub const fn name(&self) -> &Name {
 		&self.name
 	}
 
@@ -202,7 +206,7 @@ impl LiteralObject {
 		context().virtual_memory.store(self)
 	}
 
-	pub fn outer_scope_id(&self) -> ScopeId {
+	pub const fn outer_scope_id(&self) -> ScopeId {
 		self.outer_scope_id
 	}
 
@@ -231,6 +235,21 @@ impl LiteralObject {
 	pub fn is_type_assignable_to_type(&self, target_type: VirtualPointer) -> anyhow::Result<bool> {
 		Ok(self.address.unwrap() == target_type) // TODO: check for polymorphism
 	}
+
+	pub fn is_warning(&self, warning: CompilerWarning) -> bool {
+		if self.type_name() != &"Warning".into() {
+			return false;
+		}
+
+		let either = Either::from_literal(context().scope_data.get_variable("Warning").unwrap().try_as::<VirtualPointer>().unwrap().virtual_deref()).unwrap();
+		for (variant_name, variant_value) in either.variants() {
+			if format!("{warning}") == variant_name.unmangled_name() {
+				return variant_value == &self.address.unwrap();
+			}
+		}
+
+		false
+	}
 }
 
 impl Debug for LiteralObject {
@@ -255,7 +274,8 @@ impl Debug for LiteralObject {
 			let function = Either::from_literal(self).unwrap();
 			return write!(
 				f,
-				"{} {{ {} }}",
+				"{:?} {} {{ {} }}",
+				self.tags,
 				"either".style(context().theme.keyword()),
 				function
 					.variant_names()
@@ -271,19 +291,21 @@ impl Debug for LiteralObject {
 		for (field_name, field_pointer) in &self.fields {
 			let value = field_pointer.virtual_deref();
 			if value.type_name() == &"Text".into() {
-				builder += &format!(
+				write!(
+					builder,
 					"\n\t{} = {}{},",
 					field_name.unmangled_name().red(),
 					"&".dimmed(),
 					format!("\"{}\"", value.get_internal_field::<String>("internal_value").unwrap()).green()
-				);
+				)
+				.unwrap();
 				continue;
 			}
-			builder += &format!(
+			write!(
+				builder,
 				"\n\t{} = {}{},",
 				match field_pointer.virtual_deref().type_name.unmangled_name() {
-					"Group" => field_name.unmangled_name().yellow(),
-					"OneOf" => field_name.unmangled_name().yellow(),
+					"Group" | "OneOf" => field_name.unmangled_name().yellow(),
 					_ => field_name.unmangled_name().red(),
 				},
 				"&".dimmed(),
@@ -294,6 +316,7 @@ impl Debug for LiteralObject {
 					.join("\n")
 					.trim()
 			)
+			.unwrap();
 		}
 
 		if !self.fields.is_empty() {
@@ -302,7 +325,7 @@ impl Debug for LiteralObject {
 
 		builder += "}";
 
-		write!(f, "{}", builder)
+		write!(f, "{builder}")
 	}
 }
 
@@ -425,6 +448,10 @@ pub trait LiteralConvertible: Sized {
 	/// # Returns
 	///
 	/// The instance of `Self` that the literal object was
+	///
+	/// # Errors
+	///
+	/// If the given literal isn't the right type.
 	fn from_literal(literal: &LiteralObject) -> anyhow::Result<Self>;
 }
 
@@ -453,15 +480,15 @@ impl TranspileToC for LiteralObject {
 				};
 
 				// Create string builder
-				let mut builder = format!("&({}) {{", type_name);
+				let mut builder = format!("&({type_name}) {{");
 
 				// Add fields
 				for (field_name, field_pointer) in &self.fields {
-					builder += &format!("\n\t.{} = {},", field_name.to_c()?, field_pointer.to_c()?);
+					write!(builder, "\n\t.{} = {},", field_name.to_c()?, field_pointer.to_c()?).unwrap();
 				}
 
 				if self.type_name == "Function".into() {
-					builder += &format!("\n\t.call = &call_anonymous_function_{}", self.address.unwrap());
+					write!(builder, "\n\t.call = &call_anonymous_function_{}", self.address.unwrap()).unwrap();
 				}
 
 				// Finish building the string
@@ -476,4 +503,10 @@ impl Spanned for LiteralObject {
 	fn span(&self) -> Span {
 		self.span
 	}
+}
+
+#[derive(strum_macros::Display, Clone, Copy)]
+pub enum CompilerWarning {
+	SingleVariantEither,
+	EmptyEither,
 }

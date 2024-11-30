@@ -2,6 +2,7 @@ use std::fmt::Debug;
 
 use crate::{api::context::context, cli::theme::Styled, debug_log, parser::expressions::try_as_traits::TryAsMut};
 use colored::Colorize as _;
+use either::Either;
 use field_access::FieldAccessType;
 use group::GroupDeclaration;
 use literal::LiteralConvertible;
@@ -156,7 +157,7 @@ impl Expression {
 		})
 	}
 
-	pub fn is_pointer(&self) -> bool {
+	pub const fn is_pointer(&self) -> bool {
 		matches!(self, Self::Pointer(_))
 	}
 
@@ -168,7 +169,7 @@ impl Expression {
 	///
 	/// # Returns
 	/// The name of the kind of expression of this as a string.
-	
+
 	pub const fn kind_name(&self) -> &'static str {
 		match self {
 			Self::Block(_) => "block",
@@ -237,7 +238,8 @@ impl Expression {
 			Self::Pointer(pointer) => {
 				let value = pointer.virtual_deref_mut();
 				let address = value.address;
-				if value.field_access_type == FieldAccessType::Group {
+
+				if value.type_name() == &"Group".into() {
 					let mut group = GroupDeclaration::from_literal(value).unwrap();
 					group.set_name(name);
 					*value = group.to_literal();
@@ -249,6 +251,14 @@ impl Expression {
 					let mut represent_as = RepresentAs::from_literal(value).unwrap();
 					represent_as.set_name(name);
 					*value = represent_as.to_literal();
+					value.address = address;
+					return;
+				}
+
+				if value.type_name() == &"Either".into() {
+					let mut either = Either::from_literal(value).unwrap();
+					either.set_name(name);
+					*value = either.to_literal();
 					value.address = address;
 					return;
 				}

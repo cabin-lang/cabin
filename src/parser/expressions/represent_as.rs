@@ -53,7 +53,7 @@ impl Parse for RepresentAs {
 
 		let compile_time_parameters = if_then_else_default!(tokens.next_is(TokenType::LeftAngleBracket), {
 			let mut parameters = Vec::new();
-			parse_list!(tokens, ListType::AngleBracketed, {
+			let _ = parse_list!(tokens, ListType::AngleBracketed, {
 				let parameter = Parameter::parse(tokens)?;
 				context().scope_data.declare_new_variable(
 					Parameter::from_literal(parameter.virtual_deref()).unwrap().name().to_owned(),
@@ -65,7 +65,7 @@ impl Parse for RepresentAs {
 		});
 
 		let type_to_represent = Box::new(Expression::parse(tokens)?);
-		tokens.pop(TokenType::KeywordAs)?;
+		let _ = tokens.pop(TokenType::KeywordAs)?;
 		let type_to_represent_as = Box::new(Expression::parse(tokens)?);
 
 		let mut fields = Vec::new();
@@ -79,7 +79,7 @@ impl Parse for RepresentAs {
 			})?;
 
 			// Value
-			tokens.pop(TokenType::Equal)?;
+			let _ = tokens.pop(TokenType::Equal)?;
 			let mut value = Expression::parse(tokens)?;
 
 			// Set tags
@@ -117,7 +117,7 @@ impl CompileTime for RepresentAs {
 	type Output = RepresentAs;
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
-		let previous = context().scope_data.set_current_scope(self.inner_scope_id);
+		let _scope_reverter = context().scope_data.set_current_scope(self.inner_scope_id);
 
 		let type_to_represent = Box::new(self.type_to_represent.evaluate_at_compile_time().map_err(mapped_err! {
 			while = "evaluating the type to represent in a represent-as declaration at compile-time",
@@ -153,9 +153,6 @@ impl CompileTime for RepresentAs {
 				while = "evaluating the compile-time parameters of a represent-as declaration at compile-time",
 			})?;
 
-		// Exit the scope
-		context().scope_data.set_current_scope(previous);
-
 		Ok(RepresentAs {
 			type_to_represent,
 			type_to_represent_as,
@@ -170,11 +167,11 @@ impl CompileTime for RepresentAs {
 }
 
 impl RepresentAs {
-	pub fn type_to_represent(&self) -> &Expression {
+	pub const fn type_to_represent(&self) -> &Expression {
 		&self.type_to_represent
 	}
 
-	pub fn type_to_represent_as(&self) -> &Expression {
+	pub const fn type_to_represent_as(&self) -> &Expression {
 		&self.type_to_represent_as
 	}
 
@@ -183,7 +180,7 @@ impl RepresentAs {
 	}
 
 	pub fn can_represent(&self, object: &Expression) -> anyhow::Result<bool> {
-		let previous = context().scope_data.set_current_scope(self.inner_scope_id);
+		let _scope_reverter = context().scope_data.set_current_scope(self.inner_scope_id);
 
 		if let Expression::Pointer(pointer) = self.type_to_represent.as_ref() {
 			let literal = pointer.virtual_deref();
@@ -192,29 +189,23 @@ impl RepresentAs {
 				let anything: VirtualPointer = *context().scope_data.get_variable("Anything").unwrap().try_as::<VirtualPointer>()?;
 				let parameter_type = parameter.get_type()?;
 				if parameter_type == anything || object.is_assignable_to_type(parameter_type)? {
-					context().scope_data.set_current_scope(previous);
 					return Ok(true);
 				}
 			}
 		}
 
-		context().scope_data.set_current_scope(previous);
-
 		Ok(false)
 	}
 
-	pub fn can_represent_string(&self) -> anyhow::Result<String> {
-		let previous = context().scope_data.set_current_scope(self.inner_scope_id);
+	pub fn representables(&self) -> anyhow::Result<String> {
+		let _scope_reverter = context().scope_data.set_current_scope(self.inner_scope_id);
 
 		if let Expression::Name(name) = self.type_to_represent.as_ref() {
 			if let Expression::Parameter(parameter) = context().scope_data.get_variable(name).unwrap() {
 				let parameter_type = parameter.get_type()?;
-				context().scope_data.set_current_scope(previous);
 				return Ok(parameter_type.virtual_deref().name().unmangled_name().to_owned());
 			}
 		}
-
-		context().scope_data.set_current_scope(previous);
 
 		Ok("unknown".to_string())
 	}

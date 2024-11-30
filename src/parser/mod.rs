@@ -60,7 +60,7 @@ impl CompileTime for Module {
 	type Output = Module;
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
-		let previous = context().scope_data.set_current_scope(self.inner_scope_id);
+		let _scope_reverter = context().scope_data.set_current_scope(self.inner_scope_id);
 		let evaluated = Self {
 			declarations: self
 				.declarations
@@ -74,7 +74,6 @@ impl CompileTime for Module {
 				.collect(),
 			inner_scope_id: self.inner_scope_id,
 		};
-		context().scope_data.set_current_scope(previous);
 		Ok(evaluated)
 	}
 }
@@ -159,7 +158,7 @@ pub trait TokenQueueFunctionality {
 	fn current_position(&self) -> Option<Span>;
 }
 
-impl TokenQueueFunctionality for std::collections::VecDeque<Token> {
+impl TokenQueueFunctionality for TokenQueue {
 	fn peek(&self) -> anyhow::Result<&str> {
 		Ok(&self.front().ok_or_else(|| anyhow::anyhow!("Unexpected end of file"))?.value)
 	}
@@ -283,9 +282,8 @@ impl ListType {
 		match self {
 			Self::AngleBracketed => TokenType::RightAngleBracket,
 			Self::Braced => TokenType::RightBrace,
-			Self::Bracketed => TokenType::RightBracket,
 			Self::Parenthesized => TokenType::RightParenthesis,
-			Self::Tag => TokenType::RightBracket,
+			Self::Bracketed | Self::Tag => TokenType::RightBracket,
 		}
 	}
 }

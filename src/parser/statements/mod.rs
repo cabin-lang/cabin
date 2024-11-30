@@ -30,17 +30,17 @@ impl Parse for Statement {
 			TokenType::Identifier => {
 				if tokens.peek_type2()? == TokenType::KeywordIs {
 					let tail = Statement::Tail(TailStatement::parse(tokens)?);
-					tokens.pop(TokenType::Semicolon)?;
+					let _ = tokens.pop(TokenType::Semicolon)?;
 					tail
 				} else {
 					let expression = Statement::Expression(Expression::parse(tokens)?);
-					tokens.pop(TokenType::Semicolon)?;
+					let _ = tokens.pop(TokenType::Semicolon)?;
 					expression
 				}
 			},
 			_ => {
 				let expression = Statement::Expression(Expression::parse(tokens)?);
-				tokens.pop(TokenType::Semicolon)?;
+				let _ = tokens.pop(TokenType::Semicolon)?;
 				expression
 			},
 		};
