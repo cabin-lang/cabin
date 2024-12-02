@@ -102,7 +102,7 @@ impl Parse for RepresentAs {
 			type_to_represent,
 			type_to_represent_as,
 			fields,
-			span: start.to(&end),
+			span: start.to(end),
 			name: "anonymous_represent_as".into(),
 			compile_time_parameters,
 			inner_scope_id,

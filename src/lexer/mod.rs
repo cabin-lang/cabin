@@ -52,6 +52,9 @@ pub enum TokenType {
 	/// have a single-character value, which is the "comma" character (,).
 	Comma,
 
+	QuestionMark,
+	ExclamationPoint,
+
 	/// The double equals token type. This is used for comparisons in if statements, similar to other languages. Any token tokenized of this type will always
 	/// have the value "=="
 	DoubleEquals,
@@ -192,6 +195,8 @@ pub enum TokenType {
 	/// identifiers, which will cause issues when parsing. Please be careful when moving around this keyword or the `Identifier` token type!
 	KeywordReturn,
 
+	KeywordMatch,
+
 	/// The `either` keyword token type. This is used to create enumerations.
 	///
 	/// A token created with this type will always have the value "either".
@@ -232,7 +237,6 @@ pub enum TokenType {
 	/// identifiers, which will cause issues when parsing. Please be careful when moving around this keyword or the `Identifier` token type!
 	KeywordWhile,
 	KeywordDefault,
-	KeywordWith,
 
 	KeywordEither,
 
@@ -355,6 +359,7 @@ impl TokenType {
 			Self::KeywordIn => regex_macro::regex!(r"^in\b"),
 			Self::KeywordIs => regex_macro::regex!(r"^is\b"),
 			Self::KeywordLet => regex_macro::regex!(r"^let\b"),
+			Self::KeywordMatch => regex_macro::regex!(r"^match\b"),
 			Self::KeywordNew => regex_macro::regex!(r"^new\b"),
 			Self::KeywordOneOf => regex_macro::regex!(r"^oneof\b"),
 			Self::KeywordOtherwise => regex_macro::regex!(r"^otherwise\b"),
@@ -362,7 +367,6 @@ impl TokenType {
 			Self::KeywordRuntime => regex_macro::regex!(r"^run\b"),
 			Self::KeywordRepresent => regex_macro::regex!(r"^represent\b"),
 			Self::KeywordWhile => regex_macro::regex!(r"^while\b"),
-			Self::KeywordWith => regex_macro::regex!(r"^with\b"),
 
 			// Left opening groupings
 			Self::LeftAngleBracket => regex_macro::regex!("^<"),
@@ -393,6 +397,8 @@ impl TokenType {
 			Self::LessThan => regex_macro::regex!(r"^\s+<"),
 			Self::GreaterThan => regex_macro::regex!(r"^\s+>"),
 			Self::RightArrow => regex_macro::regex!(r"^->"),
+			Self::ExclamationPoint => regex_macro::regex!(r"!"),
+			Self::QuestionMark => regex_macro::regex!(r"\?"),
 
 			// Punctuations / Misc
 			Self::TagOpening => regex_macro::regex!(r"^\#\["),
@@ -481,7 +487,6 @@ impl Token {
 			| TokenType::KeywordForEach
 			| TokenType::KeywordIn
 			| TokenType::KeywordWhile
-			| TokenType::KeywordWith
 			| TokenType::KeywordDefault
 			| TokenType::KeywordEither => context().theme.keyword(),
 
@@ -514,14 +519,14 @@ impl Span {
 		Span { start: 0, length: 0 }
 	}
 
-	pub const fn cover(first: &Span, second: &Span) -> Span {
+	pub const fn cover(first: Span, second: Span) -> Span {
 		Span {
 			start: first.start,
 			length: (second.start + second.length).abs_diff(first.start),
 		}
 	}
 
-	pub const fn to(&self, other: &Span) -> Span {
+	pub const fn to(self, other: Span) -> Span {
 		Span::cover(self, other)
 	}
 

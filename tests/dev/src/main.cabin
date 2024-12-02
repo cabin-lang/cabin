@@ -1,1 +1,6 @@
-print("Hello world":AsAnything);
+let value = match "hi" {
+	Number { value is "number"; },
+	text: Text { value is text; }
+};
+
+print(value:AsAnything);

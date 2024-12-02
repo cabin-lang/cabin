@@ -60,7 +60,7 @@ macro_rules! toml {
 				}
 			}
 
-			impl<'a> Deref for [<$document_name:camel TomlWriteOnDrop>]<'a> {
+			impl Deref for [<$document_name:camel TomlWriteOnDrop>]<'_> {
 				type Target = CabinToml;
 
 				fn deref(&self) -> &Self::Target {
@@ -68,13 +68,13 @@ macro_rules! toml {
 				}
 			}
 
-			impl<'a> DerefMut for [<$document_name:camel TomlWriteOnDrop>]<'a> {
+			impl DerefMut for [<$document_name:camel TomlWriteOnDrop>]<'_> {
 				fn deref_mut(&mut self) -> &mut Self::Target {
 					self.options
 				}
 			}
 
-			impl<'a> Drop for [<$document_name:camel TomlWriteOnDrop>]<'a> {
+			impl Drop for [<$document_name:camel TomlWriteOnDrop>]<'_> {
 				fn drop(&mut self) {
 					let path = self.root_directory.join($path);
 					let config: toml_edit::DocumentMut = self.options.into();

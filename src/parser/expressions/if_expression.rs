@@ -44,7 +44,7 @@ impl Parse for IfExpression {
 			inner_scope_id: body.inner_scope_id,
 			body: Box::new(Expression::Block(body)),
 			else_body,
-			span: start.to(&end),
+			span: start.to(end),
 		})
 	}
 }

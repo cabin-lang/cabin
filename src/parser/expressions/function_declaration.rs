@@ -154,7 +154,7 @@ impl Parse for FunctionDeclaration {
 			inner_scope_id,
 			this_object: None,
 			name: Name::non_mangled("anonymous_function"),
-			span: start.to(&end),
+			span: start.to(end),
 		}
 		.to_literal()
 		.store_in_memory())

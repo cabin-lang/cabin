@@ -32,3 +32,9 @@ let Object = cabin.Object;
 let system = cabin.system;
 let print = system.terminal.print;
 let input = system.terminal.input;
+
+# Compiler
+let suppress = cabin.suppress;
+let Warning = cabin.Warning;
+
+# question mark / bang: when used on an Attempted or Optional, do control flow, otherwise, do type modification

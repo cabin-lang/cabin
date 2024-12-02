@@ -43,7 +43,14 @@ impl Parse for PostfixOperators {
 		let mut end = start;
 
 		// Postfix function call operators
-		while tokens.next_is_one_of(&[TokenType::LeftParenthesis, TokenType::LeftAngleBracket]) {
+		while tokens.next_is_one_of(&[
+			TokenType::LeftParenthesis,
+			TokenType::LeftAngleBracket,
+			TokenType::QuestionMark,
+			TokenType::ExclamationPoint,
+		]) {
+			if tokens.next_is(TokenType::QuestionMark) {}
+
 			// Compile-time arguments
 			let compile_time_arguments = if_then_else_default!(tokens.next_is(TokenType::LeftAngleBracket), {
 				let mut compile_time_arguments = Vec::new();
@@ -70,7 +77,7 @@ impl Parse for PostfixOperators {
 				compile_time_arguments,
 				arguments,
 				scope_id: context().scope_data.unique_id(),
-				span: start.to(&end),
+				span: start.to(end),
 			});
 		}
 
@@ -497,12 +504,12 @@ impl FunctionCall {
 				left,
 				Name::from(function_name),
 				context().scope_data.unique_id(),
-				start.to(&middle),
+				start.to(middle),
 			))),
 			arguments: vec![right],
 			compile_time_arguments: Vec::new(),
 			scope_id: context().scope_data.unique_id(),
-			span: start.to(&end),
+			span: start.to(end),
 		})
 	}
 

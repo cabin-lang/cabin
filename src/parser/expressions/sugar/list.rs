@@ -31,7 +31,7 @@ impl Parse for List {
 			inner_scope_id: context().scope_data.unique_id(),
 			field_access_type: FieldAccessType::Normal,
 			name: "anonymous_runtime_list".into(),
-			span: start.to(&end),
+			span: start.to(end),
 			tags: TagList::default(),
 		};
 

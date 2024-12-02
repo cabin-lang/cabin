@@ -58,7 +58,7 @@ impl Parse for ForEachLoop {
 			body: Box::new(Expression::Block(body)),
 			iterable,
 			inner_scope_id,
-			span: start.to(&end),
+			span: start.to(end),
 		})
 	}
 }

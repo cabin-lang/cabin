@@ -23,7 +23,7 @@ use crate::{
 	},
 };
 
-use super::represent_as::RepresentAs;
+use super::{match_expression::Match, represent_as::RepresentAs};
 
 /// A binary operation. More specifically, this represents not one operation, but a group of operations that share the same precedence.
 /// For example, the `+` and `-` operators share the same precedence, so they are grouped together in the `ADDITIVE` constant.
@@ -120,6 +120,10 @@ impl Parse for PrimaryExpression {
 			// Parse one-of declaration expression
 			TokenType::KeywordOneOf => Expression::Pointer(OneOf::parse(tokens).map_err(mapped_err! {
 				while = "attempting to parse a one-of declaration expression",
+			})?),
+
+			TokenType::KeywordMatch => Expression::Match(Match::parse(tokens).map_err(mapped_err! {
+				while = "attempting to parse a match expression",
 			})?),
 
 			TokenType::KeywordEither => Expression::Pointer(Either::parse(tokens)?),

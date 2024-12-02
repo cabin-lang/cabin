@@ -3,7 +3,7 @@ use std::{collections::HashMap, fmt::Write as _};
 use colored::Colorize;
 
 use crate::{
-	api::{context::context, scope::ScopeId, traits::TryAs as _},
+	api::{context::context, scope::ScopeId},
 	comptime::{memory::VirtualPointer, CompileTime},
 	lexer::{Span, TokenType},
 	parse_list,
@@ -48,7 +48,7 @@ impl Parse for Either {
 			variants,
 			scope_id: context().scope_data.unique_id(),
 			name: "anonymous_either".into(),
-			span: start.to(&end),
+			span: start.to(end),
 			tags: TagList::default(),
 		}
 		.to_literal()

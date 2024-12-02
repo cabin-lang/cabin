@@ -70,7 +70,7 @@ impl Parse for OneOf {
 			compile_time_parameters,
 			outer_scope_id: context().scope_data.unique_id(),
 			inner_scope_id,
-			span: start.to(&end),
+			span: start.to(end),
 			name: "anonymous_one_of".into(),
 		}
 		.to_literal()

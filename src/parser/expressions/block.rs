@@ -22,6 +22,10 @@ pub struct Block {
 }
 
 impl Block {
+	pub fn new(statements: Vec<Statement>, inner_scope_id: ScopeId, span: Span) -> Block {
+		Block { statements, inner_scope_id, span }
+	}
+
 	/// Parses a block expression and sets the scope type of the inner scope.
 	///
 	/// # Parameters
@@ -57,7 +61,7 @@ impl Block {
 		Ok(Block {
 			statements,
 			inner_scope_id: scope_id,
-			span: start.to(&end),
+			span: start.to(end),
 		})
 	}
 }

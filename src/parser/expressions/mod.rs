@@ -3,9 +3,9 @@ use std::fmt::Debug;
 use crate::{api::context::context, cli::theme::Styled, debug_log, parser::expressions::try_as_traits::TryAsMut};
 use colored::Colorize as _;
 use either::Either;
-use field_access::FieldAccessType;
 use group::GroupDeclaration;
 use literal::LiteralConvertible;
+use match_expression::Match;
 use parameter::Parameter;
 use represent_as::RepresentAs;
 use run::{RunExpression, RuntimeableExpression};
@@ -37,11 +37,13 @@ pub mod function_declaration;
 pub mod group;
 pub mod if_expression;
 pub mod literal;
+pub mod match_expression;
 pub mod name;
 pub mod object;
 pub mod oneof;
 pub mod operators;
 pub mod parameter;
+pub mod postfix;
 pub mod represent_as;
 pub mod run;
 pub mod sugar;
@@ -52,6 +54,7 @@ pub enum Expression {
 	FieldAccess(FieldAccess),
 	FunctionCall(FunctionCall),
 	If(IfExpression),
+	Match(Match),
 	Name(Name),
 	ObjectConstructor(ObjectConstructor),
 	ForEachLoop(ForEachLoop),
@@ -95,6 +98,9 @@ impl CompileTime for Expression {
 			})?,
 			Self::ObjectConstructor(constructor) => constructor.evaluate_at_compile_time().map_err(mapped_err! {
 				while = "evaluating a object constructor expression at compile-time",
+			})?,
+			Self::Match(match_expression) => match_expression.evaluate_at_compile_time().map_err(mapped_err! {
+				while = "evaluating a match expression at compile-time",
 			})?,
 			Self::Parameter(parameter) => Expression::Parameter(parameter.evaluate_at_compile_time().map_err(mapped_err! {
 				while = "evaluating a parameter expression at compile-time",
@@ -183,6 +189,7 @@ impl Expression {
 			Self::ForEachLoop(_) => "for-each loop",
 			Self::Run(_) => "run expression",
 			Self::Parameter(_) => "parameter",
+			Self::Match(_) => "match",
 			Self::RepresentAs(_) => "represent-as expression",
 		}
 	}
@@ -312,6 +319,7 @@ impl TranspileToC for Expression {
 			Self::ObjectConstructor(object_constructor) => object_constructor.to_c()?,
 			Self::Run(run_expression) => run_expression.to_c()?,
 			Self::RepresentAs(_) => todo!(),
+			Self::Match(_) => todo!(),
 			Self::Parameter(_) => todo!(),
 			Self::Void(_) => "void".to_owned(),
 		})
@@ -350,6 +358,7 @@ impl Spanned for Expression {
 			Expression::FieldAccess(field_access) => field_access.span(),
 			Expression::ForEachLoop(for_each_loop) => for_each_loop.span(),
 			Expression::Parameter(parameter) => parameter.span(),
+			Expression::Match(match_expression) => match_expression.span(),
 			Expression::RepresentAs(represent_as) => represent_as.span(),
 			Expression::Void(_) => todo!(),
 		}
@@ -394,6 +403,7 @@ impl Debug for Expression {
 			Self::Parameter(parameter) => parameter.fmt(formatter),
 			Self::Pointer(pointer) => pointer.fmt(formatter),
 			Self::Run(run) => run.fmt(formatter),
+			Self::Match(match_expression) => match_expression.fmt(formatter),
 			Self::RepresentAs(represent_as) => represent_as.fmt(formatter),
 			Self::Void(()) => write!(formatter, "{}", "<void>".style(context().theme.keyword())),
 		}

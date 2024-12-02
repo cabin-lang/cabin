@@ -180,7 +180,7 @@ impl Parse for ObjectConstructor {
 			internal_fields: HashMap::new(),
 			field_access_type: FieldAccessType::Normal,
 			name: Name::non_mangled("anonymous_object"),
-			span: start.to(&end),
+			span: start.to(end),
 			tags: TagList::default(),
 		})
 	}

@@ -97,7 +97,7 @@ let Attempted = oneof<Data> {
 	Error	
 };
 
-let discardable = new Object {};
+let ignorable = new Object {};
 
 let system = new Object {
 

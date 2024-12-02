@@ -514,6 +514,13 @@ impl ScopeData {
 	pub const fn get_stdlib_id() -> ScopeId {
 		ScopeId(1)
 	}
+
+	pub fn new_scope_id(&mut self, scope_type: ScopeType) -> ScopeId {
+		self.enter_new_scope(scope_type);
+		let id = ScopeId(self.current_scope);
+		self.exit_scope().unwrap();
+		id
+	}
 }
 
 impl Debug for ScopeData {

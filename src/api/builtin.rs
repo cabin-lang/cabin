@@ -73,7 +73,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?;
 			let second_number = second.try_as_literal()?.try_as::<f64>()?;
 
-			Ok(number(first_number + second_number, first.span().to(&second.span())))
+			Ok(number(first_number + second_number, first.span().to(second.span())))
 		},
 		to_c: |parameter_names| {
 			let number_address = context().scope_data.get_variable("Number").unwrap().try_as::<VirtualPointer>().unwrap();
@@ -90,7 +90,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?;
 			let second_number = second.try_as_literal()?.try_as::<f64>()?;
 
-			Ok(number(first_number - second_number, first.span().to(&second.span())))
+			Ok(number(first_number - second_number, first.span().to(second.span())))
 		},
 		to_c: |_parameter_names| {
 			Ok(String::new())

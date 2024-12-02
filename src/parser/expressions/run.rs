@@ -45,7 +45,7 @@ impl Parse for RunExpression {
 	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
 		let mut span = tokens.pop(TokenType::KeywordRuntime)?.span;
 		let expression = Box::new(Expression::parse(tokens)?);
-		span = span.to(&expression.span());
+		span = span.to(expression.span());
 		Ok(RunExpression { span, expression })
 	}
 }

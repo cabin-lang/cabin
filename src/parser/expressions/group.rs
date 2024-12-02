@@ -89,7 +89,7 @@ impl Parse for GroupDeclaration {
 			inner_scope_id,
 			outer_scope_id,
 			name: "anonymous_group".into(),
-			span: start.to(&end),
+			span: start.to(end),
 		}
 		.to_literal()
 		.store_in_memory())

@@ -207,3 +207,16 @@ macro_rules! warn {
 		$crate::api::context::context().add_warning(format!($($tokens)*));
 	};
 }
+
+#[macro_export]
+macro_rules! expression {
+	($($tokens: tt)*) => {{
+		use $crate::parser::Parse as _;
+		let code = format!($($tokens)*);
+		let mut tokens = $crate::lexer::tokenize_without_prelude(&code);
+		match tokens {
+			Ok(tokens) => $crate::parser::expressions::Expression::parse(&mut tokens),
+			Err(error) => Err(error)
+		}
+	}};
+}

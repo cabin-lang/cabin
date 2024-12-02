@@ -33,7 +33,7 @@ impl Parse for Parameter {
 		let _ = tokens.pop(TokenType::Colon)?;
 		let parameter_type = Expression::parse(tokens)?;
 		Ok(Parameter {
-			span: name.span().to(&parameter_type.span()),
+			span: name.span().to(parameter_type.span()),
 			name,
 			parameter_type: Box::new(parameter_type),
 			scope_id: context().scope_data.unique_id(),
