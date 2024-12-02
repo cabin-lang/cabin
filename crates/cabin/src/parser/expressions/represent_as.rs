@@ -207,7 +207,7 @@ impl RepresentAs {
 			}
 		}
 
-		Ok("unknown".to_string())
+		Ok("unknown".to_owned())
 	}
 
 	pub fn set_name(&mut self, name: Name) {

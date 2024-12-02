@@ -79,7 +79,7 @@ pub fn transpile(program: &Module) -> anyhow::Result<String> {
 pub fn transpile_program(program: &Module) -> anyhow::Result<String> {
 	let mut builder = String::new();
 	for line in program.to_c()?.lines() {
-		builder += &format!("\n\t{line}");
+		write!(builder, "\n\t{line}").unwrap();
 	}
 	Ok(builder)
 }
@@ -88,39 +88,50 @@ pub fn transpile_types() -> anyhow::Result<String> {
 	let mut builder = String::new();
 
 	for (address, value) in context().virtual_memory.entries() {
-		builder += &match value.type_name().unmangled_name() {
-			"Group" => {
-				let group = GroupDeclaration::from_literal(value).map_err(mapped_err! {
-					while = "deserializing a literal in memory to a group",
-				})?;
-				format!(
-					"struct {} {};\n\n",
-					value.to_c_type().map_err(mapped_err! {
-						while = "transpiling the group into its type name",
-					})?,
-					group.to_c().map_err(mapped_err! {
-						while = "transpiling a group declaration's value to C",
-					})?,
-				)
-			},
-			"Either" => {
-				let either = Either::from_literal(value)?;
-				format!("enum {} {};\n\n", value.name.to_c()?, either.to_c()?,)
-			},
-			"Object" => {
-				let mut builder = format!("struct type_{}_{} {{", value.name.to_c()?, address);
+		write!(
+			builder,
+			"{}",
+			match value.type_name().unmangled_name() {
+				"Group" => {
+					let group = GroupDeclaration::from_literal(value).map_err(mapped_err! {
+						while = "deserializing a literal in memory to a group",
+					})?;
+					format!(
+						"struct {} {};\n\n",
+						value.to_c_type().map_err(mapped_err! {
+							while = "transpiling the group into its type name",
+						})?,
+						group.to_c().map_err(mapped_err! {
+							while = "transpiling a group declaration's value to C",
+						})?,
+					)
+				},
+				"Either" => {
+					let either = Either::from_literal(value)?;
+					format!("enum {} {};\n\n", value.name.to_c()?, either.to_c()?,)
+				},
+				"Object" => {
+					let mut object_c = format!("struct type_{}_{} {{", value.name.to_c()?, address);
 
-				// Add object fields
-				for (field_name, field_value) in value.fields() {
-					builder += &format!("\n\t{}* {};", field_value.virtual_deref().get_type()?.virtual_deref().to_c_type()?, field_name.to_c()?);
-				}
+					// Add object fields
+					for (field_name, field_value) in value.fields() {
+						write!(
+							object_c,
+							"\n\t{}* {};",
+							field_value.virtual_deref().get_type()?.virtual_deref().to_c_type()?,
+							field_name.to_c()?
+						)
+						.unwrap();
+					}
 
-				// Finish building the string
-				builder += "\n};\n\n";
-				builder
-			},
-			_ => String::new(),
-		}
+					// Finish building the string
+					object_c += "\n};\n\n";
+					object_c
+				},
+				_ => String::new(),
+			}
+		)
+		.unwrap();
 	}
 	Ok(builder)
 }
@@ -203,7 +214,7 @@ pub fn transpile_literal(value: &LiteralObject, address: VirtualPointer, done: &
 	};
 
 	for line in c.lines() {
-		builder += &format!("\n\t{line}");
+		write!(builder, "\n\t{line}").unwrap();
 	}
 	done.push(address);
 

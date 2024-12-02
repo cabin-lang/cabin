@@ -302,17 +302,11 @@ impl ScopeData {
 	/// the current scope is the global scope, which has no parent and should never be exited. This should only ever be used after an accompanying
 	/// `enter_new_scope()` call.
 	///
-	/// # Returns
-	/// A result if this is currently the global scope when trying to exit it.
+	/// # Errors
+	///
+	/// If this is currently the global scope
 	pub fn exit_scope(&mut self) -> anyhow::Result<()> {
 		self.current_scope = self.current().parent.ok_or_else(|| anyhow::anyhow!("Attempted to exit global scope"))?;
-		Ok(())
-	}
-
-	pub fn exit_to_label(&mut self, label: Name) -> anyhow::Result<()> {
-		while self.current().label != Some(label.clone()) {
-			self.exit_scope()?;
-		}
 		Ok(())
 	}
 
@@ -351,8 +345,8 @@ impl ScopeData {
 	/// - `tags` - The tags on the variable declaration.
 	/// - `id` - The id of the scope to declare the variable in.
 	///
-	/// # Returns
-	/// An error if a variable already exists with the given name in the scope with the given id.
+	/// # Errors
+	/// Returns an error if a variable already exists with the given name in the scope with the given id.
 	pub fn declare_new_variable_from_id(&mut self, name: impl Into<Name>, value: Expression, id: ScopeId) -> anyhow::Result<()> {
 		let name = name.into();
 		debug_log!(
@@ -379,8 +373,8 @@ impl ScopeData {
 	/// - `value` - The value of the variable to set. All variables must be initialized with a value.
 	/// - `tags` - The tags on the variable declaration.
 	///
-	/// # Returns
-	/// An error if a variable already exists with the given name in the current scope.
+	/// # Errors
+	/// Returns an error if a variable already exists with the given name in the current scope.
 	pub fn declare_new_variable(&mut self, name: impl Into<Name>, value: Expression) -> anyhow::Result<()> {
 		self.declare_new_variable_from_id(name, value, ScopeId(self.current_scope))
 	}
@@ -408,8 +402,8 @@ impl ScopeData {
 	/// scope), otherwise, an `Err` wil be returned.
 	/// - `value` - The new value to set the variable to
 	///
-	/// # Returns
-	/// An `Err` if no variable with the given name exists in the current scope.
+	/// # Errors
+	/// Errors if no variable with the given name exists in the current scope.
 	pub fn reassign_variable_from_id(&mut self, name: &Name, mut value: Expression, id: ScopeId) -> anyhow::Result<()> {
 		debug_log!(
 			"Reassigning the variable called {} in a scope of type {:?} to be {value:?}",
@@ -443,8 +437,8 @@ impl ScopeData {
 	/// scope), otherwise, an `Err` wil be returned.
 	/// - `value` - The new value to set the variable to
 	///
-	/// # Returns
-	/// An `Err` if no variable with the given name exists in the current scope.
+	/// # Errors
+	/// Returns an error if no variable with the given name exists in the current scope.
 	pub fn reassign_variable(&mut self, name: &Name, value: Expression) -> anyhow::Result<()> {
 		self.reassign_variable_from_id(name, value, ScopeId(self.current_scope))
 	}
@@ -575,19 +569,23 @@ impl Levenshtein for str {
 			if v1.is_empty() {
 				v1.push(0);
 			}
-			v1[0] = index + 1;
+			*v1.get_mut(0).unwrap() = index + 1;
 
 			for j in 0..second_length {
-				deletion_cost = v0[j + 1] + 1;
-				insertion_cost = v1[j] + 1;
+				deletion_cost = v0.get(j + 1).unwrap() + 1;
+				insertion_cost = v1.get(j).unwrap() + 1;
 
-				substitution_cost = if self.chars().nth(index) == other.chars().nth(j) { v0[j] } else { v0[j] + 1 };
+				substitution_cost = if self.chars().nth(index) == other.chars().nth(j) {
+					*v0.get(j).unwrap()
+				} else {
+					v0.get(j).unwrap() + 1
+				};
 
 				while v1.len() <= j + 1 {
 					v1.push(0);
 				}
 
-				v1[j + 1] = [deletion_cost, insertion_cost, substitution_cost].into_iter().min().unwrap();
+				*v1.get_mut(j + 1).unwrap() = [deletion_cost, insertion_cost, substitution_cost].into_iter().min().unwrap();
 			}
 
 			dummy = v0;
@@ -595,7 +593,7 @@ impl Levenshtein for str {
 			v1 = dummy;
 		}
 
-		v0[second_length]
+		*v0.get(second_length).unwrap()
 	}
 }
 

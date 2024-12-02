@@ -6,27 +6,30 @@ use crate::{comptime::CompileTime, parser::statements::Statement};
 
 use super::block::Block;
 use super::match_expression::{Match, MatchBranch};
-use super::{Expression, Typed};
+use super::{Expression, Spanned, Typed};
 
-#[derive(Debug)]
-pub enum PostfixOperator {
+#[derive(Debug, Clone)]
+pub enum UnaryOperator {
 	QuestionMark,
 	ExclamationPoint,
 }
 
-#[derive(Debug)]
-pub struct PostfixOperation {
-	operator: PostfixOperator,
-	expression: Expression,
+/// Unlike binary expressions, which are converted to function calls at parse-time, these cannot be
+/// converted to function calls because operators like `?` and `!` can affect control flow.
+#[derive(Debug, Clone)]
+pub struct UnaryOperation {
+	pub operator: UnaryOperator,
+	pub expression: Box<Expression>,
+	pub span: Span,
 }
 
-impl CompileTime for PostfixOperation {
+impl CompileTime for UnaryOperation {
 	type Output = Expression;
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
 		let expression = self.expression.evaluate_as_type()?;
 		match self.operator {
-			PostfixOperator::QuestionMark => {
+			UnaryOperator::QuestionMark => {
 				if expression.get_type()?.virtual_deref().type_name() == &"Attempted".into() {
 					Ok(Expression::Block(Block::new(
 						vec![Statement::Expression(Expression::Match(Match {
@@ -52,9 +55,15 @@ impl CompileTime for PostfixOperation {
 					todo!()
 				}
 			},
-			PostfixOperator::ExclamationPoint => {
+			UnaryOperator::ExclamationPoint => {
 				todo!()
 			},
 		}
+	}
+}
+
+impl Spanned for UnaryOperation {
+	fn span(&self) -> Span {
+		self.span
 	}
 }

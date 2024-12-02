@@ -10,6 +10,7 @@ use parameter::Parameter;
 use represent_as::RepresentAs;
 use run::{RunExpression, RuntimeableExpression};
 use try_as::traits as try_as_traits;
+use unary::UnaryOperation;
 
 use crate::{
 	api::traits::TryAs as _,
@@ -43,10 +44,10 @@ pub mod object;
 pub mod oneof;
 pub mod operators;
 pub mod parameter;
-pub mod postfix;
 pub mod represent_as;
 pub mod run;
 pub mod sugar;
+pub mod unary;
 
 #[derive(Clone, try_as::macros::From, try_as::macros::TryInto, try_as::macros::TryAsRef, try_as::macros::TryAsMut)]
 pub enum Expression {
@@ -60,6 +61,7 @@ pub enum Expression {
 	ForEachLoop(ForEachLoop),
 	Pointer(VirtualPointer),
 	Run(RunExpression),
+	Unary(UnaryOperation),
 	Parameter(Parameter),
 	RepresentAs(RepresentAs),
 	Void(()),
@@ -105,6 +107,9 @@ impl CompileTime for Expression {
 			Self::Parameter(parameter) => Expression::Parameter(parameter.evaluate_at_compile_time().map_err(mapped_err! {
 				while = "evaluating a parameter expression at compile-time",
 			})?),
+			Self::Unary(unary) => unary.evaluate_at_compile_time().map_err(mapped_err! {
+				while = "evaluating a unary operation expression at compile-time",
+			})?,
 			Self::ForEachLoop(for_loop) => for_loop
 				.evaluate_at_compile_time()
 				.map_err(|error| anyhow::anyhow!("{error}\n\t{}", "while evaluating a for-each loop at compile-time".dimmed()))?,
@@ -183,6 +188,7 @@ impl Expression {
 			Self::FunctionCall(_) => "function call",
 			Self::Name(_) => "name",
 			Self::ObjectConstructor(_) => "object constructor",
+			Self::Unary(_) => "unary operation",
 			Self::Void(_) => "non-existent value",
 			Self::Pointer(_) => "pointer",
 			Self::If(_) => "if expression",
@@ -318,10 +324,8 @@ impl TranspileToC for Expression {
 			Self::Pointer(pointer) => pointer.to_c()?,
 			Self::ObjectConstructor(object_constructor) => object_constructor.to_c()?,
 			Self::Run(run_expression) => run_expression.to_c()?,
-			Self::RepresentAs(_) => todo!(),
-			Self::Match(_) => todo!(),
-			Self::Parameter(_) => todo!(),
 			Self::Void(_) => "void".to_owned(),
+			_ => todo!(),
 		})
 	}
 }
@@ -360,6 +364,7 @@ impl Spanned for Expression {
 			Expression::Parameter(parameter) => parameter.span(),
 			Expression::Match(match_expression) => match_expression.span(),
 			Expression::RepresentAs(represent_as) => represent_as.span(),
+			Expression::Unary(unary) => unary.span(),
 			Expression::Void(_) => todo!(),
 		}
 	}
@@ -398,6 +403,7 @@ impl Debug for Expression {
 			Self::FunctionCall(function_call) => function_call.fmt(formatter),
 			Self::ForEachLoop(for_loop) => for_loop.fmt(formatter),
 			Self::If(if_expression) => if_expression.fmt(formatter),
+			Self::Unary(unary) => unary.fmt(formatter),
 			Self::Name(name) => name.fmt(formatter),
 			Self::ObjectConstructor(object) => object.fmt(formatter),
 			Self::Parameter(parameter) => parameter.fmt(formatter),

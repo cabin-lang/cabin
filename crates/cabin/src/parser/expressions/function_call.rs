@@ -22,6 +22,8 @@ use crate::{
 	transpiler::TranspileToC,
 };
 
+use super::unary::{UnaryOperation, UnaryOperator};
+
 #[derive(Debug, Clone)]
 pub struct FunctionCall {
 	function: Box<Expression>,
@@ -49,7 +51,14 @@ impl Parse for PostfixOperators {
 			TokenType::QuestionMark,
 			TokenType::ExclamationPoint,
 		]) {
-			if tokens.next_is(TokenType::QuestionMark) {}
+			if tokens.next_is(TokenType::QuestionMark) {
+				end = tokens.pop(TokenType::QuestionMark)?.span;
+				return Ok(Expression::Unary(UnaryOperation {
+					expression: Box::new(expression),
+					operator: UnaryOperator::QuestionMark,
+					span: start.to(end),
+				}));
+			}
 
 			// Compile-time arguments
 			let compile_time_arguments = if_then_else_default!(tokens.next_is(TokenType::LeftAngleBracket), {

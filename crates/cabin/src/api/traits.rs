@@ -1,6 +1,12 @@
 use try_as::traits::{TryAsMut, TryAsRef};
 
 pub trait TryAs {
+	/// Attempts to convert this enum variant into the given type. This is a generic wrapper
+	/// around `try_as_ref`.
+	///
+	/// # Errors
+	///
+	/// If this enum is of the wrong variant.
 	fn try_as<T>(&self) -> anyhow::Result<&T>
 	where
 		Self: TryAsRef<T>,
@@ -9,6 +15,12 @@ pub trait TryAs {
 	}
 }
 pub trait TryAsRefMut {
+	/// Attempts to convert this enum variant into the given type. This is a generic wrapper
+	/// around `try_as_mut`.
+	///
+	/// # Errors
+	///
+	/// If this enum is of the wrong variant.
 	fn try_as_ref_mut<T>(&mut self) -> anyhow::Result<&mut T>
 	where
 		Self: TryAsMut<T>,

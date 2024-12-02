@@ -22,7 +22,7 @@ pub struct Block {
 }
 
 impl Block {
-	pub fn new(statements: Vec<Statement>, inner_scope_id: ScopeId, span: Span) -> Block {
+	pub const fn new(statements: Vec<Statement>, inner_scope_id: ScopeId, span: Span) -> Block {
 		Block { statements, inner_scope_id, span }
 	}
 

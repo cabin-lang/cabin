@@ -49,13 +49,13 @@ macro_rules! toml {
 				}
 			}
 
-			pub struct [<$document_name:camel TomlWriteOnDrop>]<'a> {
-				options: &'a mut CabinToml,
+			pub struct [<$document_name:camel TomlWriteOnDrop>]<'toml> {
+				options: &'toml mut CabinToml,
 				root_directory: PathBuf,
 			}
 
-			impl<'a> [<$document_name:camel TomlWriteOnDrop>]<'a> {
-				pub fn new(options: &'a mut CabinToml, root_directory: PathBuf) -> Self {
+			impl<'toml> [<$document_name:camel TomlWriteOnDrop>]<'toml> {
+				pub fn new(options: &'toml mut CabinToml, root_directory: PathBuf) -> Self {
 					Self { options, root_directory }
 				}
 			}
