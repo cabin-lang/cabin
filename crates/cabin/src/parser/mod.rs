@@ -9,6 +9,7 @@ use expressions::{
 use statements::{
 	declaration::{Declaration, DeclarationType},
 	tag::TagList,
+	Statement,
 };
 
 use crate::{
@@ -17,6 +18,7 @@ use crate::{
 		scope::{ScopeId, ScopeType},
 		traits::TryAs,
 	},
+	bail_err,
 	comptime::{memory::VirtualPointer, CompileTime},
 	lexer::{Span, Token, TokenType},
 	mapped_err,
@@ -42,17 +44,22 @@ impl Parse for Module {
 	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
 		context().scope_data.enter_new_scope(ScopeType::File);
 		let inner_scope_id = context().scope_data.unique_id();
-		let mut statements = Vec::new();
+		let mut declarations = Vec::new();
 		while !tokens.is_empty() {
-			statements.push(Declaration::parse(tokens).map_err(mapped_err! {
+			let statement = Declaration::parse(tokens).map_err(mapped_err! {
 				while = "parsing the program's top-level declarations",
-			})?);
+			})?;
+
+			let Statement::Declaration(declaration) = statement else {
+                bail_err! {
+                    base = "Modules may only contain declarations",
+                }
+            };
+
+			declarations.push(declaration);
 		}
 		context().scope_data.exit_scope()?;
-		Ok(Module {
-			declarations: statements,
-			inner_scope_id,
-		})
+		Ok(Module { declarations, inner_scope_id })
 	}
 }
 

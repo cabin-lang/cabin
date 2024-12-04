@@ -3,4 +3,4 @@ let value = match "hi" {
 	text: Text { value is text; }
 };
 
-print(value:AsAnything);
+debug(value:AnythingExtension);

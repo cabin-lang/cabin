@@ -5,7 +5,9 @@ use crate::{
 	parser::{
 		expressions::Expression,
 		statements::{declaration::Declaration, tail::TailStatement},
-		Parse, TokenQueue, TokenQueueFunctionality as _,
+		Parse,
+		TokenQueue,
+		TokenQueueFunctionality as _,
 	},
 	transpiler::TranspileToC,
 };
@@ -26,7 +28,7 @@ impl Parse for Statement {
 
 	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
 		let statement = match tokens.peek_type()? {
-			TokenType::KeywordLet | TokenType::TagOpening => Statement::Declaration(Declaration::parse(tokens)?),
+			TokenType::KeywordLet | TokenType::TagOpening => Declaration::parse(tokens)?,
 			TokenType::Identifier => {
 				if tokens.peek_type2()? == TokenType::KeywordIs {
 					let tail = Statement::Tail(TailStatement::parse(tokens)?);

@@ -1,25 +1,30 @@
+use std::fmt::Debug;
+
 use crate::{
 	api::context::context,
+	cli::theme::Styled,
 	comptime::CompileTime,
-	debug_start, if_then_some,
+	debug_start,
+	if_then_some,
 	lexer::{Span, TokenType},
 	parse_list,
 	parser::{
-		expressions::{block::Block, name::Name, Expression},
-		ListType, Parse, TokenQueue, TokenQueueFunctionality,
+		expressions::{block::Block, name::Name, Expression, Spanned},
+		ListType,
+		Parse,
+		TokenQueue,
+		TokenQueueFunctionality,
 	},
 };
 
-use super::Spanned;
-
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Match {
 	pub expression: Box<Expression>,
 	pub branches: Vec<MatchBranch>,
 	pub span: Span,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct MatchBranch {
 	pub name: Option<Name>,
 	pub type_to_match: Expression,
@@ -114,5 +119,29 @@ impl CompileTime for Match {
 impl Spanned for Match {
 	fn span(&self) -> Span {
 		self.span
+	}
+}
+
+impl Debug for MatchBranch {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
+			"{}{:?} {:?}",
+			if let Some(name) = &self.name { format!("{:?}: ", name) } else { String::new() },
+			self.type_to_match,
+			self.body
+		)
+	}
+}
+
+impl Debug for Match {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
+			"{} {:?} {{\n\t{}\n}}",
+			"match".style(context().theme.keyword()),
+			self.expression,
+			self.branches.iter().map(|branch| format!("{branch:?}")).collect::<Vec<_>>().join("\n")
+		)
 	}
 }

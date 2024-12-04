@@ -1,5 +1,6 @@
 use std::{collections::VecDeque, fmt::Write as _};
 
+use super::unary::{UnaryOperation, UnaryOperator};
 use crate::{
 	api::{
 		builtin::call_builtin_at_compile_time,
@@ -9,20 +10,31 @@ use crate::{
 	},
 	bail_err,
 	comptime::{memory::VirtualPointer, CompileTime},
-	debug_log, debug_start, if_then_else_default,
+	debug_log,
+	debug_start,
+	if_then_else_default,
 	lexer::{Span, Token, TokenType},
-	mapped_err, parse_list,
+	mapped_err,
+	parse_list,
 	parser::{
 		expressions::{
-			field_access::FieldAccess, function_declaration::FunctionDeclaration, literal::LiteralConvertible, name::Name, run::RuntimeableExpression, Expression, Parse, Spanned,
+			field_access::FieldAccess,
+			function_declaration::FunctionDeclaration,
+			literal::{CompilerWarning, LiteralConvertible},
+			name::Name,
+			run::RuntimeableExpression,
+			Expression,
+			Parse,
+			Spanned,
 			Typed,
 		},
-		ListType, TokenQueueFunctionality,
+		statements::tag::TagList,
+		ListType,
+		TokenQueueFunctionality,
 	},
 	transpiler::TranspileToC,
+	warn,
 };
-
-use super::unary::{UnaryOperation, UnaryOperator};
 
 #[derive(Debug, Clone)]
 pub struct FunctionCall {
@@ -31,6 +43,7 @@ pub struct FunctionCall {
 	arguments: Vec<Expression>,
 	scope_id: ScopeId,
 	span: Span,
+	pub tags: TagList,
 }
 
 pub struct PostfixOperators;
@@ -87,6 +100,7 @@ impl Parse for PostfixOperators {
 				arguments,
 				scope_id: context().scope_data.unique_id(),
 				span: start.to(end),
+				tags: TagList::default(),
 			});
 		}
 
@@ -97,8 +111,10 @@ impl Parse for PostfixOperators {
 impl CompileTime for FunctionCall {
 	type Output = Expression;
 
-	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
+	fn evaluate_at_compile_time(mut self) -> anyhow::Result<Self::Output> {
 		let debug_section = debug_start!("{} a {} at compile-time", "Compile-Time Evaluating".bold().green(), "function call".cyan());
+
+		self.tags = self.tags.evaluate_at_compile_time()?;
 
 		debug_log!("Evaluating the function to call in a {}", "function call".cyan());
 		let function = self.function.evaluate_at_compile_time().map_err(mapped_err! {
@@ -158,6 +174,7 @@ impl CompileTime for FunctionCall {
 				arguments,
 				scope_id: self.scope_id,
 				span: self.span,
+				tags: self.tags,
 			}));
 		}
 
@@ -257,6 +274,7 @@ impl CompileTime for FunctionCall {
 				let inner_debug_section = debug_start!("{} a built-in {}", "Compile-Time Evaluating", "function call".cyan());
 				let mut builtin_name = None;
 				let mut system_side_effects = false;
+				let mut runtime = false;
 
 				// Get the address of system_side_effects
 				let system_side_effects_address = *context()
@@ -266,6 +284,15 @@ impl CompileTime for FunctionCall {
 					.try_as::<VirtualPointer>()
 					.map_err(mapped_err! {
 						while = format!("interpreting the global variable \"{}\" as a pointer", "system_side_effects".bold().cyan()),
+					})?;
+
+				let runtime_address = *context()
+					.scope_data
+					.get_variable_from_id("runtime", ScopeData::get_stdlib_id())
+					.unwrap()
+					.try_as::<VirtualPointer>()
+					.map_err(mapped_err! {
+						while = format!("interpreting the global variable \"{}\" as a pointer", "runtime".bold().cyan()),
 					})?;
 
 				// Get builtin and side effect tags
@@ -288,12 +315,20 @@ impl CompileTime for FunctionCall {
 						if tag.try_as::<VirtualPointer>().unwrap() == &system_side_effects_address {
 							system_side_effects = true;
 						}
+
+						if tag.try_as::<VirtualPointer>().is_ok_and(|value| *value == runtime_address) {
+							runtime = true;
+						}
 					}
 				}
 
 				// Call builtin function
 				if let Some(internal_name) = builtin_name {
 					if !system_side_effects || context().has_side_effects() {
+						if runtime && !self.tags.suppresses_warning(CompilerWarning::RuntimeFunctionCall) {
+							warn!("Calling a runtime-preferred function at compile-time");
+						}
+
 						let return_value = call_builtin_at_compile_time(&internal_name, self.scope_id, arguments, self.span).map_err(mapped_err! {
 							while = format!("calling the built-in function {} at compile-time", internal_name.bold().purple()),
 						});
@@ -319,6 +354,7 @@ impl CompileTime for FunctionCall {
 			arguments,
 			scope_id: self.scope_id,
 			span: self.span,
+			tags: self.tags,
 		}))
 	}
 }
@@ -422,6 +458,7 @@ impl RuntimeableExpression for FunctionCall {
 			compile_time_arguments,
 			arguments,
 			scope_id: self.scope_id,
+			tags: self.tags,
 			span: self.span,
 		})
 	}
@@ -519,6 +556,7 @@ impl FunctionCall {
 			compile_time_arguments: Vec::new(),
 			scope_id: context().scope_data.unique_id(),
 			span: start.to(end),
+			tags: TagList::default(),
 		})
 	}
 
@@ -543,6 +581,7 @@ impl FunctionCall {
 			arguments: Vec::new(),
 			scope_id,
 			span: Span::unknown(),
+			tags: TagList::default(),
 		}
 		.evaluate_at_compile_time()
 		.map_err(mapped_err! {

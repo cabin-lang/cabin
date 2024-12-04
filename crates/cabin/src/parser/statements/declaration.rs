@@ -1,13 +1,18 @@
+use super::Statement;
 use crate::{
 	api::{context::context, scope::ScopeId},
 	comptime::CompileTime,
-	debug_start, err, if_then_some,
+	debug_start,
+	err,
+	if_then_some,
 	lexer::TokenType,
 	mapped_err,
 	parser::{
 		expressions::{name::Name, Expression},
 		statements::tag::TagList,
-		Parse, TokenQueue, TokenQueueFunctionality as _,
+		Parse,
+		TokenQueue,
+		TokenQueueFunctionality,
 	},
 	transpiler::TranspileToC,
 };
@@ -44,13 +49,20 @@ impl Declaration {
 }
 
 impl Parse for Declaration {
-	type Output = Declaration;
+	type Output = Statement;
 
 	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
 		let debug_section = debug_start!("{} a {}", "Parsing".bold().green(), "declaration".cyan());
 
 		// Tags
 		let tags = if_then_some!(tokens.next_is(TokenType::TagOpening), TagList::parse(tokens)?);
+
+		if tags.is_some() && !tokens.next_is(TokenType::KeywordLet) {
+			let mut expression = Expression::parse(tokens)?;
+			expression.set_tags(tags.unwrap());
+			let _ = tokens.pop(TokenType::Semicolon)?;
+			return Ok(Statement::Expression(expression));
+		}
 
 		// Name
 		let _ = tokens.pop(TokenType::KeywordLet)?;
@@ -79,11 +91,11 @@ impl Parse for Declaration {
 
 		// Return the declaration
 		debug_section.finish();
-		Ok(Declaration {
+		Ok(Statement::Declaration(Declaration {
 			name,
 			scope_id: context().scope_data.unique_id(),
 			declaration_type: DeclarationType::Normal,
-		})
+		}))
 	}
 }
 

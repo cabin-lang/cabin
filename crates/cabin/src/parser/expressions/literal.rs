@@ -6,6 +6,7 @@ use std::{
 use colored::Colorize;
 use try_as::traits::TryAsRef;
 
+use super::{either::Either, field_access::FieldAccessType, function_declaration::FunctionDeclaration, oneof::OneOf, parameter::Parameter, represent_as::RepresentAs, Spanned};
 use crate::{
 	api::{
 		context::context,
@@ -15,21 +16,21 @@ use crate::{
 	bail_err,
 	cli::theme::Styled,
 	comptime::{memory::VirtualPointer, CompileTime},
-	debug_start, err,
+	debug_start,
+	err,
 	lexer::Span,
 	parser::{
 		expressions::{
 			group::GroupDeclaration,
 			name::Name,
 			object::{InternalFieldValue, ObjectConstructor},
-			Expression, Typed,
+			Expression,
+			Typed,
 		},
 		statements::tag::TagList,
 	},
 	transpiler::TranspileToC,
 };
-
-use super::{either::Either, field_access::FieldAccessType, function_declaration::FunctionDeclaration, oneof::OneOf, parameter::Parameter, represent_as::RepresentAs, Spanned};
 
 /// A "literal object". Literal objects can be thought of as simple associative arrays, similar to a JSON object or similar.
 /// Specifically, a literal object is a collection of fields where each field's value is another literal object.
@@ -509,4 +510,5 @@ impl Spanned for LiteralObject {
 pub enum CompilerWarning {
 	SingleVariantEither,
 	EmptyEither,
+	RuntimeFunctionCall,
 }

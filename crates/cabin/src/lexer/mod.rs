@@ -350,7 +350,7 @@ impl TokenType {
 		match self {
 			// Keywords
 			Self::KeywordAction => regex_macro::regex!(r"^action\b"),
-			Self::KeywordAs => regex_macro::regex!(r"^as\b"),
+			Self::KeywordAs => regex_macro::regex!(r"^tobe\b"),
 			Self::KeywordDefault => regex_macro::regex!(r"^default\b"),
 			Self::KeywordEither => regex_macro::regex!(r"^either\b"),
 			Self::KeywordForEach => regex_macro::regex!(r"^foreach\b"),
@@ -365,7 +365,7 @@ impl TokenType {
 			Self::KeywordOtherwise => regex_macro::regex!(r"^otherwise\b"),
 			Self::KeywordReturn => regex_macro::regex!(r"^return\b"),
 			Self::KeywordRuntime => regex_macro::regex!(r"^run\b"),
-			Self::KeywordRepresent => regex_macro::regex!(r"^represent\b"),
+			Self::KeywordRepresent => regex_macro::regex!(r"^extend\b"),
 			Self::KeywordWhile => regex_macro::regex!(r"^while\b"),
 
 			// Left opening groupings

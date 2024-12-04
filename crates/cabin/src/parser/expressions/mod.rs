@@ -1,6 +1,5 @@
 use std::fmt::Debug;
 
-use crate::{api::context::context, cli::theme::Styled, debug_log, parser::expressions::try_as_traits::TryAsMut};
 use colored::Colorize as _;
 use either::Either;
 use group::GroupDeclaration;
@@ -13,18 +12,29 @@ use try_as::traits as try_as_traits;
 use unary::UnaryOperation;
 
 use crate::{
-	api::traits::TryAs as _,
+	api::{context::context, traits::TryAs as _},
 	bail_err,
+	cli::theme::Styled,
 	comptime::{memory::VirtualPointer, CompileTime},
+	debug_log,
 	lexer::Span,
 	mapped_err,
 	parser::{
 		expressions::{
-			block::Block, field_access::FieldAccess, foreach::ForEachLoop, function_call::FunctionCall, if_expression::IfExpression, literal::LiteralObject, name::Name,
-			object::ObjectConstructor, operators::BinaryExpression,
+			block::Block,
+			field_access::FieldAccess,
+			foreach::ForEachLoop,
+			function_call::FunctionCall,
+			if_expression::IfExpression,
+			literal::LiteralObject,
+			name::Name,
+			object::ObjectConstructor,
+			operators::BinaryExpression,
+			try_as_traits::TryAsMut,
 		},
 		statements::tag::TagList,
-		Parse, TokenQueue,
+		Parse,
+		TokenQueue,
 	},
 	transpiler::TranspileToC,
 };
@@ -241,6 +251,7 @@ impl Expression {
 		match self {
 			Self::ObjectConstructor(constructor) => constructor.tags = tags,
 			Self::Pointer(pointer) => pointer.virtual_deref_mut().tags = tags,
+			Self::FunctionCall(function_call) => function_call.tags = tags,
 			_ => {},
 		};
 	}

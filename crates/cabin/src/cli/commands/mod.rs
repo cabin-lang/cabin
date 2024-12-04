@@ -10,7 +10,8 @@ use crate::{
 		context::{context, Phase},
 		traits::TerminalOutput as _,
 	},
-	debug_start, if_then_some,
+	debug_start,
+	if_then_some,
 };
 
 pub mod new;
@@ -64,29 +65,42 @@ pub fn step<T, E: Display, F: FnOnce() -> Result<T, E>>(expression: F, phase: Ph
 		Ok(return_value) => {
 			if !context().config().options().quiet() && context().config().options().debug_info() == "none" {
 				if phase == Phase::CompileTimeEvaluation {
-					if phase == Phase::CompileTimeEvaluation && context().lines_printed != 0 {
-						move_cursor_up_and_right(
-							context().lines_printed + 1,
-							(context().config().options().tabs(1) + phase.action().0 + phase.action().1 + "... ").len() + 1,
-						);
-					}
+					// Warnings
 					if !context().warnings().is_empty() {
+						if context().lines_printed != 0 {
+							move_cursor_up_and_right(
+								context().lines_printed + 1,
+								(context().config().options().tabs(1) + phase.action().0 + phase.action().1 + "... ").len() + 1,
+							);
+						}
 						println!("{}", "Warning:".bold().yellow());
-					}
+						if context().lines_printed != 0 {
+							move_cursor_down_and_left(context().lines_printed + 1, 0);
+							println!();
+						}
 
-					if context().lines_printed != 0 {
-						move_cursor_down_and_left(context().lines_printed + 1, 0);
-						println!();
+						// Print warnings
+						for warning in context().warnings() {
+							println!("{} {}\n", "Warning:".bold().yellow(), warning);
+						}
 					}
-
-					for warning in context().warnings() {
-						println!("{} {}\n", "Warning:".bold().yellow(), warning);
-					}
-
-					if context().warnings().is_empty() {
+					// No warnings
+					else {
+						if context().lines_printed != 0 {
+							move_cursor_up_and_right(
+								context().lines_printed + 1,
+								(context().config().options().tabs(1) + phase.action().0 + phase.action().1 + "... ").len() + 1,
+							);
+						}
 						println!("{}", "Done!".bold().green());
+						if context().lines_printed != 0 {
+							move_cursor_down_and_left(context().lines_printed + 1, 0);
+							println!();
+						}
 					}
-				} else {
+				}
+				// Not compile-time evaluation
+				else {
 					println!("{}", "Done!".bold().green());
 				}
 			}
