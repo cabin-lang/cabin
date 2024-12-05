@@ -292,7 +292,6 @@ static CONTEXT: LazyLock<Context> = LazyLock::new(Context::default);
 
 /// Returns a non-borrow-checked static mutable reference to the program's `Context`, which holds global state
 /// data about the compiler.
-
 pub fn context() -> &'static mut Context {
 	#[allow(
 		unsafe_code,
