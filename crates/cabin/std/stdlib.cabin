@@ -49,7 +49,16 @@ let Function = group {
 };
 
 let system_side_effects = new Object {};
-let runtime = new Object {};
+
+let RuntimeTag = group {
+	reason: Text
+};
+
+let runtime = action<reason: Text>: RuntimeTag {
+	runtime is new RuntimeTag {
+		reason = reason	
+	};
+};
 
 let Field = group {
 	name: Text,
@@ -102,7 +111,7 @@ let system = new Object {
 
 	terminal = new Object {
 
-		#[builtin<"terminal.print">, system_side_effects, runtime] 
+		#[builtin<"terminal.print">, system_side_effects, runtime<"print() is meant for the user. Use debug() at compile-time.">] 
 		print = action(object: Anything),
 
 		debug = action(object: Anything) {
@@ -110,7 +119,7 @@ let system = new Object {
 			system.terminal.print(object);
 		},
 
-		#[builtin<"terminal.input">, system_side_effects, runtime] 
+		#[builtin<"terminal.input">, system_side_effects, runtime<"Taking input at compile-time can cause varying outputs.">] 
 		input = action: Text,
 	},
 };

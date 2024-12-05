@@ -274,7 +274,7 @@ impl CompileTime for FunctionCall {
 				let inner_debug_section = debug_start!("{} a built-in {}", "Compile-Time Evaluating", "function call".cyan());
 				let mut builtin_name = None;
 				let mut system_side_effects = false;
-				let mut runtime = false;
+				let mut runtime = None;
 
 				// Get the address of system_side_effects
 				let system_side_effects_address = *context()
@@ -284,15 +284,6 @@ impl CompileTime for FunctionCall {
 					.try_as::<VirtualPointer>()
 					.map_err(mapped_err! {
 						while = format!("interpreting the global variable \"{}\" as a pointer", "system_side_effects".bold().cyan()),
-					})?;
-
-				let runtime_address = *context()
-					.scope_data
-					.get_variable_from_id("runtime", ScopeData::get_stdlib_id())
-					.unwrap()
-					.try_as::<VirtualPointer>()
-					.map_err(mapped_err! {
-						while = format!("interpreting the global variable \"{}\" as a pointer", "runtime".bold().cyan()),
 					})?;
 
 				// Get builtin and side effect tags
@@ -316,8 +307,11 @@ impl CompileTime for FunctionCall {
 							system_side_effects = true;
 						}
 
-						if tag.try_as::<VirtualPointer>().is_ok_and(|value| *value == runtime_address) {
-							runtime = true;
+						if let Ok(pointer) = tag.try_as::<VirtualPointer>() {
+							let value = pointer.virtual_deref();
+							if value.type_name() == &"RuntimeTag".into() {
+								runtime = Some(value.get_field_literal("reason").unwrap().get_internal_field::<String>("internal_value")?);
+							}
 						}
 					}
 				}
@@ -325,8 +319,10 @@ impl CompileTime for FunctionCall {
 				// Call builtin function
 				if let Some(internal_name) = builtin_name {
 					if !system_side_effects || context().has_side_effects() {
-						if runtime && !self.tags.suppresses_warning(CompilerWarning::RuntimeFunctionCall) {
-							warn!("Calling a runtime-preferred function at compile-time");
+						if let Some(runtime_reason) = runtime {
+							if !self.tags.suppresses_warning(CompilerWarning::RuntimeFunctionCall) {
+								warn!("Calling a runtime-preferred function at compile-time: {runtime_reason} ");
+							}
 						}
 
 						let return_value = call_builtin_at_compile_time(&internal_name, self.scope_id, arguments, self.span).map_err(mapped_err! {

@@ -1,6 +1,1 @@
-let value = match "hi" {
-	Number { value is "number"; },
-	text: Text { value is text; }
-};
-
-debug(value);
+print("Hello world!");
