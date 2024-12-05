@@ -2,11 +2,11 @@ use std::fmt::Debug;
 
 use colored::Colorize as _;
 use either::Either;
+use extend::Extend;
 use group::GroupDeclaration;
 use literal::LiteralConvertible;
 use match_expression::Match;
 use parameter::Parameter;
-use represent_as::RepresentAs;
 use run::{RunExpression, RuntimeableExpression};
 use try_as::traits as try_as_traits;
 use unary::UnaryOperation;
@@ -41,6 +41,7 @@ use crate::{
 
 pub mod block;
 pub mod either;
+pub mod extend;
 pub mod field_access;
 pub mod foreach;
 pub mod function_call;
@@ -54,7 +55,6 @@ pub mod object;
 pub mod oneof;
 pub mod operators;
 pub mod parameter;
-pub mod represent_as;
 pub mod run;
 pub mod sugar;
 pub mod unary;
@@ -73,7 +73,7 @@ pub enum Expression {
 	Run(RunExpression),
 	Unary(UnaryOperation),
 	Parameter(Parameter),
-	RepresentAs(RepresentAs),
+	RepresentAs(Extend),
 	Void(()),
 }
 
@@ -272,7 +272,7 @@ impl Expression {
 				}
 
 				if value.type_name() == &"RepresentAs".into() {
-					let mut represent_as = RepresentAs::from_literal(value).unwrap();
+					let mut represent_as = Extend::from_literal(value).unwrap();
 					represent_as.set_name(name);
 					*value = represent_as.to_literal();
 					value.address = address;
@@ -318,8 +318,7 @@ impl Expression {
 	/// whether this expression can be assigned to the given type.
 	pub fn is_assignable_to_type(&self, target_type: VirtualPointer) -> anyhow::Result<bool> {
 		let this_type = self.get_type()?.virtual_deref();
-		// TODO:
-		this_type.is_type_assignable_to_type(target_type)
+		this_type.is_this_type_assignable_to_type(target_type)
 	}
 }
 

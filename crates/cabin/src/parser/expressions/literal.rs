@@ -6,7 +6,7 @@ use std::{
 use colored::Colorize;
 use try_as::traits::TryAsRef;
 
-use super::{either::Either, field_access::FieldAccessType, function_declaration::FunctionDeclaration, oneof::OneOf, parameter::Parameter, represent_as::RepresentAs, Spanned};
+use super::{either::Either, extend::Extend, field_access::FieldAccessType, function_declaration::FunctionDeclaration, oneof::OneOf, parameter::Parameter, Spanned};
 use crate::{
 	api::{
 		context::context,
@@ -233,8 +233,32 @@ impl LiteralObject {
 	}
 
 	/// Returns whether a value who's type is this literal, can be assigned to a name who's type is pointed to by the given pointer.
-	pub fn is_type_assignable_to_type(&self, target_type: VirtualPointer) -> anyhow::Result<bool> {
-		Ok(self.address.unwrap() == target_type) // TODO: check for polymorphism
+	pub fn is_this_type_assignable_to_type(&self, mut target_type: VirtualPointer) -> anyhow::Result<bool> {
+		if target_type.virtual_deref().type_name() == &"Parameter".into() {
+			let parameter = Parameter::from_literal(target_type.virtual_deref())?;
+			target_type = *parameter.parameter_type().try_as::<VirtualPointer>()?;
+		}
+
+		let anything = *context().scope_data.get_variable("Anything").unwrap().try_as::<VirtualPointer>().unwrap();
+		if target_type == anything {
+			return Ok(true);
+		}
+
+		if self.address.unwrap() == target_type {
+			return Ok(true);
+		}
+
+		for extension in context().scope_data.default_extensions() {
+			let type_to_extend = *extension.type_to_extend.try_as::<VirtualPointer>()?;
+			let type_to_be = *extension.type_to_be.as_ref().unwrap().0.try_as::<VirtualPointer>()?;
+			if self.is_this_type_assignable_to_type(type_to_extend)? {
+				if target_type.virtual_deref().is_this_type_assignable_to_type(type_to_be)? {
+					return Ok(true);
+				}
+			}
+		}
+
+		Ok(false)
 	}
 
 	pub fn is_warning(&self, warning: CompilerWarning) -> bool {
@@ -380,7 +404,7 @@ impl CompileTime for LiteralObject {
 			"Group" => GroupDeclaration::from_literal(&self)?.evaluate_at_compile_time()?.to_literal(),
 			"Either" => Either::from_literal(&self)?.evaluate_at_compile_time()?.to_literal(),
 			"OneOf" => OneOf::from_literal(&self)?.evaluate_at_compile_time()?.to_literal(),
-			"RepresentAs" => RepresentAs::from_literal(&self)?.evaluate_at_compile_time()?.to_literal(),
+			"RepresentAs" => Extend::from_literal(&self)?.evaluate_at_compile_time()?.to_literal(),
 			"Parameter" => Parameter::from_literal(&self)?.evaluate_at_compile_time()?.to_literal(),
 			_ => self,
 		};

@@ -1,13 +1,17 @@
-use colored::Colorize as _;
-
 use std::{collections::HashMap, fmt::Debug};
 
-use crate::{
-	bail_err, debug_log,
-	parser::expressions::{name::Name, Expression},
-};
+use colored::Colorize as _;
 
-use super::context::context;
+use super::{context::context, traits::TryAs as _};
+use crate::{
+	bail_err,
+	comptime::memory::VirtualPointer,
+	debug_log,
+	parser::{
+		expressions::{name::Name, Expression},
+		statements::use_extend::DefaultExtend,
+	},
+};
 
 /// Scopes never get deleted, so all `ScopeIds` are always guaranteed to point to a valid `Scope`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,9 +77,40 @@ pub struct Scope {
 	scope_type: ScopeType,
 
 	label: Option<Name>,
+
+	default_extensions: Vec<DefaultExtend>,
 }
 
 impl Scope {
+	pub fn default_extensions<'scopes>(&'scopes self, scopes: &'scopes [Scope]) -> Vec<&'scopes DefaultExtend> {
+		// TODO: check for real type overlap here
+		let mut extensions = self.parent.map(|parent| scopes.get(parent).unwrap().default_extensions(scopes)).unwrap_or(Vec::new());
+		extensions.retain(|parent_extension| {
+			for extension in &self.default_extensions {
+				if parent_extension.type_to_extend.try_as::<VirtualPointer>().unwrap() == extension.type_to_extend.try_as::<VirtualPointer>().unwrap() {
+					return false;
+				}
+			}
+			true
+		});
+		extensions.extend(&self.default_extensions);
+		extensions
+	}
+
+	pub fn map_default_extension<E, F: FnOnce(DefaultExtend) -> Result<DefaultExtend, E>>(&mut self, id: usize, map: F) -> Result<(), E> {
+		let index = self
+			.default_extensions
+			.iter()
+			.enumerate()
+			.find_map(|(index, extension)| (extension.id == id).then_some(index))
+			.unwrap();
+
+		let value = self.default_extensions.remove(index);
+		let result = map(value)?;
+		self.default_extensions.insert(index, result);
+		Ok(())
+	}
+
 	/// Returns the information about a variable declared in this scope with the given name. Note that this only checks variables declared exactly
 	/// in this scope, and does not check parents of this scope, meaning this cannot give accurate information about whether a variable exists in
 	/// the current scope; To get a variable from the current scope, use `get_variable()`, which traverses up the scope tree and recursively checks parents.
@@ -122,7 +157,6 @@ impl Scope {
 	///
 	/// # Returns
 	/// All variables that exist in this scope, including those declared in ancestor scopes.
-
 	pub fn get_variables<'scopes>(&'scopes self, scopes: &'scopes [Self]) -> Vec<(&'scopes Name, &'scopes Expression)> {
 		let mut variables = self.variables.iter().collect::<Vec<_>>();
 		if let Some(parent) = self.parent {
@@ -216,6 +250,7 @@ impl ScopeData {
 				variables: HashMap::new(),
 				parent: None,
 				label: None,
+				default_extensions: Vec::new(),
 			}],
 			current_scope: 0,
 		}
@@ -291,6 +326,7 @@ impl ScopeData {
 			children: Vec::new(),
 			scope_type,
 			label: None,
+			default_extensions: Vec::new(),
 		});
 
 		let new_id = self.scopes.len() - 1;
@@ -514,6 +550,18 @@ impl ScopeData {
 		let id = ScopeId(self.current_scope);
 		self.exit_scope().unwrap();
 		id
+	}
+
+	pub fn default_extensions(&self) -> Vec<&DefaultExtend> {
+		self.current().default_extensions(&self.scopes)
+	}
+
+	pub fn add_default_extension(&mut self, extension: DefaultExtend) {
+		self.current_mut().default_extensions.push(extension);
+	}
+
+	pub fn map_default_extension_from_id<E, F: FnOnce(DefaultExtend) -> Result<DefaultExtend, E>>(&mut self, scope_id: ScopeId, extend_id: usize, map: F) -> Result<(), E> {
+		self.get_scope_mut_from_id(scope_id).map_default_extension(extend_id, map)
 	}
 }
 

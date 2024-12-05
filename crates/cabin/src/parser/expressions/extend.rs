@@ -7,32 +7,34 @@ use crate::{
 		traits::TryAs,
 	},
 	comptime::{memory::VirtualPointer, CompileTime},
-	if_then_else_default, if_then_some,
+	if_then_else_default,
+	if_then_some,
 	lexer::{Span, TokenType},
-	mapped_err, parse_list,
+	mapped_err,
+	parse_list,
 	parser::{
 		expressions::{
+			field_access::FieldAccessType,
+			literal::{LiteralConvertible, LiteralObject},
 			name::Name,
-			object::{Field, Fields as _},
+			object::{Field, Fields as _, InternalFieldValue},
 			parameter::Parameter,
-			Expression, Spanned,
+			Expression,
+			Spanned,
+			Typed,
 		},
 		statements::tag::TagList,
-		ListType, Parse, TokenQueue, TokenQueueFunctionality as _,
+		ListType,
+		Parse,
+		TokenQueue,
+		TokenQueueFunctionality as _,
 	},
 };
 
-use super::{
-	field_access::FieldAccessType,
-	literal::{LiteralConvertible, LiteralObject},
-	object::InternalFieldValue,
-	Typed,
-};
-
 #[derive(Debug, Clone)]
-pub struct RepresentAs {
-	type_to_represent: Box<Expression>,
-	type_to_represent_as: Box<Expression>,
+pub struct Extend {
+	extend: Box<Expression>,
+	to_be: Box<Expression>,
 	fields: Vec<Field>,
 	name: Name,
 	span: Span,
@@ -41,11 +43,11 @@ pub struct RepresentAs {
 	outer_scope_id: ScopeId,
 }
 
-impl Parse for RepresentAs {
+impl Parse for Extend {
 	type Output = VirtualPointer;
 
 	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
-		let start = tokens.pop(TokenType::KeywordRepresent)?.span;
+		let start = tokens.pop(TokenType::KeywordExtend)?.span;
 		let outer_scope_id = context().scope_data.unique_id();
 
 		context().scope_data.enter_new_scope(ScopeType::RepresentAs);
@@ -65,7 +67,7 @@ impl Parse for RepresentAs {
 		});
 
 		let type_to_represent = Box::new(Expression::parse(tokens)?);
-		let _ = tokens.pop(TokenType::KeywordAs)?;
+		let _ = tokens.pop(TokenType::KeywordToBe)?;
 		let type_to_represent_as = Box::new(Expression::parse(tokens)?);
 
 		let mut fields = Vec::new();
@@ -98,9 +100,9 @@ impl Parse for RepresentAs {
 
 		context().scope_data.exit_scope()?;
 
-		Ok(RepresentAs {
-			type_to_represent,
-			type_to_represent_as,
+		Ok(Extend {
+			extend: type_to_represent,
+			to_be: type_to_represent_as,
 			fields,
 			span: start.to(end),
 			name: "anonymous_represent_as".into(),
@@ -113,16 +115,16 @@ impl Parse for RepresentAs {
 	}
 }
 
-impl CompileTime for RepresentAs {
-	type Output = RepresentAs;
+impl CompileTime for Extend {
+	type Output = Extend;
 
 	fn evaluate_at_compile_time(self) -> anyhow::Result<Self::Output> {
 		let _scope_reverter = context().scope_data.set_current_scope(self.inner_scope_id);
 
-		let type_to_represent = Box::new(self.type_to_represent.evaluate_at_compile_time().map_err(mapped_err! {
+		let type_to_represent = Box::new(self.extend.evaluate_at_compile_time().map_err(mapped_err! {
 			while = "evaluating the type to represent in a represent-as declaration at compile-time",
 		})?);
-		let type_to_represent_as = Box::new(self.type_to_represent_as.evaluate_at_compile_time().map_err(mapped_err! {
+		let type_to_represent_as = Box::new(self.to_be.evaluate_at_compile_time().map_err(mapped_err! {
 			while = "evaluating the type to represent as in a represent-as declaration at compile-time",
 		})?);
 
@@ -153,9 +155,9 @@ impl CompileTime for RepresentAs {
 				while = "evaluating the compile-time parameters of a represent-as declaration at compile-time",
 			})?;
 
-		Ok(RepresentAs {
-			type_to_represent,
-			type_to_represent_as,
+		Ok(Extend {
+			extend: type_to_represent,
+			to_be: type_to_represent_as,
 			name: self.name,
 			span: self.span,
 			fields,
@@ -166,13 +168,13 @@ impl CompileTime for RepresentAs {
 	}
 }
 
-impl RepresentAs {
+impl Extend {
 	pub const fn type_to_represent(&self) -> &Expression {
-		&self.type_to_represent
+		&self.extend
 	}
 
 	pub const fn type_to_represent_as(&self) -> &Expression {
-		&self.type_to_represent_as
+		&self.to_be
 	}
 
 	pub fn fields(&self) -> &[Field] {
@@ -182,7 +184,7 @@ impl RepresentAs {
 	pub fn can_represent(&self, object: &Expression) -> anyhow::Result<bool> {
 		let _scope_reverter = context().scope_data.set_current_scope(self.inner_scope_id);
 
-		if let Expression::Pointer(pointer) = self.type_to_represent.as_ref() {
+		if let Expression::Pointer(pointer) = self.extend.as_ref() {
 			let literal = pointer.virtual_deref();
 			if literal.type_name() == &"Parameter".into() {
 				let parameter = Parameter::from_literal(literal).unwrap();
@@ -200,7 +202,7 @@ impl RepresentAs {
 	pub fn representables(&self) -> anyhow::Result<String> {
 		let _scope_reverter = context().scope_data.set_current_scope(self.inner_scope_id);
 
-		if let Expression::Name(name) = self.type_to_represent.as_ref() {
+		if let Expression::Name(name) = self.extend.as_ref() {
 			if let Expression::Parameter(parameter) = context().scope_data.get_variable(name).unwrap() {
 				let parameter_type = parameter.get_type()?;
 				return Ok(parameter_type.virtual_deref().name().unmangled_name().to_owned());
@@ -221,15 +223,15 @@ impl RepresentAs {
 	}
 }
 
-impl LiteralConvertible for RepresentAs {
+impl LiteralConvertible for Extend {
 	fn to_literal(self) -> LiteralObject {
 		LiteralObject {
 			address: None,
 			fields: HashMap::from([]),
 			internal_fields: HashMap::from([
 				("fields".to_owned(), InternalFieldValue::FieldList(self.fields)),
-				("type_to_represent".to_owned(), InternalFieldValue::Expression(*self.type_to_represent)),
-				("type_to_represent_as".to_owned(), InternalFieldValue::Expression(*self.type_to_represent_as)),
+				("type_to_represent".to_owned(), InternalFieldValue::Expression(*self.extend)),
+				("type_to_represent_as".to_owned(), InternalFieldValue::Expression(*self.to_be)),
 				("compile_time_parameters".to_owned(), InternalFieldValue::PointerList(self.compile_time_parameters)),
 			]),
 			name: self.name,
@@ -243,10 +245,10 @@ impl LiteralConvertible for RepresentAs {
 	}
 
 	fn from_literal(literal: &LiteralObject) -> anyhow::Result<Self> {
-		Ok(RepresentAs {
+		Ok(Extend {
 			fields: literal.get_internal_field::<Vec<Field>>("fields")?.to_owned(),
-			type_to_represent: Box::new(literal.get_internal_field::<Expression>("type_to_represent")?.to_owned()),
-			type_to_represent_as: Box::new(literal.get_internal_field::<Expression>("type_to_represent_as")?.to_owned()),
+			extend: Box::new(literal.get_internal_field::<Expression>("type_to_represent")?.to_owned()),
+			to_be: Box::new(literal.get_internal_field::<Expression>("type_to_represent_as")?.to_owned()),
 			compile_time_parameters: literal.get_internal_field::<Vec<VirtualPointer>>("compile_time_parameters")?.to_owned(),
 			outer_scope_id: literal.outer_scope_id(),
 			inner_scope_id: literal.inner_scope_id.unwrap(),
@@ -256,7 +258,7 @@ impl LiteralConvertible for RepresentAs {
 	}
 }
 
-impl Spanned for RepresentAs {
+impl Spanned for Extend {
 	fn span(&self) -> Span {
 		self.span
 	}

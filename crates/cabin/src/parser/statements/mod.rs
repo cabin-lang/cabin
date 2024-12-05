@@ -1,3 +1,5 @@
+use use_extend::{DefaultExtend, DefaultExtendPointer};
+
 use crate::{
 	comptime::CompileTime,
 	lexer::TokenType,
@@ -15,12 +17,14 @@ use crate::{
 pub mod declaration;
 pub mod tag;
 pub mod tail;
+pub mod use_extend;
 
 #[derive(Debug, Clone)]
 pub enum Statement {
 	Declaration(Declaration),
 	Tail(TailStatement),
 	Expression(Expression),
+	DefaultExtend(DefaultExtendPointer),
 }
 
 impl Parse for Statement {
@@ -29,6 +33,7 @@ impl Parse for Statement {
 	fn parse(tokens: &mut TokenQueue) -> anyhow::Result<Self::Output> {
 		let statement = match tokens.peek_type()? {
 			TokenType::KeywordLet | TokenType::TagOpening => Declaration::parse(tokens)?,
+			TokenType::KeywordDefault => Statement::DefaultExtend(DefaultExtend::parse(tokens)?),
 			TokenType::Identifier => {
 				if tokens.peek_type2()? == TokenType::KeywordIs {
 					let tail = Statement::Tail(TailStatement::parse(tokens)?);
@@ -58,6 +63,9 @@ impl CompileTime for Statement {
 			Statement::Declaration(declaration) => Statement::Declaration(declaration.evaluate_at_compile_time().map_err(mapped_err! {
 				while = "evaluating a name declaration at compile-time",
 			})?),
+			Statement::DefaultExtend(default_extend) => Statement::DefaultExtend(default_extend.evaluate_at_compile_time().map_err(mapped_err! {
+				while = "evaluating a default-extend statement at compile-time",
+			})?),
 			Statement::Expression(expression) => Statement::Expression(expression.evaluate_at_compile_time().map_err(mapped_err! {
 				while = "evaluating an expression statement at compile-time",
 			})?),
@@ -74,6 +82,7 @@ impl TranspileToC for Statement {
 			Statement::Declaration(declaration) => declaration.to_c()?,
 			Statement::Tail(tail_statement) => tail_statement.to_c()?,
 			Statement::Expression(expression) => expression.to_c()? + ";",
+			_ => todo!(),
 		})
 	}
 }

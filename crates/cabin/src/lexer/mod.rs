@@ -98,8 +98,8 @@ pub enum TokenType {
 
 	RightArrow,
 
-	KeywordRepresent,
-	KeywordAs,
+	KeywordExtend,
+	KeywordToBe,
 
 	/// The `if` keyword token type. This is used similar to how it is in other languages: It runs a block of code if some condition is true.
 	///
@@ -125,6 +125,8 @@ pub enum TokenType {
 	/// Like all keywords, this enum variant declaration *must* come before `Identifier`. If it doesn't, then `new` will be tokenized incorrectly as
 	/// identifiers, which will cause issues when parsing. Please be careful when moving around this keyword or the `Identifier` token type!
 	KeywordNew,
+
+	KeywordWith,
 
 	/// The `group` keyword token type, which is used to declare a type of group of variables in the language, analogous to a `struct` in other languages.
 	///
@@ -350,7 +352,7 @@ impl TokenType {
 		match self {
 			// Keywords
 			Self::KeywordAction => regex_macro::regex!(r"^action\b"),
-			Self::KeywordAs => regex_macro::regex!(r"^tobe\b"),
+			Self::KeywordToBe => regex_macro::regex!(r"^tobe\b"),
 			Self::KeywordDefault => regex_macro::regex!(r"^default\b"),
 			Self::KeywordEither => regex_macro::regex!(r"^either\b"),
 			Self::KeywordForEach => regex_macro::regex!(r"^foreach\b"),
@@ -359,13 +361,14 @@ impl TokenType {
 			Self::KeywordIn => regex_macro::regex!(r"^in\b"),
 			Self::KeywordIs => regex_macro::regex!(r"^is\b"),
 			Self::KeywordLet => regex_macro::regex!(r"^let\b"),
+			Self::KeywordWith => regex_macro::regex!(r"^with\b"),
 			Self::KeywordMatch => regex_macro::regex!(r"^match\b"),
 			Self::KeywordNew => regex_macro::regex!(r"^new\b"),
 			Self::KeywordOneOf => regex_macro::regex!(r"^oneof\b"),
 			Self::KeywordOtherwise => regex_macro::regex!(r"^otherwise\b"),
 			Self::KeywordReturn => regex_macro::regex!(r"^return\b"),
 			Self::KeywordRuntime => regex_macro::regex!(r"^run\b"),
-			Self::KeywordRepresent => regex_macro::regex!(r"^extend\b"),
+			Self::KeywordExtend => regex_macro::regex!(r"^extend\b"),
 			Self::KeywordWhile => regex_macro::regex!(r"^while\b"),
 
 			// Left opening groupings
@@ -397,8 +400,8 @@ impl TokenType {
 			Self::LessThan => regex_macro::regex!(r"^\s+<"),
 			Self::GreaterThan => regex_macro::regex!(r"^\s+>"),
 			Self::RightArrow => regex_macro::regex!(r"^->"),
-			Self::ExclamationPoint => regex_macro::regex!(r"!"),
-			Self::QuestionMark => regex_macro::regex!(r"\?"),
+			Self::ExclamationPoint => regex_macro::regex!(r"^!"),
+			Self::QuestionMark => regex_macro::regex!(r"^\?"),
 
 			// Punctuations / Misc
 			Self::TagOpening => regex_macro::regex!(r"^\#\["),

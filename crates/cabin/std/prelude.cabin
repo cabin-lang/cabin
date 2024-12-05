@@ -4,7 +4,7 @@
 # Anything
 let Anything = cabin.Anything;
 let AnythingExtension = cabin.AnythingExtension;
-# default represent<T: Anything> T as Anything with AsAnything;
+default extend<T: Anything> T tobe Anything with AnythingExtension;
 
 # Primitives
 let Text = cabin.Text;

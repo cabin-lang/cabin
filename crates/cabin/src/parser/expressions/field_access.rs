@@ -12,17 +12,20 @@ use crate::{
 	lexer::{Span, TokenType},
 	parser::{
 		expressions::{
+			extend::Extend,
 			function_declaration::FunctionDeclaration,
-			literal::LiteralConvertible as _,
-			literal::LiteralObject,
+			literal::{LiteralConvertible as _, LiteralObject},
 			name::Name,
 			object::{Field, InternalFieldValue, ObjectConstructor},
 			operators::PrimaryExpression,
-			represent_as::RepresentAs,
-			Expression, Spanned, Typed,
+			Expression,
+			Spanned,
+			Typed,
 		},
 		statements::tag::TagList,
-		Parse, TokenQueue, TokenQueueFunctionality as _,
+		Parse,
+		TokenQueue,
+		TokenQueueFunctionality as _,
 	},
 	transpiler::TranspileToC,
 };
@@ -134,7 +137,7 @@ impl CompileTime for FieldAccess {
 					},
 				},
 				FieldAccessOperator::Colon => {
-					let declaration = RepresentAs::from_literal(
+					let declaration = Extend::from_literal(
 						context()
 							.scope_data
 							.get_variable(&self.right)
