@@ -33,6 +33,8 @@ let system = cabin.system;
 let print = system.terminal.print;
 let input = system.terminal.input;
 let debug = system.terminal.debug;
+let TerminalPrintOptions = cabin.TerminalPrintOptions;
+let TerminalInputOptions = cabin.TerminalInputOptions;
 
 # Compiler
 let suppress = cabin.suppress;

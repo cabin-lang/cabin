@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, fmt::Write as _};
+use std::{collections::VecDeque, fmt::Write as _, io::Write};
 
 use colored::Colorize as _;
 
@@ -26,16 +26,25 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 	"terminal.print" => BuiltinFunction {
 		evaluate_at_compile_time: |caller_scope_id, arguments, span| {
 			let debug_section = debug_start!("{} built-in function {}.{}", "Calling".green().bold(), "terminal".red(), "print".blue());
-			let pointer = VecDeque::from(arguments).pop_front().ok_or_else(|| anyhow::anyhow!("Missing argument to print"))?;
+			let mut arguments = VecDeque::from(arguments);
+			let pointer = arguments.pop_front().ok_or_else(|| anyhow::anyhow!("Missing argument to print"))?;
 			let returned_object = call_builtin_at_compile_time("Anything.to_string", caller_scope_id, vec![pointer], span)?;
 			let string_value = returned_object.try_as_literal()?.try_as::<String>()?.to_owned();
+
+			let options = arguments.pop_front().unwrap().try_as::<VirtualPointer>()?.virtual_deref();
+			let newline = Expression::Pointer(options.get_field("newline").unwrap()).is_true();
 
 			if context().lines_printed == 0 && !context().config().options().quiet() {
 				println!("\n");
 				context().lines_printed += 1;
 			}
 
-			println!("{string_value}");
+			if newline {
+				println!("{string_value}");
+			} else {
+				print!("{string_value}");
+				std::io::stdout().flush()?;
+			}
 			context().lines_printed += string_value.chars().filter(|character| character == &'\n').count() + 1;
 
 			debug_section.finish();
@@ -55,8 +64,19 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 		}
 	},
 	"terminal.input" => BuiltinFunction {
-		evaluate_at_compile_time: |_caller_scope_id, _arguments, span| {
+		evaluate_at_compile_time: |_caller_scope_id, arguments, span| {
+			let mut arguments = VecDeque::from(arguments);
+			let options = arguments.pop_front().unwrap().try_as::<VirtualPointer>()?.virtual_deref();
+			let prompt = options.get_field_literal("prompt").unwrap().get_internal_field::<String>("internal_value").unwrap();
+
+			if context().lines_printed == 0 {
+				println!("\n");
+				context().lines_printed += 1;
+			}
+
 			context().lines_printed += 1;
+			print!("{prompt}");
+			std::io::stdout().flush()?;
 			let mut line = String::new();
 			let _ = std::io::stdin().read_line(&mut line)?;
 			line = line.get(0..line.len() - 1).unwrap().to_owned();

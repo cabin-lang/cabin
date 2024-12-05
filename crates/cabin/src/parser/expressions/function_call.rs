@@ -1,9 +1,11 @@
-use std::{collections::VecDeque, fmt::Write as _};
+use std::{
+	collections::{HashMap, VecDeque},
+	fmt::Write as _,
+};
 
 use colored::Colorize;
 use regex_macro::regex;
 
-use super::unary::{UnaryOperation, UnaryOperator};
 use crate::{
 	api::{
 		builtin::call_builtin_at_compile_time,
@@ -21,11 +23,13 @@ use crate::{
 	parse_list,
 	parser::{
 		expressions::{
-			field_access::FieldAccess,
+			field_access::{FieldAccess, FieldAccessType},
 			function_declaration::FunctionDeclaration,
 			literal::{CompilerWarning, LiteralConvertible},
 			name::Name,
+			object::{Field, ObjectConstructor},
 			run::RuntimeableExpression,
+			unary::{UnaryOperation, UnaryOperator},
 			Expression,
 			Parse,
 			Spanned,
@@ -40,6 +44,48 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
+enum Argument {
+	Positional(Expression),
+	Keyword(Name, Expression),
+}
+
+fn composite_arguments(arguments: Vec<Argument>) -> Vec<Expression> {
+	let mut output = Vec::new();
+	let mut keyword_arguments = Vec::new();
+	let mut has_keyword_arguments = false;
+	for argument in arguments {
+		match argument {
+			Argument::Positional(value) => output.push(value),
+			Argument::Keyword(name, value) => {
+				has_keyword_arguments = true;
+				keyword_arguments.push(Field {
+					name,
+					value: Some(value),
+					field_type: None,
+				});
+			},
+		}
+	}
+	let composite_keyword_argument = Expression::ObjectConstructor(ObjectConstructor {
+		fields: keyword_arguments,
+		type_name: "Object".into(),
+		internal_fields: HashMap::new(),
+		outer_scope_id: context().scope_data.unique_id(),
+		inner_scope_id: context().scope_data.unique_id(),
+		field_access_type: FieldAccessType::Normal,
+		name: "options".into(),
+		span: Span::unknown(),
+		tags: TagList::default(),
+	});
+
+	if has_keyword_arguments {
+		output.push(composite_keyword_argument);
+	}
+
+	output
+}
+
+#[derive(Debug, Clone)]
 pub struct FunctionCall {
 	function: Box<Expression>,
 	compile_time_arguments: Vec<Expression>,
@@ -47,6 +93,8 @@ pub struct FunctionCall {
 	scope_id: ScopeId,
 	span: Span,
 	pub tags: TagList,
+	has_keyword_arguments: bool,
+	has_keyword_compile_time_arguments: bool,
 }
 
 pub struct PostfixOperators;
@@ -77,23 +125,47 @@ impl Parse for PostfixOperators {
 			}
 
 			// Compile-time arguments
-			let compile_time_arguments = if_then_else_default!(tokens.next_is(TokenType::LeftAngleBracket), {
+			let (compile_time_arguments, has_keyword_compile_time_arguments) = if_then_else_default!(tokens.next_is(TokenType::LeftAngleBracket), {
 				let mut compile_time_arguments = Vec::new();
+				let mut has_compile_time_keyword_arguments = false;
 				end = parse_list!(tokens, ListType::AngleBracketed, {
-					compile_time_arguments.push(Expression::parse(tokens)?);
+					// Keyword argument
+					if tokens.next_is(TokenType::Identifier) && tokens.next_next_is(TokenType::Equal) {
+						let name = Name::parse(tokens)?;
+						let _ = tokens.pop(TokenType::Equal)?;
+						let value = Expression::parse(tokens)?;
+						compile_time_arguments.push(Argument::Keyword(name, value));
+						has_compile_time_keyword_arguments = true
+					}
+					// Regular argument
+					else {
+						compile_time_arguments.push(Argument::Positional(Expression::parse(tokens)?));
+					}
 				})
 				.span;
-				compile_time_arguments
+				(composite_arguments(compile_time_arguments), has_compile_time_keyword_arguments)
 			});
 
 			// Arguments
-			let arguments = if_then_else_default!(tokens.next_is(TokenType::LeftParenthesis), {
+			let (arguments, has_keyword_arguments) = if_then_else_default!(tokens.next_is(TokenType::LeftParenthesis), {
 				let mut arguments = Vec::new();
+				let mut has_keyword_arguments = false;
 				end = parse_list!(tokens, ListType::Parenthesized, {
-					arguments.push(Expression::parse(tokens)?);
+					// Keyword argument
+					if tokens.next_is(TokenType::Identifier) && tokens.next_next_is(TokenType::Equal) {
+						let name = Name::parse(tokens)?;
+						let _ = tokens.pop(TokenType::Equal)?;
+						let value = Expression::parse(tokens)?;
+						arguments.push(Argument::Keyword(name, value));
+						has_keyword_arguments = true;
+					}
+					// Regular argument
+					else {
+						arguments.push(Argument::Positional(Expression::parse(tokens)?));
+					}
 				})
 				.span;
-				arguments
+				(composite_arguments(arguments), has_keyword_arguments)
 			});
 
 			// Reassign base expression
@@ -104,6 +176,8 @@ impl Parse for PostfixOperators {
 				scope_id: context().scope_data.unique_id(),
 				span: start.to(end),
 				tags: TagList::default(),
+				has_keyword_arguments,
+				has_keyword_compile_time_arguments,
 			});
 		}
 
@@ -178,6 +252,8 @@ impl CompileTime for FunctionCall {
 				scope_id: self.scope_id,
 				span: self.span,
 				tags: self.tags,
+				has_keyword_arguments: self.has_keyword_arguments,
+				has_keyword_compile_time_arguments: self.has_keyword_compile_time_arguments,
 			}));
 		}
 
@@ -196,6 +272,32 @@ impl CompileTime for FunctionCall {
 						arguments.insert(0, this_object.clone().evaluate_at_compile_time()?);
 					}
 				}
+			}
+
+			// Keyword arguments
+			if !self.has_keyword_arguments && function_declaration.parameters().last().is_some_and(|parameter| parameter.name() == &"options".into()) {
+				let options_type_name = function_declaration
+					.parameters()
+					.last()
+					.unwrap()
+					.parameter_type()
+					.try_as::<VirtualPointer>()?
+					.virtual_deref()
+					.name()
+					.clone();
+				let options = ObjectConstructor {
+					type_name: options_type_name,
+					fields: Vec::new(),
+					internal_fields: HashMap::new(),
+					name: "options".into(),
+					outer_scope_id: context().scope_data.unique_id(),
+					inner_scope_id: context().scope_data.unique_id(),
+					field_access_type: FieldAccessType::Normal,
+					span: Span::unknown(),
+					tags: TagList::default(),
+				}
+				.evaluate_at_compile_time()?;
+				arguments.push(options);
 			}
 
 			// Validate compile-time arguments
@@ -363,6 +465,8 @@ impl CompileTime for FunctionCall {
 			scope_id: self.scope_id,
 			span: self.span,
 			tags: self.tags,
+			has_keyword_arguments: self.has_keyword_arguments,
+			has_keyword_compile_time_arguments: self.has_keyword_compile_time_arguments,
 		}))
 	}
 }
@@ -468,6 +572,8 @@ impl RuntimeableExpression for FunctionCall {
 			scope_id: self.scope_id,
 			tags: self.tags,
 			span: self.span,
+			has_keyword_arguments: self.has_keyword_arguments,
+			has_keyword_compile_time_arguments: self.has_keyword_compile_time_arguments,
 		})
 	}
 }
@@ -565,6 +671,8 @@ impl FunctionCall {
 			scope_id: context().scope_data.unique_id(),
 			span: start.to(end),
 			tags: TagList::default(),
+			has_keyword_arguments: false,
+			has_keyword_compile_time_arguments: false,
 		})
 	}
 
@@ -590,6 +698,8 @@ impl FunctionCall {
 			scope_id,
 			span: Span::unknown(),
 			tags: TagList::default(),
+			has_keyword_compile_time_arguments: false,
+			has_keyword_arguments: false,
 		}
 		.evaluate_at_compile_time()
 		.map_err(mapped_err! {

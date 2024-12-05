@@ -107,12 +107,20 @@ let Attempted = oneof<Data> {
 
 let ignorable = new Object {};
 
+let TerminalPrintOptions = group {
+	newline = Boolean.true
+};
+
+let TerminalInputOptions = group {
+	prompt = ""
+};
+
 let system = new Object {
 
 	terminal = new Object {
 
 		#[builtin<"terminal.print">, system_side_effects, runtime<"print() is meant for the user. Use debug() at compile-time, or use a run expression to print to the user.">] 
-		print = action(object: Anything),
+		print = action(object: Anything, options: TerminalPrintOptions),
 
 		debug = action(object: Anything) {
 			#[suppress<Warning.RuntimeFunctionCall>]
@@ -120,7 +128,7 @@ let system = new Object {
 		},
 
 		#[builtin<"terminal.input">, system_side_effects, runtime<"Taking input at compile-time can cause varying outputs.">] 
-		input = action: Text,
+		input = action(options: TerminalInputOptions): Text,
 	},
 };
 

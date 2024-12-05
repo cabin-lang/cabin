@@ -149,7 +149,14 @@ pub trait TokenQueueFunctionality {
 	fn peek_type2(&self) -> anyhow::Result<TokenType>;
 
 	/// Returns whether the next token in the queue matches the given token type.
-	fn next_is(&self, token_type: TokenType) -> bool;
+	fn next_is(&self, token_type: TokenType) -> bool {
+		self.peek_type().map_or(false, |token| token == token_type)
+	}
+
+	/// Returns whether the next next token in the queue matches the given token type.
+	fn next_next_is(&self, token_type: TokenType) -> bool {
+		self.peek_type2().map_or(false, |token| token == token_type)
+	}
 
 	/// Returns whether the next token in the queue matches one of the given token types.
 	///
@@ -204,10 +211,6 @@ impl TokenQueueFunctionality for TokenQueue {
 		}
 
 		anyhow::bail!("Expected {token_type} but found end of file.");
-	}
-
-	fn next_is(&self, token_type: TokenType) -> bool {
-		self.peek_type().map_or(false, |token| token == token_type)
 	}
 
 	fn current_position(&self) -> Option<Span> {

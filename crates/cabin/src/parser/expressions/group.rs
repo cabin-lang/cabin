@@ -3,6 +3,7 @@ use std::{
 	fmt::Write as _,
 };
 
+use super::field_access::FieldAccessType;
 use crate::{
 	api::{
 		context::context,
@@ -10,23 +11,28 @@ use crate::{
 	},
 	bail_err,
 	comptime::{memory::VirtualPointer, CompileTime},
-	debug_log, debug_start, if_then_some,
+	debug_log,
+	debug_start,
+	if_then_some,
 	lexer::{Span, Token, TokenType},
-	mapped_err, parse_list,
+	mapped_err,
+	parse_list,
 	parser::{
 		expressions::{
 			literal::{LiteralConvertible, LiteralObject},
 			name::Name,
 			object::{Field, InternalFieldValue},
-			Expression, Parse, Spanned, Typed,
+			Expression,
+			Parse,
+			Spanned,
+			Typed,
 		},
 		statements::tag::TagList,
-		ListType, TokenQueueFunctionality,
+		ListType,
+		TokenQueueFunctionality,
 	},
 	transpiler::TranspileToC,
 };
-
-use super::field_access::FieldAccessType;
 
 #[derive(Debug, Clone)]
 pub struct GroupDeclaration {
@@ -252,11 +258,11 @@ impl GroupDeclaration {
 
 	pub fn set_name(&mut self, name: Name) {
 		self.name = name.clone();
-		self.fields.iter_mut().for_each(|field| {
-			field.name = format!("{}_{}", name.unmangled_name(), field.name.unmangled_name()).into();
-			if let Some(value) = &mut field.value {
-				value.try_set_name(field.name.clone());
-			}
-		});
+		//self.fields.iter_mut().for_each(|field| {
+		//	field.name = format!("{}_{}", name.unmangled_name(), field.name.unmangled_name()).into();
+		//	if let Some(value) = &mut field.value {
+		//		value.try_set_name(field.name.clone());
+		//	}
+		//});
 	}
 }
