@@ -13,11 +13,10 @@ pub mod transpiler;
 pub const STDLIB: &str = include_str!("../std/stdlib.cabin");
 pub const PRELUDE: &str = include_str!("../std/prelude.cabin");
 
-/// A `clap::Parser` for the arguments passed at the command line. This is called from the main entry point, and
-/// delegates work to whatever subcommand was used.
+/// The Cabin compiler.
 #[derive(clap::Parser)]
 pub struct CabinCompilerArguments {
-	/// The subcommand to run.
+	/// The command to run.
 	#[command(subcommand)]
 	pub command: SubCommand,
 }

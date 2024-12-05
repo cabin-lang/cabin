@@ -5,18 +5,22 @@ use try_as::traits as try_as_traits;
 use crate::{
 	api::{context::context, scope::ScopeId},
 	comptime::{memory::VirtualPointer, CompileTime},
-	debug_log, debug_start, if_then_some,
+	debug_log,
+	debug_start,
+	if_then_some,
 	lexer::{Span, TokenType},
-	mapped_err, parse_list,
+	mapped_err,
+	parse_list,
 	parser::{
-		expressions::{group::GroupDeclaration, literal::LiteralConvertible as _, name::Name, Expression},
+		expressions::{field_access::FieldAccessType, group::GroupDeclaration, literal::LiteralConvertible as _, name::Name, parameter::Parameter, Expression, Spanned},
 		statements::tag::TagList,
-		ListType, Parse, TokenQueue, TokenQueueFunctionality,
+		ListType,
+		Parse,
+		TokenQueue,
+		TokenQueueFunctionality,
 	},
 	transpiler::TranspileToC,
 };
-
-use super::{field_access::FieldAccessType, parameter::Parameter, Spanned};
 
 #[derive(Debug, Clone)]
 pub struct ObjectConstructor {

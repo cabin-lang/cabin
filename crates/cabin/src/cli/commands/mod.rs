@@ -36,6 +36,19 @@ pub enum SubCommand {
 	New(NewCommand),
 }
 
+/// Performs a step of compiler execution. This pretty-prints debug information (if enabled in the
+/// compiler config) and performs the given step of compilation. If the step fails (returns an
+/// `Err`) then the program is exited and the error is pretty-printed.
+///
+/// # Parameters
+///
+/// - `expression` - A function that runs the step of compilation.
+/// - `phase` - The compilation phase of this step. See `Phase` for more information.
+///
+/// # Returns
+///
+/// The returned value from the compilation step if compilation was sucessful. If it was not, the
+/// program exits.
 pub fn step<T, E: Display, F: FnOnce() -> Result<T, E>>(expression: F, phase: Phase) -> T {
 	context().phase = phase;
 

@@ -1,4 +1,7 @@
-use std::{fmt::Write as _, sync::LazyLock};
+use std::{
+	fmt::Write as _,
+	sync::{Arc, LazyLock, Mutex},
+};
 
 use colored::{ColoredString, Colorize as _};
 
@@ -215,6 +218,7 @@ impl Context {
 	/// written to update to the contents of the returned object.
 	///
 	/// # Errors
+	///
 	/// If the compiler is currently operating on a single file instead of in a project that contains options, since
 	/// single Cabin files can't contain compiler configuration.
 	pub fn cabin_toml_mut(&mut self) -> anyhow::Result<CabinTomlWriteOnDrop> {
@@ -235,12 +239,17 @@ impl Context {
 
 #[derive(Debug, Clone)]
 pub struct SourceFilePosition {
+	/// The line of the position.
 	line: u32,
+
+	/// The column of the position.
 	column: u32,
+
+	/// The name of the source file.
 	name: &'static str,
 
 	/// The fully qualified path name of the Rust function this location takes place in. This is
-	/// generally obtained via the `function!()` macro.
+	/// generally obtained via the `function!()` macro from `crate::api::macros`.
 	function: String,
 }
 
@@ -299,6 +308,16 @@ pub fn context() -> &'static mut Context {
 	}
 }
 
+// Maybe we should try something like this instead..
+
+pub static SAFE_CONTEXT: LazyLock<Arc<Mutex<Context>>> = LazyLock::new(|| Arc::new(Mutex::new(Context::default())));
+#[macro_export]
+macro_rules! context {
+	() => {
+		std::sync::Arc::clone(&*crate::api::context::SAFE_CONTEXT).try_lock().unwrap()
+	};
+}
+
 pub struct DebugSection;
 
 impl DebugSection {
@@ -310,20 +329,43 @@ impl DebugSection {
 	}
 }
 
+/// A phase in compilation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Phase {
+	/// This phase represents when the compiler is parsing and evaluating the Cabin standard
+	/// library. This is the very first phase in compilation.
 	Stdlib,
+
+	/// The phase for when the compiler reads all of the source files in a Cabin project.
 	ReadingSourceFiles,
+
+	/// The phase for when the compiler tokenizes source code into a token stream.
 	Tokenization,
+
+	/// The phase for when the compiler parses its token stream into an abstract syntax tree.
 	Parsing,
+
+	/// The phase for when the compiler links all files' ASTs together into a single AST.
 	Linking,
+
+	/// The phase for when the compiler evaluates its ASTs at compile-time.
 	CompileTimeEvaluation,
+
+	/// The phase for when the compiler transpiles its evaluated ASTs into C code.
 	Transpilation,
+
+	/// The phase for when the compiler compiles C code into a native binary.
 	Compilation,
+
+	/// The phase for when the compiler runs a compiled native binary.
 	RunningBinary,
 }
 
 impl Phase {
+	/// Returns what this phase is doing as a tuple of two strings; The first being the verb for
+	/// what the phase does and the second being the object for what the phase is acting on. This
+	/// is used by `crate::cli::commands::step()` to pretty-print information as compilation
+	/// happens.
 	pub const fn action(&self) -> (&'static str, &'static str) {
 		match self {
 			Phase::Stdlib => ("Adding", "standard library"),

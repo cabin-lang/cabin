@@ -1,28 +1,11 @@
 use colored::Colorize as _;
 
 use crate::{
-	api::{
-		context::context,
-		scope::ScopeId,
-		traits::{TerminalOutput, TryAs as _},
-	},
-	bail_err,
+	api::{context::context, scope::ScopeId, traits::TryAs as _},
 	comptime::{memory::VirtualPointer, CompileTime},
-	err,
 	lexer::{Span, TokenType},
 	parser::{
-		expressions::{
-			extend::Extend,
-			function_declaration::FunctionDeclaration,
-			literal::{LiteralConvertible as _, LiteralObject},
-			name::Name,
-			object::{Field, InternalFieldValue, ObjectConstructor},
-			operators::PrimaryExpression,
-			Expression,
-			Spanned,
-			Typed,
-		},
-		statements::tag::TagList,
+		expressions::{function_declaration::FunctionDeclaration, literal::LiteralConvertible as _, name::Name, operators::PrimaryExpression, Expression, Spanned},
 		Parse,
 		TokenQueue,
 		TokenQueueFunctionality as _,
@@ -43,7 +26,6 @@ pub enum FieldAccessType {
 #[derive(Debug, Clone)]
 pub enum FieldAccessOperator {
 	Dot,
-	Colon,
 }
 
 impl TryFrom<TokenType> for FieldAccessOperator {
@@ -52,7 +34,6 @@ impl TryFrom<TokenType> for FieldAccessOperator {
 	fn try_from(value: TokenType) -> Result<Self, Self::Error> {
 		Ok(match value {
 			TokenType::Dot => FieldAccessOperator::Dot,
-			TokenType::Colon => FieldAccessOperator::Colon,
 			_ => anyhow::bail!("literally how did you even get ths error to happen"),
 		})
 	}
@@ -135,67 +116,6 @@ impl CompileTime for FieldAccess {
 								)
 							})?
 					},
-				},
-				FieldAccessOperator::Colon => {
-					let declaration = Extend::from_literal(
-						context()
-							.scope_data
-							.get_variable(&self.right)
-							.ok_or_else(|| {
-								err! {
-									base = "no represent as with this name was found",
-								}
-							})?
-							.try_as::<VirtualPointer>()?
-							.virtual_deref(),
-					)?;
-
-					if !declaration.can_represent(&left_evaluated)? {
-						bail_err! {
-							base = "Attempted to represent an object with a represent-as declaration, but that declaration can't apply to that object.",
-							details = format!(
-								"
-									Here, you use the colon operator to attempt to represent an object of type \"{}\" using the represent-as declaration
-									\"{}\". However, That represent-as declaration can only represent objects of type \"{}\".
-									",
-								left_evaluated.get_type()?.virtual_deref().name().unmangled_name().bold().yellow(),
-								self.right.unmangled_name().bold().yellow(),
-								declaration.representables()?.bold().yellow(),
-							).as_terminal_output(),
-						}
-					}
-
-					let mut fields = declaration.fields().to_vec();
-					let mut original_fields = literal
-						.fields
-						.clone()
-						.into_iter()
-						.map(|(name, field_value)| Field {
-							name,
-							field_type: None,
-							value: Some(Expression::Pointer(field_value)),
-						})
-						.collect::<Vec<_>>();
-					fields.append(&mut original_fields);
-
-					let mut internal_fields = literal.internal_fields.clone();
-					let _ = internal_fields.insert("representing_type_name".to_owned(), InternalFieldValue::Name(literal.type_name().clone()));
-
-					Expression::Pointer(
-						LiteralObject::try_from(ObjectConstructor {
-							type_name: declaration.type_to_represent_as().try_as::<VirtualPointer>().unwrap().virtual_deref().name().to_owned(),
-							fields,
-							internal_fields,
-							inner_scope_id: context().scope_data.file_id(),
-							field_access_type: FieldAccessType::Normal,
-							name: "anonymous_represent_as_casted".into(),
-							outer_scope_id: context().scope_data.file_id(),
-							tags: TagList::default(),
-							span: declaration.span(),
-						})
-						.unwrap()
-						.store_in_memory(),
-					)
 				},
 			})
 		}

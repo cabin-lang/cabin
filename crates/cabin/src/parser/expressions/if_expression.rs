@@ -1,3 +1,6 @@
+use std::fmt::Write as _;
+
+use super::Spanned;
 use crate::{
 	api::{context::context, scope::ScopeId},
 	comptime::CompileTime,
@@ -5,14 +8,12 @@ use crate::{
 	mapped_err,
 	parser::{
 		expressions::{block::Block, Expression},
-		Parse, TokenQueue, TokenQueueFunctionality,
+		Parse,
+		TokenQueue,
+		TokenQueueFunctionality,
 	},
 	transpiler::TranspileToC,
 };
-
-use std::fmt::Write as _;
-
-use super::Spanned;
 
 #[derive(Debug, Clone)]
 pub struct IfExpression {
