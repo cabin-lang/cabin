@@ -10,7 +10,8 @@ use crate::{
 		traits::TryAs as _,
 	},
 	comptime::{memory::VirtualPointer, CompileTime},
-	debug_start, err,
+	debug_start,
+	err,
 	lexer::Span,
 	mapped_err,
 	parser::expressions::{name::Name, object::ObjectConstructor, Expression, Spanned, Typed},
@@ -55,6 +56,7 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 	},
 	"terminal.input" => BuiltinFunction {
 		evaluate_at_compile_time: |_caller_scope_id, _arguments, span| {
+			context().lines_printed += 1;
 			let mut line = String::new();
 			let _ = std::io::stdin().read_line(&mut line)?;
 			line = line.get(0..line.len() - 1).unwrap().to_owned();

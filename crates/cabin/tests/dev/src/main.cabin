@@ -1,1 +1,4 @@
-print("Hello world!");
+print("Enter your name: ");
+let name = input();
+print("Hi");
+print(name);

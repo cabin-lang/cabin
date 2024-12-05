@@ -1,5 +1,8 @@
 use std::{collections::VecDeque, fmt::Write as _};
 
+use colored::Colorize;
+use regex_macro::regex;
+
 use super::unary::{UnaryOperation, UnaryOperator};
 use crate::{
 	api::{
@@ -321,7 +324,16 @@ impl CompileTime for FunctionCall {
 					if !system_side_effects || context().has_side_effects() {
 						if let Some(runtime_reason) = runtime {
 							if !self.tags.suppresses_warning(CompilerWarning::RuntimeFunctionCall) {
-								warn!("Calling a runtime-preferred function at compile-time: {runtime_reason} ");
+								warn!(
+									"The action {} was run at compile-time, but it should only be called at runtime. Reason: \n\n\t{} ",
+									format!(
+										"{}.{}()",
+										regex!(r"^[^\.]+").find(&internal_name).unwrap().as_str().red(),
+										regex!(r"\.(.+)").captures(&internal_name).unwrap().get(1).unwrap().as_str().blue()
+									)
+									.bold(),
+									runtime_reason.dimmed()
+								);
 							}
 						}
 

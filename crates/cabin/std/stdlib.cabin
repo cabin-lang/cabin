@@ -111,7 +111,7 @@ let system = new Object {
 
 	terminal = new Object {
 
-		#[builtin<"terminal.print">, system_side_effects, runtime<"print() is meant for the user. Use debug() at compile-time.">] 
+		#[builtin<"terminal.print">, system_side_effects, runtime<"print() is meant for the user. Use debug() at compile-time, or use a run expression to print to the user.">] 
 		print = action(object: Anything),
 
 		debug = action(object: Anything) {
