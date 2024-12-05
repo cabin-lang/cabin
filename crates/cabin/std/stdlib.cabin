@@ -10,7 +10,11 @@ let Optional = oneof<Data> {
 	Nothing
 };
 
-let Text = group {};
+let Text = group {
+
+	#[builtin<"Text.plus">]
+	plus = action(this: Text, other: Text): Text
+};
 
 let Anything = group {
 

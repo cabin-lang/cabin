@@ -1,3 +1,2 @@
 let name = input(prompt = "Enter your name: ");
-print("Hi ", newline = false);
-print(name);
+print("Hi " + name);

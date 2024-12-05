@@ -118,6 +118,23 @@ static BUILTINS: phf::Map<&str, BuiltinFunction> = phf::phf_map! {
 			Ok(String::new())
 		}
 	},
+	"Text.plus" => BuiltinFunction {
+		evaluate_at_compile_time: |_caller_scope_id, arguments, _span| {
+			let first = arguments.first().ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?;
+			let first_number = first.try_as_literal()?.try_as::<String>()?.to_owned();
+			let second = arguments.get(1).ok_or_else(|| anyhow::anyhow!("Missing argument to Number.plus"))?;
+			let second_number = second.try_as_literal()?.try_as::<String>()?;
+
+			Ok(string(&(first_number + second_number), first.span().to(second.span())))
+		},
+		to_c: |parameter_names| {
+			let number_address = context().scope_data.get_variable("Number").unwrap().try_as::<VirtualPointer>().unwrap();
+			let first = parameter_names.first().unwrap();
+			let second = parameter_names.get(1).unwrap();
+			let number_type = format!("group_u_Number_{number_address}");
+			Ok(format!("*return_address = ({number_type}) {{ .internal_value = {first}->internal_value + {second}->internal_value }};"))
+		}
+	},
 	"Anything.to_string" => BuiltinFunction {
 		evaluate_at_compile_time: |_caller_scope_id, arguments, span| {
 			let this = arguments

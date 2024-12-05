@@ -25,7 +25,7 @@ use crate::{
 		expressions::{
 			field_access::{FieldAccess, FieldAccessType},
 			function_declaration::FunctionDeclaration,
-			literal::{CompilerWarning, LiteralConvertible},
+			literal::{CompilerWarning, LiteralConvertible, LiteralObject},
 			name::Name,
 			object::{Field, ObjectConstructor},
 			run::RuntimeableExpression,
@@ -199,7 +199,30 @@ impl CompileTime for FunctionCall {
 		})?;
 
 		// Compile-time arguments
-		let compile_time_arguments = {
+		let builtin = context()
+			.scope_data
+			.get_variable_from_id("builtin", ScopeData::get_stdlib_id())
+			.unwrap()
+			.try_as::<VirtualPointer>()?;
+		let compile_time_arguments = if function.try_as::<VirtualPointer>().is_ok_and(|pointer| pointer == builtin) {
+			let object: ObjectConstructor = VecDeque::from(self.compile_time_arguments).pop_front().unwrap().try_into().unwrap();
+
+			vec![Expression::Pointer(
+				LiteralObject {
+					internal_fields: object.internal_fields,
+					address: None,
+					field_access_type: FieldAccessType::Normal,
+					fields: HashMap::new(),
+					inner_scope_id: None,
+					outer_scope_id: context().scope_data.unique_id(),
+					span: Span::unknown(),
+					tags: TagList::default(),
+					type_name: "Text".into(),
+					name: "anonymous_string_literal".into(),
+				}
+				.store_in_memory(),
+			)]
+		} else {
 			let compile_args_debug = debug_start!(
 				"{} a {} compile-time arguments at compile-time",
 				"Compile-Time Evaluating".bold().green(),
