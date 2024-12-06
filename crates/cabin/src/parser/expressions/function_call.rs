@@ -363,12 +363,12 @@ impl CompileTime for FunctionCall {
 				if let Expression::Block(block) = body {
 					// Validate and add compile-time arguments
 					for (argument, parameter) in compile_time_arguments.iter().zip(function_declaration.compile_time_parameters().iter()) {
-						context().scope_data.reassign_variable_from_id(parameter.name(), argument.clone(), block.inner_scope_id)?;
+						context().scope_data.reassign_variable_from_id(parameter.name(), argument.clone(), block.inner_scope_id())?;
 					}
 
 					// Validate and add arguments
 					for (argument, parameter) in arguments.iter().zip(function_declaration.parameters().iter()) {
-						context().scope_data.reassign_variable_from_id(parameter.name(), argument.clone(), block.inner_scope_id)?;
+						context().scope_data.reassign_variable_from_id(parameter.name(), argument.clone(), block.inner_scope_id())?;
 					}
 				}
 

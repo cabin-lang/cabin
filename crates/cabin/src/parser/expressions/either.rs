@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Write as _};
 
-use colored::Colorize;
+use colored::Colorize as _;
 
 use crate::{
 	api::{context::context, scope::ScopeId},
@@ -16,12 +16,37 @@ use crate::{
 			Spanned,
 		},
 		statements::tag::TagList,
-		ListType, Parse, TokenQueue, TokenQueueFunctionality,
+		ListType,
+		Parse,
+		TokenQueue,
+		TokenQueueFunctionality,
 	},
 	transpiler::TranspileToC,
 	warn,
 };
 
+/// An `either`. In Cabin, `eithers` represent choices between empty values. They are analogous to
+/// something like a Java enum. For example, in Cabin, `true` and `false` aren't keywords; They're
+/// `either` variants:
+///
+/// ```cabin
+/// let Boolean = either {
+///     true,
+///     false
+/// };
+///
+/// let true = Boolean.true;
+/// let false = Boolean.false;
+/// ```
+///
+/// This is loosely equivalent to the following;
+///
+/// ```cabin
+/// let true = new Object {};
+/// let false = new Object {};
+///
+/// let Boolean = true | false;
+/// ```
 #[derive(Debug, Clone)]
 pub struct Either {
 	variants: Vec<(Name, VirtualPointer)>,

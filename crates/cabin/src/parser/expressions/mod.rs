@@ -1,15 +1,8 @@
 use std::fmt::Debug;
 
 use colored::Colorize as _;
-use either::Either;
-use extend::Extend;
-use group::GroupDeclaration;
-use literal::LiteralConvertible;
-use match_expression::Match;
-use parameter::Parameter;
-use run::{RunExpression, RuntimeableExpression};
-use try_as::traits as try_as_traits;
-use unary::UnaryOperation;
+// This is required because of a bug in `try_as`
+use try_as::traits::{self as try_as_traits, TryAsMut};
 
 use crate::{
 	api::{context::context, scope::ScopeData, traits::TryAs as _},
@@ -22,15 +15,21 @@ use crate::{
 	parser::{
 		expressions::{
 			block::Block,
+			either::Either,
+			extend::Extend,
 			field_access::FieldAccess,
 			foreach::ForEachLoop,
 			function_call::FunctionCall,
+			group::GroupDeclaration,
 			if_expression::IfExpression,
-			literal::LiteralObject,
+			literal::{LiteralConvertible, LiteralObject},
+			match_expression::Match,
 			name::Name,
 			object::ObjectConstructor,
 			operators::BinaryExpression,
-			try_as_traits::TryAsMut,
+			parameter::Parameter,
+			run::{RunExpression, RuntimeableExpression},
+			unary::UnaryOperation,
 		},
 		statements::tag::TagList,
 		Parse,
@@ -56,6 +55,12 @@ pub mod oneof;
 pub mod operators;
 pub mod parameter;
 pub mod run;
+
+/// The `sugar` module. This module handles parsing expressions that are just syntactic sugar for
+/// other constructs in the language, as opposed to their own syntax. For example, creating a
+/// literal list such as `[1, 2, 3]` is just syntactic sugar for creating an instance of the `List`
+/// group, and the result of parsing such an expression is simply an `ObjectConstructor`, as
+/// opposed to being it's own type. Such syntaxes are parsed in this `sugar` module.
 pub mod sugar;
 pub mod unary;
 
@@ -178,6 +183,7 @@ impl Expression {
 		})
 	}
 
+	/// Returns whether this expression is a virtual pointer.
 	pub const fn is_pointer(&self) -> bool {
 		matches!(self, Self::Pointer(_))
 	}
@@ -190,7 +196,6 @@ impl Expression {
 	///
 	/// # Returns
 	/// The name of the kind of expression of this as a string.
-
 	pub const fn kind_name(&self) -> &'static str {
 		match self {
 			Self::Block(_) => "block",
@@ -210,22 +215,16 @@ impl Expression {
 		}
 	}
 
-	pub fn can_be_literal(&self) -> bool {
-		match self {
-			Self::ObjectConstructor(object) => object.is_literal(),
-			Self::Pointer(_) => true,
-			_ => false,
-		}
-	}
-
 	/// Returns a new owned pointer to the same value in virtual memory as this referenced
 	/// pointer. If this expression does indeed refer to a pointer, this is effectively a
 	/// cheap `to_owned()`. If not, an error is returned.
 	///
 	/// # Errors
+	///
 	/// If this expression doesn't refer to a pointer.
 	///
 	/// # Performance
+	///
 	/// This clone is very cheap; Only the underlying pointer address (a `usize`) is cloned.
 	pub fn try_clone_pointer(&self) -> anyhow::Result<Expression> {
 		if let Self::Pointer(address) = self {

@@ -32,25 +32,10 @@ use crate::{
 };
 
 ///
-/// Normal extension:
-///
 /// ```cabin
 /// let Square = extend Number {
 ///     square = action(this: Number) {
 ///         it is this * this;
-///     };
-/// };
-/// ```
-///
-/// Extension to another type:
-///
-/// ```cabin
-/// let AddPoints = extend Point tobe AddableTo<Point, Point> {
-///     plus = action(this: Point, other: Point): Point {
-///         it is new Point {
-///             x = this.x + other.x,
-///             y = this.y + other.y
-///         };
 ///     };
 /// };
 /// ```

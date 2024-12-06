@@ -73,11 +73,11 @@ pub enum TokenType {
 	/// changed to something more intuitive. When tokenizes, tokens of this type will return the entire comment, including the leading two slashes, but not the
 	/// trailing newline or carriage return.
 	///
-	/// NOTE: This *must* be checked ***before*** the `ForwardSlash` token type. Failure to do so will start parsing a comment as two separate forward slash
+	/// NOTE: This *must* be checked *before* the `ForwardSlash` token type. Failure to do so will start parsing a comment as two separate forward slash
 	/// tokens, and then attempt to parse the comment as code. These token types are iterated with `strum::IntoEnumIterator`, which iterates over this enum
 	/// in order. This means that this enum variant declaration *must* be placed *before* the `ForwardSlash` token type. Please be careful moving this variant
 	/// or that one around!
-	LineComment,
+	Comment,
 
 	/// The forward slash token. This is used for arithmetic division expressions. Any token tokenized of this type will always have a single-character value, which is
 	/// the "forward slash" character (/).
@@ -162,27 +162,6 @@ pub enum TokenType {
 	KeywordRuntime,
 
 	KeywordIs,
-
-	/// The `return` keyword token type. This is used to exit from a function and give a value back to the caller.
-	///
-	/// A token created with this type will always have the value "return".
-	///
-	/// Either way, I don't really like `return` as a keyword for *either* to be honest, so we should consider some other possibilities. One silly idea I had is
-	/// using "its" for a tail expression keyword, so things would look like this:
-	///
-	/// ```cabin
-	/// constant image_type = if extension == "png" {
-	/// 	it is "Portable networks graphics";
-	/// } else {
-	/// 	it is "not a PNG!";
-	/// };
-	/// ```
-	///
-	/// This reads well for a small example like this, but may be confusing when the bodies are much longer. Regardless it's one possibility to consider.
-	///
-	/// Like all keywords, this enum variant declaration *must* come before `Identifier`. If it doesn't, then `return` will be tokenized incorrectly as
-	/// identifiers, which will cause issues when parsing. Please be careful when moving around this keyword or the `Identifier` token type!
-	KeywordReturn,
 
 	KeywordMatch,
 
@@ -329,7 +308,7 @@ pub enum TokenType {
 
 impl TokenType {
 	pub fn is_whitespace(&self) -> bool {
-		matches!(self, TokenType::Whitespace | TokenType::LineComment)
+		matches!(self, TokenType::Whitespace | TokenType::Comment)
 	}
 
 	// TODO: This could pretty easily be refactored into a non-regex solution that would almost certainly be more performant;
@@ -358,7 +337,6 @@ impl TokenType {
 			Self::KeywordNew => regex!(r"^new\b"),
 			Self::KeywordOneOf => regex!(r"^oneof\b"),
 			Self::KeywordOtherwise => regex!(r"^otherwise\b"),
-			Self::KeywordReturn => regex!(r"^return\b"),
 			Self::KeywordRuntime => regex!(r"^run\b"),
 			Self::KeywordToBe => regex!(r"^tobe\b"),
 			Self::KeywordWhile => regex!(r"^while\b"),
@@ -403,7 +381,7 @@ impl TokenType {
 
 			// Ignored tokens
 			Self::Whitespace => regex!(r"^\s"),
-			Self::LineComment => regex!(r"^#[^\n\r]*"),
+			Self::Comment => regex!(r"^#[^\n\r#]*[\n\r#$]"),
 
 			// Unknown - This token type only appears when using `tokenize_string`, in which case
 			// it is inserted manually into the token stream. That's why this has an unmatachable
@@ -466,7 +444,7 @@ impl Token {
 	fn style(&self, next: Option<&Token>) -> &Style {
 		match self.token_type {
 			// Comments
-			TokenType::LineComment => context().theme.comment(),
+			TokenType::Comment => context().theme.comment(),
 
 			// Numbers
 			TokenType::Number => context().theme.number(),
@@ -482,7 +460,6 @@ impl Token {
 			| TokenType::KeywordIf
 			| TokenType::KeywordRuntime
 			| TokenType::KeywordIs
-			| TokenType::KeywordReturn
 			| TokenType::KeywordOneOf
 			| TokenType::KeywordLet
 			| TokenType::KeywordForEach
@@ -602,13 +579,31 @@ pub fn tokenize_program(code: &str, is_prelude: bool) -> anyhow::Result<VecDeque
 		}
 	}
 
-	tokens.retain(|token| token.token_type != TokenType::Whitespace && token.token_type != TokenType::LineComment);
+	tokens.retain(|token| token.token_type != TokenType::Whitespace && token.token_type != TokenType::Comment);
 
 	Ok(VecDeque::from(tokens))
 }
 
-pub fn tokenize_string(code: &str) -> VecDeque<Token> {
-	let mut code = code.to_owned();
+/// Tokenizes a string infallibly. This performs raw tokenization on a string and returns a token
+/// stream as a result. Instead of erroring when encountering unknown tokens, a token of type
+/// `TokenType::Unknown` is included in the token stream.
+///
+/// This is used by `CabinString::parse` to parse expressions in formatted strings. Formatted
+/// strings contain expressions that need to be parsed (and therefore tokenized) but they will also
+/// contain further tokens that may not necessarily be valid because they're part of a string
+/// literal. Thus, we need an infallible tokenize function.
+///
+/// This shouldn't be used for tokenizing general Cabin programs; Use `tokenize` instead.
+///
+/// # Parameters
+///
+/// - `string` - The string to tokenize
+///
+/// # Returns
+///
+/// A token stream of tokenized tokens, possibly including `Unknown` tokens.
+pub fn tokenize_string(string: &str) -> VecDeque<Token> {
+	let mut code = string.to_owned();
 	code = code.replace('\t', "    ");
 
 	let mut tokens = Vec::new();
@@ -617,7 +612,7 @@ pub fn tokenize_string(code: &str) -> VecDeque<Token> {
 	// We only read tokens from the start of a string, so we repeatedly loop over the code and remove the tokenized text when we find tokens.
 	// This means we can just iterate while code isn't empty.
 	while !code.is_empty() {
-		let (token_type, value) = TokenType::find_match(&code).unwrap_or((TokenType::Unknown, "_".to_owned()));
+		let (token_type, value) = TokenType::find_match(&code).unwrap_or((TokenType::Unknown, code.chars().next().unwrap().to_string()));
 		let length = value.len(); // This must be done early so that we aren't trying to get the length of a moved value
 
 		// Add the token

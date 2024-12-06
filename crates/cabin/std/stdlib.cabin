@@ -1,6 +1,6 @@
 let This = group {};
 
-#[suppress<Warning.SingleVariantEither>]
+#[suppress<Warning.SingleVariantEither>] 
 let Nothing = either {
 	nothing
 };

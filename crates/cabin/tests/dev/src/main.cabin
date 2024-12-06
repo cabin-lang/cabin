@@ -1,2 +1,2 @@
-let name = "violet";
+let name = input(prompt = "Enter your name: ");
 debug("Hi {name}!");

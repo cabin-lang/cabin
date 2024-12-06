@@ -1,3 +1,5 @@
+use std::fmt::Write as _;
+
 use crate::{
 	api::{
 		context::context,
@@ -6,22 +8,40 @@ use crate::{
 	comptime::CompileTime,
 	debug_start,
 	lexer::{Span, TokenType},
-	parser::{expressions::Expression, statements::Statement, Parse, TokenQueue, TokenQueueFunctionality as _},
+	parser::{
+		expressions::{Expression, Spanned},
+		statements::Statement,
+		Parse,
+		TokenQueue,
+		TokenQueueFunctionality as _,
+	},
 	transpiler::TranspileToC,
 };
 
-use std::fmt::Write as _;
-
-use super::Spanned;
-
 #[derive(Debug, Clone)]
 pub struct Block {
-	pub statements: Vec<Statement>,
-	pub inner_scope_id: ScopeId,
+	/// The statements inside this block.
+	statements: Vec<Statement>,
+
+	/// The scope ID of the inside of this block.
+	inner_scope_id: ScopeId,
+
+	/// The span of this block. See `Spanned::span()` for more information.
 	span: Span,
 }
 
 impl Block {
+	/// Creates a new `Block`.
+	///
+	/// # Parameters
+	///
+	/// - `statements` - The statements inside the block
+	/// - `inner_scope_id` - The ID of the scope inside this block
+	/// - `span` - The span of the block
+	///
+	/// # Returns
+	///
+	/// The created block
 	pub const fn new(statements: Vec<Statement>, inner_scope_id: ScopeId, span: Span) -> Block {
 		Block { statements, inner_scope_id, span }
 	}
@@ -126,5 +146,11 @@ impl TranspileToC for Block {
 impl Spanned for Block {
 	fn span(&self) -> Span {
 		self.span.to_owned()
+	}
+}
+
+impl Block {
+	pub fn inner_scope_id(&self) -> ScopeId {
+		self.inner_scope_id
 	}
 }

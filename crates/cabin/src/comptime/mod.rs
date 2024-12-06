@@ -1,5 +1,7 @@
 pub mod memory;
 
+/// A trait for AST nodes to implement that allows them to be evaluated at compile-time. After
+/// parsing, the program's abstract syntax tree is evaluated at compile-time as much as possible.
 pub trait CompileTime {
 	type Output;
 

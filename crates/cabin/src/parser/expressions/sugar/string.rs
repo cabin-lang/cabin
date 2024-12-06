@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 
+// Required because of a bug in `try_as`
 use try_as::traits as try_as_traits;
 
 use crate::{
@@ -14,9 +15,36 @@ use crate::{
 	},
 };
 
+/// A part of a formatted string literal. Each part is either just a regular string value, or an
+/// expression that's inserted into the formatted string. The parts are chained together as
+/// function calls at parse time, i.e.:
+///
+/// ```cabin
+/// print("Hello {name}!");
+/// ```
+///
+/// becomes:
+///
+/// ```cabin
+/// print("Hello ".plus(name.to_text()).plus("!"));
+/// ```
+///
+/// A formatted string is stored as a `Vec<StringPart>` before being converted into a function call
+/// chain such as the one shown above, so the above might be something like:
+///
+/// ```rust
+/// vec![
+///     StringPart::Literal("Hello "),
+///     StringPart::Expression(name.to_text()),
+///     StringPart::Literal("!")
+/// ]
+/// ```
 #[derive(Debug, try_as::macros::TryAsRef)]
 pub enum StringPart {
+	/// A literal string part.
 	Literal(String),
+
+	/// An interpolated expression string part.
 	Expression(Expression),
 }
 
@@ -29,6 +57,8 @@ impl Into<Expression> for StringPart {
 	}
 }
 
+/// A wrapper for implementing `Parse` for parsing string literals. In Cabin, all strings are
+/// formatted strings by default, so they require special logic for parsing.
 pub struct CabinString;
 
 impl Parse for CabinString {
@@ -56,7 +86,7 @@ impl Parse for CabinString {
 					let expression = Expression::parse(&mut tokens)?;
 					parts.push(StringPart::Expression(expression));
 
-					// Recollect tokens into string
+					// Recollect remaining tokens into string
 					without_quotes = tokens.into_iter().map(|token| token.value).collect();
 
 					// Pop closing brace

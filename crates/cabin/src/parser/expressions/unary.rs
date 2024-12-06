@@ -1,13 +1,20 @@
-use crate::api::context::context;
-use crate::api::scope::ScopeType;
-use crate::lexer::Span;
-use crate::parser::statements::tail::TailStatement;
-use crate::{comptime::CompileTime, parser::statements::Statement};
+use crate::{
+	api::{context::context, scope::ScopeType},
+	comptime::CompileTime,
+	lexer::Span,
+	parser::{
+		expressions::{
+			block::Block,
+			match_expression::{Match, MatchBranch},
+			Expression,
+			Spanned,
+			Typed,
+		},
+		statements::{tail::TailStatement, Statement},
+	},
+};
 
-use super::block::Block;
-use super::match_expression::{Match, MatchBranch};
-use super::{Expression, Spanned, Typed};
-
+/// A unary operator. These are types of operators that take a single expression and operate on it.
 #[derive(Debug, Clone)]
 pub enum UnaryOperator {
 	QuestionMark,

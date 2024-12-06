@@ -52,7 +52,7 @@ impl Parse for Match {
 				Some(type_to_match) => {
 					context()
 						.scope_data
-						.declare_new_variable_from_id(first.clone(), Expression::Void(()), body.inner_scope_id)?;
+						.declare_new_variable_from_id(first.clone(), Expression::Void(()), body.inner_scope_id())?;
 					MatchBranch {
 						type_to_match,
 						name: Some(first),
@@ -101,7 +101,7 @@ impl CompileTime for Match {
 			if expression.is_assignable_to_type(branch.type_to_match.try_as_literal()?.address.unwrap())? {
 				debug_section.finish();
 				if let Some(name) = &branch.name {
-					context().scope_data.reassign_variable_from_id(name, expression, branch.body.inner_scope_id)?;
+					context().scope_data.reassign_variable_from_id(name, expression, branch.body.inner_scope_id())?;
 				}
 				return branch.body.clone().evaluate_at_compile_time();
 			};

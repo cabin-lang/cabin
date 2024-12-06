@@ -42,7 +42,7 @@ impl Parse for IfExpression {
 		};
 		Ok(IfExpression {
 			condition,
-			inner_scope_id: body.inner_scope_id,
+			inner_scope_id: body.inner_scope_id(),
 			body: Box::new(Expression::Block(body)),
 			else_body,
 			span: start.to(end),

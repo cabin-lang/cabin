@@ -1,5 +1,6 @@
 use std::{collections::HashMap, fmt::Debug};
 
+use super::{field_access::FieldAccessType, parameter::Parameter};
 use crate::{
 	api::{
 		builtin::transpile_builtin_to_c,
@@ -9,24 +10,30 @@ use crate::{
 	},
 	cli::theme::Styled,
 	comptime::{memory::VirtualPointer, CompileTime},
-	debug_log, debug_start, if_then_else_default, if_then_some,
+	debug_log,
+	debug_start,
+	if_then_else_default,
+	if_then_some,
 	lexer::{Span, TokenType},
-	mapped_err, parse_list,
+	mapped_err,
+	parse_list,
 	parser::{
 		expressions::{
 			block::Block,
 			literal::{LiteralConvertible, LiteralObject},
 			name::Name,
 			object::InternalFieldValue,
-			Expression, Parse, Spanned,
+			Expression,
+			Parse,
+			Spanned,
 		},
 		statements::tag::TagList,
-		ListType, TokenQueue, TokenQueueFunctionality as _,
+		ListType,
+		TokenQueue,
+		TokenQueueFunctionality as _,
 	},
 	transpiler::TranspileToC,
 };
-
-use super::{field_access::FieldAccessType, parameter::Parameter};
 
 #[derive(Clone)]
 pub struct FunctionDeclaration {
@@ -126,16 +133,16 @@ impl Parse for FunctionDeclaration {
 		debug_log!("Parsing the body of a {}", "function declaration".cyan());
 		let (body, inner_scope_id) = if_then_some!(tokens.next_is(TokenType::LeftBrace), {
 			let block = Block::parse_with_scope_type(tokens, ScopeType::Function)?;
-			let inner_scope_id = block.inner_scope_id;
+			let inner_scope_id = block.inner_scope_id();
 			for parameter in &compile_time_parameters {
 				context()
 					.scope_data
-					.declare_new_variable_from_id(parameter.name().clone(), Expression::Void(()), block.inner_scope_id)?;
+					.declare_new_variable_from_id(parameter.name().clone(), Expression::Void(()), block.inner_scope_id())?;
 			}
 			for parameter in &parameters {
 				context()
 					.scope_data
-					.declare_new_variable_from_id(parameter.name().clone(), Expression::Void(()), block.inner_scope_id)?;
+					.declare_new_variable_from_id(parameter.name().clone(), Expression::Void(()), block.inner_scope_id())?;
 			}
 			end = block.span();
 			(Expression::Block(block), inner_scope_id)

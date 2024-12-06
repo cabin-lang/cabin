@@ -1,15 +1,16 @@
+use super::Spanned;
 use crate::{
 	api::{context::context, scope::ScopeId, traits::TryAs as _},
 	comptime::CompileTime,
 	lexer::{Span, TokenType},
 	parser::{
 		expressions::{block::Block, name::Name, Expression},
-		Parse, TokenQueue, TokenQueueFunctionality as _,
+		Parse,
+		TokenQueue,
+		TokenQueueFunctionality as _,
 	},
 	transpiler::TranspileToC,
 };
-
-use super::Spanned;
 
 #[derive(Debug, Clone)]
 pub struct ForEachLoop {
@@ -48,7 +49,7 @@ impl Parse for ForEachLoop {
 		let end = body.span();
 
 		// Add the binding name to scope
-		let inner_scope_id = body.inner_scope_id;
+		let inner_scope_id = body.inner_scope_id();
 		context()
 			.scope_data
 			.declare_new_variable_from_id(binding_name.clone(), Expression::Void(()), inner_scope_id)?;
