@@ -729,4 +729,17 @@ impl FunctionCall {
 			while = "running the program's main file at compile-time",
 		})
 	}
+
+	pub fn basic(function: Expression) -> FunctionCall {
+		FunctionCall {
+			function: Box::new(function),
+			arguments: Vec::new(),
+			compile_time_arguments: Vec::new(),
+			scope_id: context().scope_data.unique_id(),
+			span: Span::unknown(),
+			has_keyword_arguments: false,
+			has_keyword_compile_time_arguments: false,
+			tags: TagList::default(),
+		}
+	}
 }

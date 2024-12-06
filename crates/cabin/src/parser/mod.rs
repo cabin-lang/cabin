@@ -174,43 +174,89 @@ pub trait TokenQueueFunctionality {
 
 impl TokenQueueFunctionality for TokenQueue {
 	fn peek(&self) -> anyhow::Result<&str> {
-		Ok(&self.front().ok_or_else(|| anyhow::anyhow!("Unexpected end of file"))?.value)
+		let mut index = 0;
+		let mut next = self.get(index).ok_or_else(|| anyhow::anyhow!("Unexpected end of file"))?;
+		while next.token_type.is_whitespace() {
+			index += 1;
+			next = self.get(index).ok_or_else(|| anyhow::anyhow!("Unexpected end of file"))?;
+		}
+		Ok(&next.value)
 	}
 
 	fn peek_type(&self) -> anyhow::Result<TokenType> {
-		Ok(self.front().ok_or_else(|| anyhow::anyhow!("Unexpected end of file."))?.token_type)
+		let mut index = 0;
+		let mut next = self.get(index).ok_or_else(|| anyhow::anyhow!("Unexpected end of file"))?;
+		while next.token_type.is_whitespace() {
+			index += 1;
+			next = self.get(index).ok_or_else(|| anyhow::anyhow!("Unexpected end of file"))?;
+		}
+		Ok(next.token_type)
 	}
 
 	fn peek_type2(&self) -> anyhow::Result<TokenType> {
-		Ok(self.get(1).ok_or_else(|| anyhow::anyhow!("Unexpected end of file."))?.token_type)
+		let mut index = 0;
+
+		// The one time I'd enjoy a do-while loop
+		let mut next = self.get(index).ok_or_else(|| anyhow::anyhow!("Unexpected end of file"))?;
+		index += 1;
+		while next.token_type.is_whitespace() {
+			next = self.get(index).ok_or_else(|| anyhow::anyhow!("Unexpected end of file"))?;
+			index += 1;
+		}
+
+		let mut next_next = self.get(index).ok_or_else(|| anyhow::anyhow!("Unexpected end of file"))?;
+		while next_next.token_type.is_whitespace() {
+			index += 1;
+			next_next = self.get(index).ok_or_else(|| anyhow::anyhow!("Unexpected end of file"))?;
+		}
+
+		Ok(next_next.token_type)
 	}
 
 	fn pop(&mut self, token_type: TokenType) -> anyhow::Result<Token> {
-		if let Some(token) = self.pop_front() {
-			if token.token_type == token_type {
-				return Ok(token);
-			}
+		let mut maybe_whitespace = TokenType::Whitespace;
+		while maybe_whitespace.is_whitespace() {
+			if let Some(token) = self.pop_front() {
+				maybe_whitespace = token.token_type;
 
-			anyhow::bail!(
-				"Expected {} but found {}",
-				format!("{token_type}").bold().cyan(),
-				format!("{}", token.token_type).bold().cyan()
-			);
+				if token.token_type == token_type {
+					return Ok(token);
+				}
+
+				if !maybe_whitespace.is_whitespace() {
+					anyhow::bail!(
+						"Expected {} but found {}",
+						format!("{token_type}").bold().cyan(),
+						format!("{}", token.token_type).bold().cyan()
+					);
+				}
+			}
 		}
 
 		anyhow::bail!("Expected {token_type} but found EOF");
 	}
 
 	fn pop_type(&mut self, token_type: TokenType) -> anyhow::Result<TokenType> {
-		let token = self.pop_front();
-		if let Some(token) = token {
-			if token.token_type == token_type {
-				return Ok(token.token_type);
+		let mut maybe_whitespace = TokenType::Whitespace;
+		while maybe_whitespace.is_whitespace() {
+			if let Some(token) = self.pop_front() {
+				maybe_whitespace = token.token_type;
+
+				if token.token_type == token_type {
+					return Ok(token.token_type);
+				}
+
+				if !maybe_whitespace.is_whitespace() {
+					anyhow::bail!(
+						"Expected {} but found {}",
+						format!("{token_type}").bold().cyan(),
+						format!("{}", token.token_type).bold().cyan()
+					);
+				}
 			}
-			anyhow::bail!("Expected {token_type} but found {}", token.token_type);
 		}
 
-		anyhow::bail!("Expected {token_type} but found end of file.");
+		anyhow::bail!("Expected {token_type} but found EOF");
 	}
 
 	fn current_position(&self) -> Option<Span> {

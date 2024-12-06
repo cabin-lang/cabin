@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use super::{extend::Extend, match_expression::Match};
+use super::{extend::Extend, match_expression::Match, sugar::string::CabinString};
 use crate::{
 	lexer::{Token, TokenType},
 	mapped_err,
@@ -145,12 +145,7 @@ impl Parse for PrimaryExpression {
 			})?,
 
 			// Parse string literal into a string object
-			TokenType::String => {
-				let token = tokens.pop(TokenType::String)?;
-				let with_quotes = token.value;
-				let without_quotes = with_quotes.get(1..with_quotes.len() - 1).unwrap().to_owned();
-				Expression::ObjectConstructor(ObjectConstructor::string(&without_quotes, token.span))
-			},
+			TokenType::String => CabinString::parse(tokens)?,
 
 			// Parse number literal into a number object
 			TokenType::Number => {

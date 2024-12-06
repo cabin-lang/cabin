@@ -337,9 +337,14 @@ pub enum TokenType {
 	/// The parser never sees them. This constitutes characters of all standard ASCII whitespace including spaces, tabs, newlines, and carriage returns (which are
 	/// outside of strings of course). Cabin is not a whitespace-sensitive language, so these are intentionally ignored when tokenizing.
 	Whitespace,
+	Unknown,
 }
 
 impl TokenType {
+	pub fn is_whitespace(&self) -> bool {
+		matches!(self, TokenType::Whitespace | TokenType::LineComment)
+	}
+
 	// TODO: This could pretty easily be refactored into a non-regex solution that would almost certainly be more performant;
 	// It would certainly be less clean and less concise, but it would be more performant, so we should consider this at some point.
 
@@ -412,6 +417,12 @@ impl TokenType {
 			// Ignored tokens
 			Self::Whitespace => regex_macro::regex!(r"^\s"),
 			Self::LineComment => regex_macro::regex!(r"^#[^\n\r]*"),
+
+			// Unknown - This token type only appears when using `tokenize_string`, in which case
+			// it is inserted manually into the token stream. That's why this has an unmatachable
+			// regex - an "end of line" indicator followed by the letter 'a' - so that it'll never
+			// be naturally matched during tokenization.
+			Self::Unknown => regex_macro::regex!(r"$a"),
 		}
 	}
 
@@ -607,6 +618,34 @@ pub fn tokenize_program(code: &str, is_prelude: bool) -> anyhow::Result<VecDeque
 	tokens.retain(|token| token.token_type != TokenType::Whitespace && token.token_type != TokenType::LineComment);
 
 	Ok(VecDeque::from(tokens))
+}
+
+pub fn tokenize_string(code: &str) -> VecDeque<Token> {
+	let mut code = code.to_owned();
+	code = code.replace('\t', "    ");
+
+	let mut tokens = Vec::new();
+	let mut position = 0;
+
+	// We only read tokens from the start of a string, so we repeatedly loop over the code and remove the tokenized text when we find tokens.
+	// This means we can just iterate while code isn't empty.
+	while !code.is_empty() {
+		let (token_type, value) = TokenType::find_match(&code).unwrap_or((TokenType::Unknown, "_".to_owned()));
+		let length = value.len(); // This must be done early so that we aren't trying to get the length of a moved value
+
+		// Add the token
+		let token = Token {
+			token_type,
+			value,
+			span: Span { start: position, length },
+		};
+		tokens.push(token);
+		position += length;
+
+		code = code.get(length..).unwrap().to_owned();
+	}
+
+	VecDeque::from(tokens)
 }
 
 /// Tokenizes a string of Cabin source code into a vector of tokens. This is the first step in compiling Cabin source code. The returned vector of tokens

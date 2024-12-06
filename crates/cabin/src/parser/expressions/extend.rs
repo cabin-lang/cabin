@@ -214,12 +214,6 @@ impl Extend {
 
 	pub fn set_name(&mut self, name: Name) {
 		self.name = name.clone();
-		self.fields.iter_mut().for_each(|field| {
-			field.name = format!("{}_{}", name.unmangled_name(), field.name.unmangled_name()).into();
-			if let Some(value) = &mut field.value {
-				value.try_set_name(field.name.clone());
-			}
-		});
 	}
 }
 
