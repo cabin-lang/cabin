@@ -12,7 +12,7 @@ use try_as::traits as try_as_traits;
 use unary::UnaryOperation;
 
 use crate::{
-	api::{context::context, traits::TryAs as _},
+	api::{context::context, scope::ScopeData, traits::TryAs as _},
 	bail_err,
 	cli::theme::Styled,
 	comptime::{memory::VirtualPointer, CompileTime},
@@ -242,7 +242,7 @@ impl Expression {
 			return false;
 		};
 
-		let true_address = context().scope_data.get_variable("true").unwrap().try_as().unwrap();
+		let true_address = context().scope_data.get_variable_from_id("true", ScopeData::get_stdlib_id()).unwrap().try_as().unwrap();
 
 		literal_address == true_address
 	}

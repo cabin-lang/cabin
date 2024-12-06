@@ -12,8 +12,8 @@ let Number = cabin.Number;
 
 # Booleans
 let Boolean = cabin.Boolean;
-let true = Boolean.true;
-let false = Boolean.false;
+let true = cabin.true;
+let false = cabin.false;
 
 # Optionals
 let Optional = cabin.Optional;

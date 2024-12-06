@@ -4,6 +4,7 @@ use std::collections::VecDeque;
 // which is useful for outputting human-readable errors. We assign this to `as _` to indicate clearly that The trait is not referenced directly and only used
 // to bring its methods into scope to be called.
 use convert_case::Casing as _;
+use regex_macro::{regex, Regex};
 // Bring the `IntoEnumIterator` trait into scope, which allows us to use `::iter()` on enums that `#[derive(strum_macros::EnumIter)]`. Specifically here, this is used
 // on `TokenType` to iterate over the values of the enum to test which one matches a specific string of Cabin code. We assign this to `as _` to indicate clearly that
 // The trait is not referenced directly and only used to bring its methods into scope to be called.
@@ -76,11 +77,6 @@ pub enum TokenType {
 	/// tokens, and then attempt to parse the comment as code. These token types are iterated with `strum::IntoEnumIterator`, which iterates over this enum
 	/// in order. This means that this enum variant declaration *must* be placed *before* the `ForwardSlash` token type. Please be careful moving this variant
 	/// or that one around!
-	///
-	/// TODO: Change line comments! Double slash (//) isn't the most intuitive. What can we do here? Another common one is the octothorpe (#), but this is already
-	/// used for tags. Any other ideas? One is A left arrow "<-" or "<=", indicating that it points to the thing it comments on. However, this can cause ambiguity
-	/// when parsing comparative expressions like `if x<-4`, which would become whitespace-sensitive (a similar issue arises with the fat arrow, i.e., `if x<=4`). What
-	/// should we use here? This is a design discussion that should happen sooner rather than later.
 	LineComment,
 
 	/// The forward slash token. This is used for arithmetic division expressions. Any token tokenized of this type will always have a single-character value, which is
@@ -137,11 +133,6 @@ pub enum TokenType {
 	///
 	/// Like all keywords, this enum variant declaration *must* come before `Identifier`. If it doesn't, then `group` will be tokenized incorrectly as
 	/// identifiers, which will cause issues when parsing. Please be careful when moving around this keyword or the `Identifier` token type!
-	///
-	/// TODO: We are considering renaming this to something like `grouptype`, because it doesn't actually represent a group of values, but instead a *type*
-	/// of group of values. I don't really like multi-word keywords and I think this is unnecessary added length, so for now I more prefer `group`, but we
-	/// should consider `grouptype` as well as other possibilities. One other option is just `type`, which would act similar to how it does in TypeScript,
-	/// but the word "type" has a very specific meaning in Cabin and `group`s are only one specific subset of those, and we don't want to raise confusion.
 	KeywordGroup,
 
 	/// The `run` keyword token type, which is used to run an expression at compile-time. In Cabin, all expressions are run at compile-time by default,
@@ -175,10 +166,6 @@ pub enum TokenType {
 	/// The `return` keyword token type. This is used to exit from a function and give a value back to the caller.
 	///
 	/// A token created with this type will always have the value "return".
-	///
-	/// TODO: We would like to rename this to something different. Cabin should support tail expressions, and we have to consider what keyword to use for that.
-	/// At the same time, it's handy to be able to return out from an entire function as well, so if `return` becomes the keyword for tail expressions,
-	/// we should consider what the keyword for returning from the current function should be.
 	///
 	/// Either way, I don't really like `return` as a keyword for *either* to be honest, so we should consider some other possibilities. One silly idea I had is
 	/// using "its" for a tail expression keyword, so things would look like this:
@@ -353,76 +340,76 @@ impl TokenType {
 	///
 	/// # Returns
 	/// A regular expression pattern that matches the token type.
-	fn pattern(self) -> &'static regex_macro::Regex {
+	fn pattern(self) -> &'static Regex {
 		match self {
 			// Keywords
-			Self::KeywordAction => regex_macro::regex!(r"^action\b"),
-			Self::KeywordToBe => regex_macro::regex!(r"^tobe\b"),
-			Self::KeywordDefault => regex_macro::regex!(r"^default\b"),
-			Self::KeywordEither => regex_macro::regex!(r"^either\b"),
-			Self::KeywordForEach => regex_macro::regex!(r"^foreach\b"),
-			Self::KeywordGroup => regex_macro::regex!(r"^group\b"),
-			Self::KeywordIf => regex_macro::regex!(r"^if\b"),
-			Self::KeywordIn => regex_macro::regex!(r"^in\b"),
-			Self::KeywordIs => regex_macro::regex!(r"^is\b"),
-			Self::KeywordLet => regex_macro::regex!(r"^let\b"),
-			Self::KeywordWith => regex_macro::regex!(r"^with\b"),
-			Self::KeywordMatch => regex_macro::regex!(r"^match\b"),
-			Self::KeywordNew => regex_macro::regex!(r"^new\b"),
-			Self::KeywordOneOf => regex_macro::regex!(r"^oneof\b"),
-			Self::KeywordOtherwise => regex_macro::regex!(r"^otherwise\b"),
-			Self::KeywordReturn => regex_macro::regex!(r"^return\b"),
-			Self::KeywordRuntime => regex_macro::regex!(r"^run\b"),
-			Self::KeywordExtend => regex_macro::regex!(r"^extend\b"),
-			Self::KeywordWhile => regex_macro::regex!(r"^while\b"),
+			Self::KeywordAction => regex!(r"^action\b"),
+			Self::KeywordDefault => regex!(r"^default\b"),
+			Self::KeywordEither => regex!(r"^either\b"),
+			Self::KeywordExtend => regex!(r"^extend\b"),
+			Self::KeywordForEach => regex!(r"^foreach\b"),
+			Self::KeywordGroup => regex!(r"^group\b"),
+			Self::KeywordIf => regex!(r"^if\b"),
+			Self::KeywordIn => regex!(r"^in\b"),
+			Self::KeywordIs => regex!(r"^is\b"),
+			Self::KeywordLet => regex!(r"^let\b"),
+			Self::KeywordWith => regex!(r"^with\b"),
+			Self::KeywordMatch => regex!(r"^match\b"),
+			Self::KeywordNew => regex!(r"^new\b"),
+			Self::KeywordOneOf => regex!(r"^oneof\b"),
+			Self::KeywordOtherwise => regex!(r"^otherwise\b"),
+			Self::KeywordReturn => regex!(r"^return\b"),
+			Self::KeywordRuntime => regex!(r"^run\b"),
+			Self::KeywordToBe => regex!(r"^tobe\b"),
+			Self::KeywordWhile => regex!(r"^while\b"),
 
 			// Left opening groupings
-			Self::LeftAngleBracket => regex_macro::regex!("^<"),
-			Self::LeftBrace => regex_macro::regex!(r"^\{"),
-			Self::LeftBracket => regex_macro::regex!(r"^\["),
-			Self::LeftParenthesis => regex_macro::regex!(r"^\("),
+			Self::LeftAngleBracket => regex!("^<"),
+			Self::LeftBrace => regex!(r"^\{"),
+			Self::LeftBracket => regex!(r"^\["),
+			Self::LeftParenthesis => regex!(r"^\("),
 
 			// Right closing groupings
-			Self::RightAngleBracket => regex_macro::regex!("^>"),
-			Self::RightBrace => regex_macro::regex!(r"^\}"),
-			Self::RightBracket => regex_macro::regex!(r"^\]"),
-			Self::RightParenthesis => regex_macro::regex!(r"^\)"),
+			Self::RightAngleBracket => regex!("^>"),
+			Self::RightBrace => regex!(r"^\}"),
+			Self::RightBracket => regex!(r"^\]"),
+			Self::RightParenthesis => regex!(r"^\)"),
 
 			// Literals
-			Self::String => regex_macro::regex!(r#"(?s)^"[^"]*""#),
-			Self::Number => regex_macro::regex!(r"^-?\d+(\.\d+)?"),
-			Self::Identifier => regex_macro::regex!(r"^[a-zA-Z_]\w*"),
+			Self::String => regex!(r#"(?s)^"[^"]*""#),
+			Self::Number => regex!(r"^-?\d+(\.\d+)?"),
+			Self::Identifier => regex!(r"^[a-zA-Z_]\w*"),
 
 			// Operators
-			Self::Plus => regex_macro::regex!(r"^\+"),
-			Self::Minus => regex_macro::regex!("^-"),
-			Self::Asterisk => regex_macro::regex!(r"^\*"),
-			Self::Caret => regex_macro::regex!(r"^\^"),
-			Self::Dot => regex_macro::regex!(r"^\."),
-			Self::DoubleEquals => regex_macro::regex!("^=="),
-			Self::ForwardSlash => regex_macro::regex!("^/"),
-			Self::Equal => regex_macro::regex!("^="),
-			Self::LessThan => regex_macro::regex!(r"^\s+<"),
-			Self::GreaterThan => regex_macro::regex!(r"^\s+>"),
-			Self::RightArrow => regex_macro::regex!(r"^->"),
-			Self::ExclamationPoint => regex_macro::regex!(r"^!"),
-			Self::QuestionMark => regex_macro::regex!(r"^\?"),
+			Self::Plus => regex!(r"^\+"),
+			Self::Minus => regex!("^-"),
+			Self::Asterisk => regex!(r"^\*"),
+			Self::Caret => regex!(r"^\^"),
+			Self::Dot => regex!(r"^\."),
+			Self::DoubleEquals => regex!("^=="),
+			Self::ForwardSlash => regex!("^/"),
+			Self::Equal => regex!("^="),
+			Self::LessThan => regex!(r"^\s+<"),
+			Self::GreaterThan => regex!(r"^\s+>"),
+			Self::RightArrow => regex!(r"^->"),
+			Self::ExclamationPoint => regex!(r"^!"),
+			Self::QuestionMark => regex!(r"^\?"),
 
 			// Punctuations / Misc
-			Self::TagOpening => regex_macro::regex!(r"^\#\["),
-			Self::Colon => regex_macro::regex!("^:"),
-			Self::Comma => regex_macro::regex!("^,"),
-			Self::Semicolon => regex_macro::regex!("^;"),
+			Self::TagOpening => regex!(r"^\#\["),
+			Self::Colon => regex!("^:"),
+			Self::Comma => regex!("^,"),
+			Self::Semicolon => regex!("^;"),
 
 			// Ignored tokens
-			Self::Whitespace => regex_macro::regex!(r"^\s"),
-			Self::LineComment => regex_macro::regex!(r"^#[^\n\r]*"),
+			Self::Whitespace => regex!(r"^\s"),
+			Self::LineComment => regex!(r"^#[^\n\r]*"),
 
 			// Unknown - This token type only appears when using `tokenize_string`, in which case
 			// it is inserted manually into the token stream. That's why this has an unmatachable
 			// regex - an "end of line" indicator followed by the letter 'a' - so that it'll never
 			// be naturally matched during tokenization.
-			Self::Unknown => regex_macro::regex!(r"$a"),
+			Self::Unknown => regex!(r"$a"),
 		}
 	}
 

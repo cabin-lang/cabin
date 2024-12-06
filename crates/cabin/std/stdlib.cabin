@@ -79,6 +79,8 @@ let Boolean = either {
 	true,
 	false
 };
+let true = Boolean.true;
+let false = Boolean.false;
 
 # The tag for a built-in function. Functions that are built into the Cabin compiler and run with native code are marked with this, usually
 # via the `builtin<>` function.
@@ -131,7 +133,7 @@ let system = new Object {
 			system.terminal.print(object);
 		},
 
-		#[builtin<"terminal.input">, system_side_effects, runtime<"Taking input at compile-time can cause varying outputs.">] 
+		#[builtin<"terminal.input">, system_side_effects, runtime<"Taking input at compile-time can produce varying binaries.">] 
 		input = action(options: TerminalInputOptions): Text,
 	},
 };
